@@ -64,6 +64,30 @@ function LoginPage() {
 
                         Iniciar Sesión
                     </button>
+
+                    <div className="my-4">
+                        <div className="flex items-center">
+                            <div className="h-px flex-1 bg-border" />
+                            <span className="mx-3 text-xs text-muted-foreground">o</span>
+                            <div className="h-px flex-1 bg-border" />
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        aria-label="Iniciar sesión con Microsoft"
+                        className="w-full px-6 py-3 bg-white dark:bg-slate-900 border border-border text-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-muted/40 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:shadow-md focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 flex items-center justify-center gap-3"
+                    >
+                        <span className="inline-flex items-center gap-3">
+                            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" focusable="false">
+                                <rect x="1" y="1" width="10" height="10" fill="#F25022" />
+                                <rect x="13" y="1" width="10" height="10" fill="#7FBA00" />
+                                <rect x="1" y="13" width="10" height="10" fill="#00A4EF" />
+                                <rect x="13" y="13" width="10" height="10" fill="#FFB900" />
+                            </svg>
+                            <span>Iniciar sesión con Microsoft</span>
+                        </span>
+                    </button>
                 </form>
             </div>
 
