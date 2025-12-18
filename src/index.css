@@ -3,6 +3,45 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* fuentes de el corporativo */
+@font-face {
+  font-family: 'Gotham';
+  src: url('/fonts/Gotham-Book.woff2') format('woff2'),
+       url('/fonts/Gotham-Book.woff') format('woff'),
+       url('/fonts/Gotham-Book.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Gotham';
+  src: url('/fonts/Gotham-Medium.woff2') format('woff2'),
+       url('/fonts/Gotham-Medium.woff') format('woff'),
+       url('/fonts/Gotham-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Gotham';
+  src: url('/fonts/Gotham-Bold.woff2') format('woff2'),
+       url('/fonts/Gotham-Bold.woff') format('woff'),
+       url('/fonts/Gotham-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --font-sans: 'Gotham';
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
 :root {
   --background: #fafafa;
   --foreground: #1a1a1a;
