@@ -117,3 +117,14 @@ export const loginWithMicrosoft = async () => {
         throw error;
     }
 }
+
+
+export const logout = async () => {
+    if (!auth) throw new Error('Firebase Auth no inicializado');
+    try {
+        await signOut(auth);
+    } catch (error) {
+        console.error("Error durante el logout:", error);
+        throw error;
+    }
+}
