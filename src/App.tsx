@@ -1,26 +1,27 @@
 
 import './App.css'
-import { Routes, Route, Link, Navigate } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import LoginPage from './pages/auth/LoginPage'
+import ProtectedRoute from './components/auth/protected-route'
+import PublicOnlyRoute from './components/auth/public-route'
 
 
 function App() {
     return (
         <>
-            <header className="p-4 border-b">
-                <nav className="flex gap-4">
-                    <Link to="/">Inicio</Link>
-                    <Link to="/login">Login</Link>
-                </nav>
-            </header>
+            
 
-            <main className="p-4">
+
                 <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="*" element={<Navigate to="/" replace />} />
+                    <Route element={<ProtectedRoute />}>
+                        <Route path="/" element={<Home />} />
+                    </Route>
+                    <Route element={<PublicOnlyRoute />}>
+                        <Route path="/login" element={<LoginPage />} />
+                    </Route>
+                    
                 </Routes>
-            </main>
+
         </>
     )
 }

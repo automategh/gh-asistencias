@@ -1,8 +1,10 @@
+import { useAuth } from "@/context/AuthContext"
 import { Mail, Lock, AlertCircle } from "lucide-react"
 
 function LoginPage() {
 
-    
+    const { loginWithMicrosoft } = useAuth();
+
     return (
         <div className="min-h-screen bg-linear-to-br from-background via-muted/20 to-background">
             <div className="flex justify-center items-center">
@@ -76,6 +78,7 @@ function LoginPage() {
                     </div>
 
                     <button
+                        onClick={loginWithMicrosoft}
                         type="button"
                         aria-label="Iniciar sesión con Microsoft"
                         className="w-full px-6 py-3 bg-white dark:bg-slate-900 border border-border text-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-muted/40 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:shadow-md focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 flex items-center justify-center gap-3"
