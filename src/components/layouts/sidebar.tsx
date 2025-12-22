@@ -1,7 +1,7 @@
 import { useAuth } from "@/context/AuthContext"
 import { Calendar, ChevronLeft, ChevronRight, Home, LogOut, Menu, UserCircle, UserCog, X } from "lucide-react"
-import { useState } from "react"
-import { Link } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { Link, useLocation } from "react-router-dom"
 
 interface SidebarProps {
     onCollapsedChange: (collapsed: boolean) => void
@@ -10,16 +10,32 @@ interface SidebarProps {
 export function Sidebar({ onCollapsedChange }: SidebarProps) {
 
     const { user, logout, role } = useAuth()
+    
+const location = useLocation()
 
-    const [isMobileOpen, setIsMobileOpen] = useState(false)
-    const [isCollapsed, setIsCollapsed] = useState(false)
+    // Estado móvil (se cierra automáticamente al cambiar de ruta)
+    const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false)
 
-    const pathname = window.location.pathname
+    // Persistencia de colapso en localStorage para evitar “abrirse” en cada navegación
+    const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+        const saved = window.localStorage.getItem("sidebar:collapsed")
+        return saved === "1"
+    })
 
-    const toggleCollapsed = () => {
+    // Cierra el sidebar móvil al cambiar de ruta de forma asíncrona y solo si está abierto
+    useEffect(() => {
+        if (!isMobileOpen) return
+        const id = window.setTimeout(() => setIsMobileOpen(false), 0)
+        return () => window.clearTimeout(id)
+    }, [location.pathname, isMobileOpen])
+
+    const pathname = location.pathname
+
+    const toggleCollapsed = (): void => {
         const newState = !isCollapsed
         setIsCollapsed(newState)
         onCollapsedChange?.(newState)
+        window.localStorage.setItem("sidebar:collapsed", newState ? "1" : "0")
     }
 
     const links = [
@@ -96,7 +112,10 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                                 <li key={link.path}>
                                     <Link
                                         to={link.path}
-                                        onClick={() => setIsMobileOpen(false)}
+                                        onClick={() => {
+                                            setIsMobileOpen(false)
+
+                                        }}
                                         className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group relative ${isActive ? "bg-primary text-primary-foreground shadow-md" : "text-foreground hover:bg-muted/50"
                                             } ${isCollapsed ? "lg:justify-center lg:px-0" : ""}`}
                                         title={isCollapsed ? link.name : undefined}

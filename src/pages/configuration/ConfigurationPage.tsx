@@ -9,6 +9,7 @@ import type { ChangeEvent } from 'react'
 import { getDepartaments } from '@/services/departaments/departments.service';
 import type { Departament } from '@/types/departament';
 import { getLeaderNames, updateUserProfile } from '@/services/user.service';
+import Layout from '@/components/layouts/layout';
 
 /** BD seleccionada y persistida tras el login. */
 interface SelectedDatabase {
@@ -198,279 +199,282 @@ function ConfigurationProfilePage() {
             .toUpperCase() || ' '
 
     return (
-        <div className="max-w-4xl mx-auto p-6 mt-8">
-            {/* Profile Card */}
-            <div className="bg-card rounded-2xl border border-border p-8 mb-6">
-                <div className="flex items-center gap-6 mb-8 pb-8 border-b border-border">
-                    <div className="w-24 h-24 bg-linear-to-br from-secondary to-accent rounded-2xl flex items-center justify-center text-4xl font-bold text-secondary-foreground">
-                        {initialLetter}
-                    </div>
-                    <div className="grow">
-                        <h2 className="text-3xl font-bold text-foreground mb-2">{user?.name}</h2>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                            <Shield className="w-4 h-4" />
-                            <span className="capitalize font-medium">{user?.role}</span>
+        <Layout>
+        
+            <div className="max-w-4xl mx-auto p-6 mt-8">
+                {/* Profile Card */}
+                <div className="bg-card rounded-2xl border border-border p-8 mb-6">
+                    <div className="flex items-center gap-6 mb-8 pb-8 border-b border-border">
+                        <div className="w-24 h-24 bg-linear-to-br from-secondary to-accent rounded-2xl flex items-center justify-center text-4xl font-bold text-secondary-foreground">
+                            {initialLetter}
                         </div>
-                    </div>
-                    {!isEditing && (
-                        <button
-                            onClick={() => {
-                                setFormData({
-                                    name: user?.name || '',
-                                    department: user?.department || '',
-                                    identify: user?.identify || '',
-                                    immediateBoss: user?.immediateBoss || '',
-                                })
-                                setIsEditing(true)
-                            }}
-                            className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5"
-                        >
-                            Editar Perfil
-                        </button>
-                    )}
-                </div>
-
-                {/* Information Fields */}
-                <div className="space-y-6">
-                    {/* Name */}
-                    <div>
-                        <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                            <User className="w-4 h-4 text-primary" />
-                            Nombre Completo
-                        </label>
-                        {isEditing ? (
-                            <input
-                                disabled
-                                type="text"
-                                name="name"
-                                value={user?.name || ''}
-                                onChange={handleInputChange}
-                                className="w-full px-4 py-3 bg-muted/30 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
-                            />
-                        ) : (
-                            <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">{user?.name}</div>
-                        )}
-                    </div>
-
-
-                    {/* Identificación */}
-                    <div>
-                        <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                            <IdCardIcon className="w-4 h-4 text-primary" />
-                            Identificación
-                        </label>
-                        {isEditing ? (
-                            <input
-                                type="text"
-                                name="identify"
-                                value={formData.identify || ""}
-                                onChange={handleInputChange}
-                                placeholder="Ej: 123456789, 00000000"
-                                className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
-                            />
-                        ) : (
-                            <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
-                                {user?.identify || "No especificado"}
+                        <div className="grow">
+                            <h2 className="text-3xl font-bold text-foreground mb-2">{user?.name}</h2>
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                                <Shield className="w-4 h-4" />
+                                <span className="capitalize font-medium">{user?.role}</span>
                             </div>
-                        )}
-                    </div>
-
-                    {/* Jefe Inmediato */}
-                    <div>
-                        <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                            <User className="w-4 h-4 text-primary" />
-                            Jefe Inmediato
-                        </label>
-                        {isEditing ? (
-                            <select
-                                name="immediateBoss"
-                                value={formData.immediateBoss || ""}
-                                onChange={handleInputChange}
-                                className="w-full px-4 py-3  border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
-                            >
-                                <option value="">Selecciona un líder</option>
-                                {leaders.map((leader, index) => (
-                                    <option key={index} value={leader}>
-                                        {leader}
-                                    </option>
-                                ))}
-                            </select>
-                        ) : (
-                            <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
-                                {user?.immediateBoss || "No especificado"}
-                            </div>
-                        )}
-                    </div>
-                    {/* Email (Read Only) */}
-                    <div>
-                        <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                            <Mail className="w-4 h-4 text-primary" />
-                            Correo Electrónico
-                        </label>
-                        <div className="px-4 py-3 bg-muted/30 border border-border rounded-lg text-muted-foreground">
-                            {user?.email}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">El correo no puede ser modificado</p>
-                    </div>
-
-                    {/* Department */}
-                    <div>
-                        <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                            <Building2 className="w-4 h-4 text-primary" />
-                            Departamento
-                        </label>
-                        {isEditing ? (
-                            <select
-                                name="department"
-                                value={formData.department || ""}
-                                onChange={handleInputChange}
-                                className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
-                            >
-                                <option value="">Selecciona un departamento</option>
-                                {departaments.map((dep) => (
-                                    <option key={dep.id} value={dep.name}>{dep.name}</option>
-                                ))}
-                            </select>
-                        ) : (
-                            <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
-                                {user?.department || "No especificado"}
-                            </div>
-                        )}
-                    </div>
-
-
-
-                    {/* Action Buttons */}
-                    {isEditing && (
-                        <div className="flex gap-4 pt-6">
-                            <button
-                                onClick={handleSave}
-                                className="flex-1 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2"
-                            >
-                                <Save className="w-5 h-5" />
-                                Guardar Cambios
-                            </button>
+                        {!isEditing && (
                             <button
                                 onClick={() => {
-                                    setIsEditing(false)
                                     setFormData({
-                                        name: user?.name || "",
-                                        department: user?.department || "",
-                                        identify: user?.identify || "",
-                                        immediateBoss: user?.immediateBoss || "",
+                                        name: user?.name || '',
+                                        department: user?.department || '',
+                                        identify: user?.identify || '',
+                                        immediateBoss: user?.immediateBoss || '',
                                     })
+                                    setIsEditing(true)
                                 }}
-                                className="flex-1 px-6 py-3 bg-transparent border-2 border-border text-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-muted"
+                                className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5"
                             >
-                                Cancelar
+                                Editar Perfil
                             </button>
-                        </div>
-                    )}
-                </div>
-            </div>
+                        )}
+                    </div>
 
-            {/* Account Info */}
-            <div className="bg-card rounded-2xl border border-border p-6">
-                <h3 className="text-lg font-bold text-foreground mb-4">Información de Cuenta</h3>
-                <div className="space-y-3 text-sm">
-                    <div className="flex justify-between">
-                        <span className="text-muted-foreground">Tipo de Usuario</span>
-                        <span className="font-medium text-foreground capitalize">{user?.role}</span>
-                    </div>
-                    <div className="flex justify-between">
-                        <span className="text-muted-foreground">Estado del Perfil</span>
-                        <span className="font-medium text-green-500"></span>
-                    </div>
-                </div>
-            </div>
+                    {/* Information Fields */}
+                    <div className="space-y-6">
+                        {/* Name */}
+                        <div>
+                            <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                                <User className="w-4 h-4 text-primary" />
+                                Nombre Completo
+                            </label>
+                            {isEditing ? (
+                                <input
+                                    disabled
+                                    type="text"
+                                    name="name"
+                                    value={user?.name || ''}
+                                    onChange={handleInputChange}
+                                    className="w-full px-4 py-3 bg-muted/30 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
+                                />
+                            ) : (
+                                <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">{user?.name}</div>
+                            )}
+                        </div>
 
-            {/* Change Password */}
-            {isEmailPasswordUser && (
-                <div className="bg-card rounded-2xl border border-border p-6 mt-6">
-                    <h3 className="text-lg font-bold text-foreground mb-4">Cambiar contraseña</h3>
-                    <div className="space-y-4">
+
+                        {/* Identificación */}
                         <div>
                             <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                                <Lock className="w-4 h-4 text-primary" />
-                                Contraseña actual
+                                <IdCardIcon className="w-4 h-4 text-primary" />
+                                Identificación
                             </label>
-                            <div className="relative">
+                            {isEditing ? (
                                 <input
-                                    type={showPwd.current ? 'text' : 'password'}
-                                    name="current"
-                                    value={passwordForm.current}
-                                    onChange={handlePasswordFieldChange}
-                                    className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground pr-12"
+                                    type="text"
+                                    name="identify"
+                                    value={formData.identify || ""}
+                                    onChange={handleInputChange}
+                                    placeholder="Ej: 123456789, 00000000"
+                                    className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
                                 />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPwd(prev => ({ ...prev, current: !prev.current }))}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                                    aria-label="Mostrar/ocultar contraseña actual"
-                                >
-                                    {showPwd.current ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                                </button>
-                            </div>
+                            ) : (
+                                <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
+                                    {user?.identify || "No especificado"}
+                                </div>
+                            )}
                         </div>
+
+                        {/* Jefe Inmediato */}
                         <div>
                             <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                                <Lock className="w-4 h-4 text-primary" />
-                                Nueva contraseña
+                                <User className="w-4 h-4 text-primary" />
+                                Jefe Inmediato
                             </label>
-                            <div className="relative">
-                                <input
-                                    type={showPwd.next ? 'text' : 'password'}
-                                    name="next"
-                                    value={passwordForm.next}
-                                    onChange={handlePasswordFieldChange}
-                                    className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground pr-12"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPwd(prev => ({ ...prev, next: !prev.next }))}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                                    aria-label="Mostrar/ocultar nueva contraseña"
+                            {isEditing ? (
+                                <select
+                                    name="immediateBoss"
+                                    value={formData.immediateBoss || ""}
+                                    onChange={handleInputChange}
+                                    className="w-full px-4 py-3  border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
                                 >
-                                    {showPwd.next ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                                </button>
-                            </div>
+                                    <option value="">Selecciona un líder</option>
+                                    {leaders.map((leader, index) => (
+                                        <option key={index} value={leader}>
+                                            {leader}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
+                                    {user?.immediateBoss || "No especificado"}
+                                </div>
+                            )}
                         </div>
+                        {/* Email (Read Only) */}
                         <div>
                             <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                                <Lock className="w-4 h-4 text-primary" />
-                                Confirmar nueva contraseña
+                                <Mail className="w-4 h-4 text-primary" />
+                                Correo Electrónico
                             </label>
-                            <div className="relative">
-                                <input
-                                    type={showPwd.confirm ? 'text' : 'password'}
-                                    name="confirm"
-                                    value={passwordForm.confirm}
-                                    onChange={handlePasswordFieldChange}
-                                    className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground pr-12"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPwd(prev => ({ ...prev, confirm: !prev.confirm }))}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                                    aria-label="Mostrar/ocultar confirmación"
+                            <div className="px-4 py-3 bg-muted/30 border border-border rounded-lg text-muted-foreground">
+                                {user?.email}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">El correo no puede ser modificado</p>
+                        </div>
+
+                        {/* Department */}
+                        <div>
+                            <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                                <Building2 className="w-4 h-4 text-primary" />
+                                Departamento
+                            </label>
+                            {isEditing ? (
+                                <select
+                                    name="department"
+                                    value={formData.department || ""}
+                                    onChange={handleInputChange}
+                                    className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
                                 >
-                                    {showPwd.confirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    <option value="">Selecciona un departamento</option>
+                                    {departaments.map((dep) => (
+                                        <option key={dep.id} value={dep.name}>{dep.name}</option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
+                                    {user?.department || "No especificado"}
+                                </div>
+                            )}
+                        </div>
+
+
+
+                        {/* Action Buttons */}
+                        {isEditing && (
+                            <div className="flex gap-4 pt-6">
+                                <button
+                                    onClick={handleSave}
+                                    className="flex-1 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                                >
+                                    <Save className="w-5 h-5" />
+                                    Guardar Cambios
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setIsEditing(false)
+                                        setFormData({
+                                            name: user?.name || "",
+                                            department: user?.department || "",
+                                            identify: user?.identify || "",
+                                            immediateBoss: user?.immediateBoss || "",
+                                        })
+                                    }}
+                                    className="flex-1 px-6 py-3 bg-transparent border-2 border-border text-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-muted"
+                                >
+                                    Cancelar
                                 </button>
                             </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Account Info */}
+                <div className="bg-card rounded-2xl border border-border p-6">
+                    <h3 className="text-lg font-bold text-foreground mb-4">Información de Cuenta</h3>
+                    <div className="space-y-3 text-sm">
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Tipo de Usuario</span>
+                            <span className="font-medium text-foreground capitalize">{user?.role}</span>
                         </div>
-                        <div className="pt-2">
-                            <button
-                                type="button"
-                                onClick={handleChangePassword}
-                                className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light"
-                            >
-                                Cambiar contraseña
-                            </button>
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">Estado del Perfil</span>
+                            <span className="font-medium text-green-500"></span>
                         </div>
                     </div>
                 </div>
-            )}
-        </div>
+
+                {/* Change Password */}
+                {isEmailPasswordUser && (
+                    <div className="bg-card rounded-2xl border border-border p-6 mt-6">
+                        <h3 className="text-lg font-bold text-foreground mb-4">Cambiar contraseña</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                                    <Lock className="w-4 h-4 text-primary" />
+                                    Contraseña actual
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        type={showPwd.current ? 'text' : 'password'}
+                                        name="current"
+                                        value={passwordForm.current}
+                                        onChange={handlePasswordFieldChange}
+                                        className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground pr-12"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPwd(prev => ({ ...prev, current: !prev.current }))}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                                        aria-label="Mostrar/ocultar contraseña actual"
+                                    >
+                                        {showPwd.current ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                                    <Lock className="w-4 h-4 text-primary" />
+                                    Nueva contraseña
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        type={showPwd.next ? 'text' : 'password'}
+                                        name="next"
+                                        value={passwordForm.next}
+                                        onChange={handlePasswordFieldChange}
+                                        className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground pr-12"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPwd(prev => ({ ...prev, next: !prev.next }))}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                                        aria-label="Mostrar/ocultar nueva contraseña"
+                                    >
+                                        {showPwd.next ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                                    <Lock className="w-4 h-4 text-primary" />
+                                    Confirmar nueva contraseña
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        type={showPwd.confirm ? 'text' : 'password'}
+                                        name="confirm"
+                                        value={passwordForm.confirm}
+                                        onChange={handlePasswordFieldChange}
+                                        className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground pr-12"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPwd(prev => ({ ...prev, confirm: !prev.confirm }))}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                                        aria-label="Mostrar/ocultar confirmación"
+                                    >
+                                        {showPwd.confirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="pt-2">
+                                <button
+                                    type="button"
+                                    onClick={handleChangePassword}
+                                    className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light"
+                                >
+                                    Cambiar contraseña
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </Layout>
     )
 }
 
