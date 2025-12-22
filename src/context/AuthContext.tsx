@@ -26,7 +26,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  * @returns Componente React que envuelve a los hijos con el contexto de autenticación.
  */
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [role, setRole] = useState<string | null>(null);
     const [user, setUser] = useState<User | null>(null);
 

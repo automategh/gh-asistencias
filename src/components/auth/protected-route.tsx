@@ -36,7 +36,9 @@ export default function ProtectedRoute(): JSX.Element {
 
     // DEPENDENCIAS ESTABLES: siempre dos valores (uid o null) y el booleano de ruta
     const uid: string | null = user?.uid ?? null
-    const isOnProfileRoute: boolean = location.pathname.startsWith('/configure-profile')
+    // Ruta única de configuración de perfil
+    const PROFILE_ROUTES: readonly string[] = ['/configure-profile']
+    const isOnProfileRoute: boolean = PROFILE_ROUTES.some(prefix => location.pathname.startsWith(prefix))
 
     useEffect(() => {
         let cancelled = false
@@ -48,7 +50,7 @@ export default function ProtectedRoute(): JSX.Element {
                 return
             }
 
-            // Ya en /configure-profile: no fuerces redirección
+            // Ya en la ruta de configuración: no fuerces redirección
             if (isOnProfileRoute) {
                 setProfileComplete(true)
                 return
@@ -85,7 +87,7 @@ export default function ProtectedRoute(): JSX.Element {
     }, [uid, isOnProfileRoute]) // Tamaño y orden constantes
 
     // Evita redirigir mientras se determina auth y perfil
-    if (loading || profileComplete === null) {
+    if (loading && profileComplete === null) {
         return <div className="p-4 text-sm text-gray-500">Cargando…</div>
     }
 
@@ -94,6 +96,7 @@ export default function ProtectedRoute(): JSX.Element {
     }
 
     if (!isOnProfileRoute && profileComplete === false) {
+        // Redirige a la ruta de configuración de perfil
         return <Navigate to="/configure-profile" />
     }
 
