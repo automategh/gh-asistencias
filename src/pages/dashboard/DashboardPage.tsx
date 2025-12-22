@@ -1,6 +1,5 @@
 import { Sidebar } from '@/components/layouts/sidebar';
 import { useAuth } from '@/context/AuthContext';
-import React from 'react'
 
 function DashboardPage() {
     const { logout } = useAuth();
