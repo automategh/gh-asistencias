@@ -6,6 +6,7 @@ import ProtectedRoute from './components/auth/protected-route'
 import PublicOnlyRoute from './components/auth/public-route'
 import ConfigurationProfilePage from './pages/configuration/ConfigurationPage'
 import DashboardPage from './pages/dashboard/DashboardPage'
+import NewMeetPage from './pages/meets/NewMeetPage'
 
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
                 <Route element={<ProtectedRoute />}>
                     <Route path="/" element={<DashboardPage />} />
                     <Route path="/configure-profile" element={<ConfigurationProfilePage />} />
+                    <Route path="/new-meeting" element={<NewMeetPage />} />
                 </Route>
                 <Route element={<PublicOnlyRoute />}>
                     <Route path="/login" element={<LoginPage />} />
