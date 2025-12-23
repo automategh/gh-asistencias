@@ -1,26 +1,9 @@
 import { useAuth } from '@/context/AuthContext'
-import { getDatabaseForUrl } from '@/services/firebase'
+import { useDatabase } from '@/context/DatabaseContext'
 import { get, ref } from 'firebase/database'
 import { useEffect, useState, type JSX } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 
-/** BD seleccionada y persistida tras el login. */
-interface SelectedDatabase {
-    readonly url: string
-    readonly key: string
-}
-
-/** Obtiene la BD seleccionada desde LocalStorage. */
-function readSelectedDatabase(): SelectedDatabase | null {
-    try {
-        const raw = window.localStorage.getItem('selectedDatabase')
-        if (!raw) return null
-        const parsed = JSON.parse(raw) as SelectedDatabase
-        return typeof parsed.url === 'string' && parsed.url.length > 0 ? parsed : null
-    } catch {
-        return null
-    }
-}
 
 /**
  * Protección de rutas al estilo "middleware".
@@ -31,6 +14,7 @@ function readSelectedDatabase(): SelectedDatabase | null {
  */
 export default function ProtectedRoute(): JSX.Element {
     const { user, loading } = useAuth()
+    const { database } = useDatabase()
     const location = useLocation()
     const [profileComplete, setProfileComplete] = useState<boolean | null>(null)
 
@@ -41,6 +25,10 @@ export default function ProtectedRoute(): JSX.Element {
     const isOnProfileRoute: boolean = PROFILE_ROUTES.some(prefix => location.pathname.startsWith(prefix))
 
     useEffect(() => {
+        if (!database) {
+            throw new Error('la database no está disponible ')
+        }
+
         let cancelled = false
 
         async function checkProfile(): Promise<void> {
@@ -56,19 +44,13 @@ export default function ProtectedRoute(): JSX.Element {
                 return
             }
 
-            const selectedDatabase = readSelectedDatabase()
-            if (!selectedDatabase) {
+            // Verifica en la base de datos si el perfil está completo
+            if (!database) {
                 setProfileComplete(false)
                 return
             }
 
-            const db = getDatabaseForUrl(selectedDatabase.url)
-            if (!db) {
-                setProfileComplete(false)
-                return
-            }
-
-            const identifyRef = ref(db, `users/${uid}/identify`)
+            const identifyRef = ref(database, `users/${uid}/identify`)
             const snapshot = await get(identifyRef)
             const isComplete = snapshot.exists()
 
@@ -84,7 +66,7 @@ export default function ProtectedRoute(): JSX.Element {
         return () => {
             cancelled = true
         }
-    }, [uid, isOnProfileRoute]) // Tamaño y orden constantes
+    }, [uid, isOnProfileRoute, database]) // Tamaño y orden constantes
 
     // Evita redirigir mientras se determina auth y perfil
     if (loading && profileComplete === null) {
