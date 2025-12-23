@@ -1,5 +1,4 @@
 import { useAuth } from '@/context/AuthContext';
-import { getDatabaseForUrl } from '@/services/firebase';
 import { get, ref } from 'firebase/database';
 import { Building2, Eye, EyeOff, Lock, Mail, Shield, User, Save, IdCardIcon } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
@@ -10,28 +9,13 @@ import { getDepartaments } from '@/services/departaments/departments.service';
 import type { Departament } from '@/types/departament';
 import { getLeaderNames, updateUserProfile } from '@/services/user.service';
 import Layout from '@/components/layouts/layout';
+import { useDatabase } from '@/context/DatabaseContext';
 
-/** BD seleccionada y persistida tras el login. */
-interface SelectedDatabase {
-    readonly url: string
-    readonly key: string
-}
-
-/** Obtiene la BD seleccionada desde LocalStorage. */
-function readSelectedDatabase(): SelectedDatabase | null {
-    try {
-        const raw = window.localStorage.getItem('selectedDatabase')
-        if (!raw) return null
-        const parsed = JSON.parse(raw) as SelectedDatabase
-        return typeof parsed.url === 'string' && parsed.url.length > 0 ? parsed : null
-    } catch {
-        return null
-    }
-}
 
 function ConfigurationProfilePage() {
 
     const { user: firebaseUser } = useAuth();
+    const { database } = useDatabase();
     const [user, setUser] = useState<UserProfile | null>(null)
     const [isEditing, setIsEditing] = useState<boolean>(false);
     const [departaments, setDepartaments] = useState<Departament[]>([]);
@@ -47,8 +31,6 @@ function ConfigurationProfilePage() {
     const [showPwd, setShowPwd] = useState<{ current: boolean; next: boolean; confirm: boolean }>({ current: false, next: false, confirm: false });
     const isEmailPasswordUser = Boolean(firebaseUser?.providerData?.some(p => p?.providerId === 'password'));
 
-    const databaseUrl = readSelectedDatabase()?.url || '';
-    const database = getDatabaseForUrl(databaseUrl);
 
     useEffect(() => {
         if (!database) {
@@ -87,41 +69,6 @@ function ConfigurationProfilePage() {
         fetchUserData();
     }, [database, firebaseUser]);
 
-    /**
-     * Inserta los departamentos "Sistemas" y "Administración" en `departaments`.
-     * Evita duplicados por nombre (case-insensitive). Botón temporal solo en DEV.
-     */
-    // async function seedDepartments(): Promise<void> {
-    //     if (!database) {
-    //         console.error("No hay base de datos disponible para crear departamentos");
-    //         return;
-    //     }
-
-    //     try {
-    //         const listRef = ref(database, "departaments");
-    //         const snapshot = await get(listRef);
-    //         const existing = snapshot.val() as Record<string, { name: string }> | null;
-    //         const existingNames = new Set(
-    //             Object.values(existing ?? {}).map(d => (d.name ?? "").trim().toLowerCase())
-    //         );
-
-    //         const candidates = ["Sistemas", "Administración"];
-    //         const toCreate = candidates.filter(n => !existingNames.has(n.trim().toLowerCase()));
-
-    //         for (const name of toCreate) {
-    //             const newRef = push(listRef);
-    //             await set(newRef, { name, createdAt: new Date().toISOString() });
-    //         }
-
-    //         const message = toCreate.length > 0
-    //             ? `Departamentos creados: ${toCreate.join(", ")}`
-    //             : "No se crearon nuevos departamentos (ya existían)";
-    //         // Aviso simple para confirmar la operación
-    //         alert(message);
-    //     } catch (error) {
-    //         console.error("Error al insertar departamentos:", error);
-    //     }
-    // }
 
     /**
      * Maneja cambios del formulario de perfil.
@@ -197,6 +144,8 @@ function ConfigurationProfilePage() {
             .trim()
             .charAt(0)
             .toUpperCase() || ' '
+    
+    const completePerfil = user && user.identify && user.department && user.immediateBoss;
 
     return (
         <Layout>
@@ -389,7 +338,7 @@ function ConfigurationProfilePage() {
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Estado del Perfil</span>
-                                <span className="font-medium text-green-500"></span>
+                                <span className={`font-medium ${completePerfil ? "text-green-500" : "text-red-500"}`}> {completePerfil ? "Completo" : "Incompleto"}</span>
                             </div>
                         </div>
                     </div>
