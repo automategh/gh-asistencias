@@ -1,6 +1,14 @@
 {
   "rules": {
     ".read": "auth != null",
-    ".write": "auth != null"
+    ".write": "auth != null",
+    "userMeetings": {
+      "$uid": {
+        ".indexOn": ["startTime"]
+      }
+    },
+    "meetings": {
+      ".indexOn": ["createdBy"]
+    }
   }
 }

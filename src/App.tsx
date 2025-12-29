@@ -7,6 +7,7 @@ import PublicOnlyRoute from './components/auth/public-route'
 import ConfigurationProfilePage from './pages/configuration/ConfigurationPage'
 import DashboardPage from './pages/dashboard/DashboardPage'
 import NewMeetPage from './pages/meets/NewMeetPage'
+import MeetsPage from './pages/meets/MeetsPage'
 
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
                     <Route path="/" element={<DashboardPage />} />
                     <Route path="/configure-profile" element={<ConfigurationProfilePage />} />
                     <Route path="/new-meeting" element={<NewMeetPage />} />
+                    <Route path="/meets" element={<MeetsPage />} />
                 </Route>
                 <Route element={<PublicOnlyRoute />}>
                     <Route path="/login" element={<LoginPage />} />

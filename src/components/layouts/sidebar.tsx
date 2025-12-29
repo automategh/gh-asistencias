@@ -41,7 +41,9 @@ const location = useLocation()
     const links = [
         { icon: Home, name: "Dashboard", path: "/", roles: ["Admin", "Lider", "User"] },
         { icon: Plus, name: "Nueva Reunion", path: "/new-meeting", roles: ["Admin", "Lider"] },
+        { icon: Calendar, name: "Reuniones", path: "/meets", roles: ["Admin", "Lider", "User"] },
         { icon: UserCog, name: "Perfil", path: "/configure-profile", roles: ["Admin", "Lider", "User"] },
+        
         
     ]
     
