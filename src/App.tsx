@@ -8,6 +8,7 @@ import ConfigurationProfilePage from './pages/configuration/ConfigurationPage'
 import DashboardPage from './pages/dashboard/DashboardPage'
 import NewMeetPage from './pages/meets/NewMeetPage'
 import MeetsPage from './pages/meets/MeetsPage'
+import DetailMeetPage from './pages/meets/DetailMeetPage'
 
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
                     <Route path="/configure-profile" element={<ConfigurationProfilePage />} />
                     <Route path="/new-meeting" element={<NewMeetPage />} />
                     <Route path="/meets" element={<MeetsPage />} />
+                    <Route path="/meeting/:id" element={<DetailMeetPage />} />
                 </Route>
                 <Route element={<PublicOnlyRoute />}>
                     <Route path="/login" element={<LoginPage />} />
