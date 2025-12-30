@@ -17,12 +17,30 @@ import { createMeeting, addParticipants } from '@/services/meetings.service'
 import { get, ref } from 'firebase/database'
 
 /**
- * Convierte un valor `datetime-local` (en zona local del navegador)
- * a timestamp en milisegundos (epoch ms).
+ * Convierte un valor `datetime-local` a epoch ms, interpretándolo en zona local
+ * de forma segura (sin depender de parseo implícito del motor).
+ *
+ * Ejemplo de entrada: "2025-12-30T14:00"
  */
 function toEpochMs(datetimeLocal: string): number {
-    const date = new Date(datetimeLocal)
-    return date.getTime()
+    if (!datetimeLocal) return NaN
+    const parts = datetimeLocal.split('T')
+    if (parts.length !== 2) return NaN
+    const [datePart, timePart] = parts
+    const [yStr, mStr, dStr] = datePart.split('-')
+    const [hStr, minStr] = timePart.split(':')
+
+    const year = Number(yStr)
+    const month = Number(mStr)
+    const day = Number(dStr)
+    const hour = Number(hStr)
+    const minute = Number(minStr)
+
+    if ([year, month, day, hour, minute].some(n => Number.isNaN(n))) return NaN
+
+    // Construye fecha en zona local (Date(year, monthIndex, day, hour, minute))
+    const d = new Date(year, month - 1, day, hour, minute, 0, 0)
+    return d.getTime()
 }
 
 /**

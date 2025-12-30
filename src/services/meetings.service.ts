@@ -7,7 +7,7 @@ import type { User } from "firebase/auth"
  * Lanza un error con mensaje claro si es null.
  */
 function assertDatabase(db: Database | null): asserts db is Database {
-  if (!db) throw new Error("La base de datos no está disponible")
+    if (!db) throw new Error("La base de datos no está disponible")
 }
 
 /**
@@ -21,39 +21,39 @@ function assertDatabase(db: Database | null): asserts db is Database {
  * @returns Reunión persistida con `id` asignado
  */
 export async function createMeeting(
-  database: Database | null,
-  creator: Pick<User, "uid" | "displayName" | "email">,
-  input: MeetingCreateInput,
+    database: Database | null,
+    creator: Pick<User, "uid" | "displayName" | "email">,
+    input: MeetingCreateInput,
 ): Promise<Meeting> {
-  assertDatabase(database)
-  const meetingsRef = ref(database, "meetings")
-  const newRef = push(meetingsRef)
-  const id = newRef.key
+    assertDatabase(database)
+    const meetingsRef = ref(database, "meetings")
+    const newRef = push(meetingsRef)
+    const id = newRef.key
 
-  if (!id) {
-    throw new Error("No fue posible generar el id de la reunión")
-  }
+    if (!id) {
+        throw new Error("No fue posible generar el id de la reunión")
+    }
 
-  const now = Date.now()
-  const meeting: Meeting = {
-    id,
-    title: input.title.trim(),
-    type: input.type,
-    customType: input.customType ?? null,
-    description: input.description?.trim() ?? null,
-    location: input.location.trim(),
-    startTime: input.startTime,
-    endTime: input.endTime,
-    status: "scheduled",
-    createdBy: creator.uid,
-    createdByName: creator.displayName ?? null,
-    createdByEmail: creator.email ?? null,
-    managers: input.managers ?? null,
-    createdAt: now,
-  }
+    const now = Date.now()
+    const meeting: Meeting = {
+        id,
+        title: input.title.trim(),
+        type: input.type,
+        customType: input.customType ?? null,
+        description: input.description?.trim() ?? null,
+        location: input.location.trim(),
+        startTime: input.startTime,
+        endTime: input.endTime,
+        status: "scheduled",
+        createdBy: creator.uid,
+        createdByName: creator.displayName ?? null,
+        createdByEmail: creator.email ?? null,
+        managers: input.managers ?? null,
+        createdAt: now,
+    }
 
-  await set(newRef, meeting)
-  return meeting
+    await set(newRef, meeting)
+    return meeting
 }
 
 /**
@@ -67,37 +67,37 @@ export async function createMeeting(
  * @param indexMeta Metadatos mínimos para el índice por usuario (startTime, status)
  */
 export async function addParticipants(
-  database: Database | null,
-  meetingId: string,
-  participants: ParticipantInput[],
-  indexMeta: { startTime: number; status: MeetingStatus },
+    database: Database | null,
+    meetingId: string,
+    participants: ParticipantInput[],
+    indexMeta: { startTime: number; status: MeetingStatus },
 ): Promise<void> {
-  assertDatabase(database)
-  const updates: Record<string, unknown> = {}
+    assertDatabase(database)
+    const updates: Record<string, unknown> = {}
 
-  for (const p of participants) {
-    const participant: MeetingParticipant = {
-      uid: p.uid,
-      name: p.name,
-      email: p.email,
-      role: p.role,
-      inviteStatus: "invited",
-      attendance: null,
+    for (const p of participants) {
+        const participant: MeetingParticipant = {
+            uid: p.uid,
+            name: p.name,
+            email: p.email,
+            role: p.role,
+            inviteStatus: "invited",
+            attendance: null,
+        }
+
+        updates[`/meetingParticipants/${meetingId}/${p.uid}`] = participant
+
+        updates[`/userMeetings/${p.uid}/${meetingId}`] = {
+            meetingId,
+            startTime: indexMeta.startTime,
+            status: indexMeta.status,
+            role: p.role,
+            inviteStatus: "invited",
+            attendance: null,
+        }
     }
 
-    updates[`/meetingParticipants/${meetingId}/${p.uid}`] = participant
-
-    updates[`/userMeetings/${p.uid}/${meetingId}`] = {
-      meetingId,
-      startTime: indexMeta.startTime,
-      status: indexMeta.status,
-      role: p.role,
-      inviteStatus: "invited",
-      attendance: null,
-    }
-  }
-
-  await update(ref(database), updates)
+    await update(ref(database), updates)
 }
 
 /**
@@ -114,28 +114,49 @@ export async function addParticipants(
  * @param changes Campos a modificar
  */
 export async function updateParticipantStatus(
-  database: Database | null,
-  meetingId: string,
-  uid: string,
-  changes: Partial<Pick<MeetingParticipant, "inviteStatus" | "attendance" | "checkedInAt">>,
+    database: Database | null,
+    meetingId: string,
+    uid: string,
+    changes: Partial<Pick<MeetingParticipant, "inviteStatus" | "attendance" | "checkedInAt">>,
 ): Promise<void> {
-  assertDatabase(database)
-  const participantRef = ref(database, `meetingParticipants/${meetingId}/${uid}`)
-  const snapshot = await get(participantRef)
-  if (!snapshot.exists()) {
-    throw new Error("El participante no existe en esta reunión")
-  }
+    assertDatabase(database)
+    const participantRef = ref(database, `meetingParticipants/${meetingId}/${uid}`)
+    const snapshot = await get(participantRef)
+    if (!snapshot.exists()) {
+        throw new Error("El participante no existe en esta reunión")
+    }
 
-  const updates: Record<string, unknown> = {}
-  if (typeof changes.inviteStatus !== "undefined") {
-    updates["inviteStatus"] = changes.inviteStatus
-  }
-  if (typeof changes.attendance !== "undefined") {
-    updates["attendance"] = changes.attendance
-  }
-  if (typeof changes.checkedInAt !== "undefined") {
-    updates["checkedInAt"] = changes.checkedInAt
-  }
+    const updates: Record<string, unknown> = {}
+    if (typeof changes.inviteStatus !== "undefined") {
+        updates["inviteStatus"] = changes.inviteStatus
+    }
+    if (typeof changes.attendance !== "undefined") {
+        updates["attendance"] = changes.attendance
+    }
+    if (typeof changes.checkedInAt !== "undefined") {
+        updates["checkedInAt"] = changes.checkedInAt
+    }
 
-  await update(participantRef, updates)
+    await update(participantRef, updates)
+}
+
+/** Obtiene una reunión por su ID.
+ *
+ * @param database Instancia RTDB
+ * @param meetingId ID de la reunión
+ * @returns Reunión o null si no existe
+ * @throws Error si la reunión no existe
+ */
+export async function getMeetingById(
+    database: Database | null,
+    meetingId: string,
+): Promise<Meeting | null> {
+    assertDatabase(database)
+    const meetingRef = ref(database, `meetings/${meetingId}`)
+    const snapshot = await get(meetingRef)
+    if (!snapshot.exists()) {
+        throw new Error("La reunión no existe")
+    }
+    const meeting = snapshot.val() as Meeting
+    return meeting
 }
