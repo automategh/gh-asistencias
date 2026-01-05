@@ -2,7 +2,11 @@ import type React from "react";
 import { useState, type JSX } from "react";
 import { Sidebar } from "./sidebar";
 
-
+/**
+ * Layout principal con sidebar.
+ * @param props.children Contenido de la página
+ * @returns Componente de layout
+ */
 export default function Layout({ children }: { children: React.ReactNode }): JSX.Element {
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
         const saved = window.localStorage.getItem("sidebar:collapsed")
