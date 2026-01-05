@@ -4,7 +4,7 @@ import { Check, Users, X } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { get, ref } from 'firebase/database'
-import type { MeetingParticipant, Meeting } from '@/types/meeting'
+import type { MeetingParticipant, Meeting, ParticipantRole } from '@/types/meeting'
 import { getMeetingById } from '@/services/meetings.service'
 
 /**
@@ -65,6 +65,19 @@ function AttendancePage() {
     const absentCount = useMemo<number>(() => attendance.filter(a => a.attendance === 'absent').length, [attendance])
     const lateCount = useMemo<number>(() => attendance.filter(a => a.attendance === 'late').length, [attendance])
 
+    const switchRoles = (role: ParticipantRole) => {
+        switch (role) {
+            case 'attendee':
+                return 'Asistente'
+            case 'speaker':
+                return 'Orador'
+            case 'host':
+                return 'Anfitrión'
+            default:
+                return 'Asistente'
+        }
+    }
+
     return (
         <Layout>
             <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
@@ -112,10 +125,10 @@ function AttendancePage() {
                                 <tr className="border-b border-border">
                                     <th className="text-left py-3 px-4 font-semibold text-foreground">Nombre</th>
                                     <th className="text-left py-3 px-4 font-semibold text-foreground">Correo</th>
-                                    <th className="text-left py-3 px-4 font-semibold text-foreground">Rol</th>
-                                    <th className="text-left py-3 px-4 font-semibold text-foreground">Invitación</th>
-                                    <th className="text-left py-3 px-4 font-semibold text-foreground">Estado</th>
-                                    <th className="text-left py-3 px-4 font-semibold text-foreground">Hora de Ingreso</th>
+                                    <th className="text-center py-3 px-4 font-semibold text-foreground">Rol</th>
+                                    <th className="text-center py-3 px-4 font-semibold text-foreground">Invitación</th>
+                                    <th className="text-center py-3 px-4 font-semibold text-foreground">Estado</th>
+                                    <th className="text-center py-3 px-4 font-semibold text-foreground">Hora de Ingreso</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -128,25 +141,29 @@ function AttendancePage() {
                                         <tr key={a.uid} className="border-b border-border last:border-b-0">
                                             <td className="py-3 px-4 text-foreground font-medium">{a.name}</td>
                                             <td className="py-3 px-4 text-muted-foreground">{a.email}</td>
-                                            <td className="py-3 px-4 text-foreground capitalize">{a.role}</td>
-                                            <td className={`px-3 py-1 rounded-full text-xs font-semibold inline-flex items-center justify-center gap-1 ${a.attendance === "present"
-                                                ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
-                                                : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                                                }`}>
-                                                {a.attendance === "present" ? (
-                                                    <>
-                                                        <Check className="w-3 h-3" />
-                                                        Presente
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <X className="w-3 h-3" />
-                                                        Ausente
-                                                    </>
-                                                )}
+                                            <td className="py-3 px-4 text-foreground capitalize text-center">
+                                                {switchRoles(a.role)}
                                             </td>
-                                            <td className="py-3 px-4 text-foreground capitalize">{a.attendance ?? '—'}</td>
-                                            <td className="py-3 px-4 text-foreground">{typeof a.checkedInAt === 'number' ? new Date(a.checkedInAt).toLocaleString('es-ES') : '—'}</td>
+                                            <td className='text-center'>
+                                                <div className={`px-3 py-1 rounded-full text-xs font-semibold inline-flex items-center justify-center gap-1 ${a.attendance === "present"
+                                                    ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                                                    : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                                                    }`}>
+                                                    {a.attendance === "present" ? (
+                                                        <>
+                                                            <Check className="w-3 h-3" />
+                                                            Presente
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <X className="w-3 h-3" />
+                                                            Ausente
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="py-3 px-4 text-foreground text-center capitalize">{a.attendance ?? '—'}</td>
+                                            <td className="py-3 px-4 text-foreground text-center">{typeof a.checkedInAt === 'number' ? new Date(a.checkedInAt).toLocaleString('es-ES') : '—'}</td>
                                         </tr>
                                     ))
                                 )}
