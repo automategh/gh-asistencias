@@ -2,13 +2,46 @@
   "rules": {
     ".read": "auth != null",
     ".write": "auth != null",
-    "userMeetings": {
-      "$uid": {
-        ".indexOn": ["startTime"]
+    "meetings": {
+      ".indexOn": ["createdBy", "startTime", "status"],
+      "$meetingId": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((data.exists() ? data.child('createdBy').val() === auth.uid : newData.child('createdBy').val() === auth.uid) || root.child('users/' + auth.uid + '/role').val() === 'Admin')"
       }
     },
-    "meetings": {
-      ".indexOn": ["createdBy"]
+    "meetingParticipants": {
+      "$meetingId": {
+        "$uid": {
+          ".read": "auth != null",
+          ".write": "auth != null && root.child('meetings/' + $meetingId + '/status').val() != 'closed' && root.child('meetings/' + $meetingId + '/status').val() != 'completed' && (auth.uid === $uid || root.child('meetings/' + $meetingId + '/createdBy').val() === auth.uid || root.child('users/' + auth.uid + '/role').val() === 'Admin')"
+        }
+      }
+    },
+    "userMeetings": {
+      "$uid": {
+        ".indexOn": ["startTime", "status"],
+        "$meetingId": {
+          ".read": "auth != null",
+          ".write": "auth != null && (auth.uid === $uid || root.child('meetings/' + $meetingId + '/createdBy').val() === auth.uid || root.child('users/' + auth.uid + '/role').val() === 'Admin')"
+        }
+      }
+    },
+    "users": {
+      ".indexOn": ["name", "email", "role"]
+    },
+    "features": {
+      ".read": "auth != null",
+      ".write": "root.child('users/' + auth.uid + '/role').val() === 'Admin'"
+    },
+    "roles": {
+      ".read": "auth != null",
+      ".write": "root.child('users/' + auth.uid + '/role').val() === 'Admin'"
+    },
+    "userPermissions": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "root.child('users/' + auth.uid + '/role').val() === 'Admin'"
+      }
     }
   }
 }

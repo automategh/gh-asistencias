@@ -160,3 +160,130 @@ export async function getMeetingById(
     const meeting = snapshot.val() as Meeting
     return meeting
 }
+
+/** Cierra una reunión cambiando su estado a `closed`.
+ * También propaga el estado en el índice `userMeetings/{uid}/{meetingId}` para cada participante.
+ *
+ * Reglas de negocio:
+ * - Solo el `createdBy` o un `manager` deberían cerrar la reunión (se valida aquí y en reglas RTDB).
+ * - Si ya está `closed`, `completed` o `cancelled`, no permite cerrar nuevamente.
+ *
+ * @param database Instancia RTDB
+ * @param meetingId ID de la reunión a cerrar
+ * @param closerUid UID del usuario que solicita el cierre
+ * @returns Reunión actualizada
+ */
+export async function closeMeeting(
+    database: Database | null,
+    meetingId: string,
+    closerUid: string,
+): Promise<Meeting> {
+    assertDatabase(database)
+
+    const meetingRef = ref(database, `meetings/${meetingId}`)
+    const snap = await get(meetingRef)
+    if (!snap.exists()) {
+        throw new Error("La reunión no existe")
+    }
+    const meeting = snap.val() as Meeting
+
+    // Validación de estado
+    if (meeting.status === "closed" || meeting.status === "completed" || meeting.status === "cancelled") {
+        throw new Error("La reunión ya no puede cerrarse (estado final)")
+    }
+
+    // Validación de permisos básicos a nivel de cliente (reglas RTDB también protegen)
+    const isCreator = meeting.createdBy === closerUid
+    const isManager = Array.isArray(meeting.managers) ? meeting.managers.includes(closerUid) : false
+    if (!isCreator && !isManager) {
+        throw new Error("No tienes permisos para cerrar esta reunión")
+    }
+
+    const now = Date.now()
+
+    // Construimos updates fan-out:
+    // 1) Actualizar reunión
+    const updates: Record<string, unknown> = {}
+    updates[`/meetings/${meetingId}/status`] = "closed"
+    updates[`/meetings/${meetingId}/closedAt`] = now
+    updates[`/meetings/${meetingId}/closedBy`] = closerUid
+    updates[`/meetings/${meetingId}/updatedAt`] = now
+
+    // 2) Propagar estado a índices por usuario
+    const participantsRef = ref(database, `meetingParticipants/${meetingId}`)
+    const participantsSnap = await get(participantsRef)
+    if (participantsSnap.exists()) {
+        const participants = participantsSnap.val() as Record<string, MeetingParticipant>
+        Object.keys(participants).forEach((uid) => {
+            updates[`/userMeetings/${uid}/${meetingId}/status`] = "closed"
+        })
+    }
+
+    await update(ref(database), updates)
+
+    // Devuelve la reunión actualizada (re-lectura ligera)
+    const newSnap = await get(meetingRef)
+    return newSnap.val() as Meeting
+}
+
+/** Marca una reunión como `completed` (finalizada) y propaga el estado.
+ * Reglas de negocio:
+ * - Solo el `createdBy`, un `manager` o `Admin` pueden completar.
+ * - No permite completar si ya está `completed` o `cancelled`.
+ * - Permite completar si está `closed` o si la hora actual es posterior al `endTime`.
+ *
+ * @param database Instancia RTDB
+ * @param meetingId ID de la reunión a completar
+ * @param actorUid UID del usuario que solicita completar
+ * @returns Reunión actualizada
+ */
+export async function completeMeeting(
+    database: Database | null,
+    meetingId: string,
+    actorUid: string,
+): Promise<Meeting> {
+    assertDatabase(database)
+
+    const meetingRef = ref(database, `meetings/${meetingId}`)
+    const snap = await get(meetingRef)
+    if (!snap.exists()) {
+        throw new Error("La reunión no existe")
+    }
+    const meeting = snap.val() as Meeting
+
+    if (meeting.status === "completed" || meeting.status === "cancelled") {
+        throw new Error("La reunión ya no puede completarse")
+    }
+
+    const isCreator = meeting.createdBy === actorUid
+    const isManager = Array.isArray(meeting.managers) ? meeting.managers.includes(actorUid) : false
+    // Nota: Admin se valida por reglas del servidor; aquí reforzamos cliente.
+    if (!isCreator && !isManager) {
+        throw new Error("No tienes permisos para completar esta reunión")
+    }
+
+    const now = Date.now()
+    const canCompleteByTime = now >= meeting.endTime
+    const canCompleteByStatus = meeting.status === "closed"
+    if (!canCompleteByTime && !canCompleteByStatus) {
+        throw new Error("Solo puede completarse si ya terminó o está cerrada")
+    }
+
+    const updates: Record<string, unknown> = {}
+    updates[`/meetings/${meetingId}/status`] = "completed"
+    updates[`/meetings/${meetingId}/updatedAt`] = now
+
+    const participantsRef = ref(database, `meetingParticipants/${meetingId}`)
+    const participantsSnap = await get(participantsRef)
+    if (participantsSnap.exists()) {
+        const participants = participantsSnap.val() as Record<string, MeetingParticipant>
+        Object.keys(participants).forEach((uid) => {
+            updates[`/userMeetings/${uid}/${meetingId}/status`] = "completed"
+        })
+    }
+
+    await update(ref(database), updates)
+
+    const newSnap = await get(meetingRef)
+    return newSnap.val() as Meeting
+}

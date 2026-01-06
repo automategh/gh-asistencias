@@ -1,0 +1,64 @@
+{
+    "roles": {
+        "Admin": {
+            "features": {
+                "viewDashboard": true,
+                "configureProfile": true,
+                "viewMeetingList": true,
+                "viewMeeting": true,
+                "createMeeting": true,
+                "manageAttendance": true,
+                "manageDepartments": true,
+                "manageTraining": true
+            }
+        },
+        "Lider": {
+            "features": {
+                "viewDashboard": true,
+                "configureProfile": true,
+                "viewMeetingList": true,
+                "viewMeeting": true,
+                "createMeeting": true,
+                "manageAttendance": true,
+                "manageDepartments": false,
+                "manageTraining": false
+            }
+        },
+        "HR": {
+            "features": {
+                "viewDashboard": true,
+                "configureProfile": true,
+                "viewMeetingList": true,
+                "viewMeeting": true,
+                "createMeeting": true,
+                "manageAttendance": false,
+                "manageDepartments": true,
+                "manageTraining": true
+            }
+        },
+        "Instructor": {
+            "features": {
+                "viewDashboard": true,
+                "configureProfile": true,
+                "viewMeetingList": true,
+                "viewMeeting": true,
+                "createMeeting": false,
+                "manageAttendance": true,
+                "manageDepartments": false,
+                "manageTraining": true
+            }
+        },
+        "User": {
+            "features": {
+                "viewDashboard": true,
+                "configureProfile": true,
+                "viewMeetingList": true,
+                "viewMeeting": true,
+                "createMeeting": false,
+                "manageAttendance": false,
+                "manageDepartments": false,
+                "manageTraining": false
+            }
+        }
+    }
+}

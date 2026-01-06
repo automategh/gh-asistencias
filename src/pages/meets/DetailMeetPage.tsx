@@ -1,17 +1,21 @@
 import Layout from '@/components/layouts/layout'
 import { QRCodeDisplay } from '@/components/meet/qr-code-display'
 import { useDatabase } from '@/context/DatabaseContext'
-import { getMeetingById } from '@/services/meetings.service'
+import { closeMeeting, completeMeeting, getMeetingById } from '@/services/meetings.service'
 import type { Meeting } from '@/types/meeting'
 import { BarChart3, Calendar, Clock, FileText, MapPin } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import { useAuth } from '@/context/AuthContext'
 
 function DetailMeetPage() {
 
     const { id } = useParams<{ id: string }>()
     const { database } = useDatabase()
+    const { user, role } = useAuth()
     const [meeting, setMeeting] = useState<Meeting | null>(null)
+    const [closing, setClosing] = useState(false)
+    const [completing, setCompleting] = useState(false)
 
     useEffect(() => {
         if (!database || !id) {
@@ -83,6 +87,57 @@ function DetailMeetPage() {
                 return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
             default:
                 return 'bg-muted text-muted-foreground'
+        }
+    }
+
+    // Permiso de cierre: creador, manager o Admin
+    const canClose = useMemo(() => {
+        if (!meeting || !user) return false
+        if (role === 'Admin') return true
+        const isCreator = meeting.createdBy === user.uid
+        const isManager = Array.isArray(meeting.managers) ? meeting.managers.includes(user.uid) : false
+        return isCreator || isManager
+    }, [meeting, user, role])
+
+    const isFinalStatus = useMemo(() => {
+        const s = meeting?.status
+        return s === 'closed' || s === 'completed' || s === 'cancelled'
+    }, [meeting])
+
+    async function handleCloseMeeting() {
+        if (!database || !meeting || !user) return
+        setClosing(true)
+        try {
+            const updated = await closeMeeting(database, meeting.id, user.uid)
+            setMeeting(updated)
+        } catch (error) {
+            console.error('No fue posible cerrar la reunión:', error)
+        } finally {
+            setClosing(false)
+        }
+    }
+
+    const canComplete = useMemo(() => {
+        if (!meeting || !user) return false
+        if (meeting.status === 'completed' || meeting.status === 'cancelled') return false
+        const ended = Date.now() >= meeting.endTime
+        const canByStatus = meeting.status === 'closed'
+        const isCreator = meeting.createdBy === user.uid
+        const isManager = Array.isArray(meeting.managers) ? meeting.managers.includes(user.uid) : false
+        const isAdmin = role === 'Admin'
+        return (isCreator || isManager || isAdmin) && (ended || canByStatus)
+    }, [meeting, user, role])
+
+    async function handleCompleteMeeting() {
+        if (!database || !meeting || !user) return
+        setCompleting(true)
+        try {
+            const updated = await completeMeeting(database, meeting.id, user.uid)
+            setMeeting(updated)
+        } catch (error) {
+            console.error('No fue posible completar la reunión:', error)
+        } finally {
+            setCompleting(false)
         }
     }
 
@@ -162,6 +217,26 @@ function DetailMeetPage() {
                                         <BarChart3 className="w-5 h-5" />
                                         Ver Asistencia
                                     </Link>
+                                    {canClose && !isFinalStatus && (
+                                        <button
+                                            type="button"
+                                            disabled={closing}
+                                            onClick={handleCloseMeeting}
+                                            className="ml-4 inline-flex items-center gap-2 px-6 py-3 bg-amber-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-amber-700 disabled:opacity-50"
+                                        >
+                                            {closing ? 'Cerrando…' : 'Cerrar reunión'}
+                                        </button>
+                                    )}
+                                    {canComplete && (
+                                        <button
+                                            type="button"
+                                            disabled={completing}
+                                            onClick={handleCompleteMeeting}
+                                            className="ml-4 inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-emerald-700 disabled:opacity-50"
+                                        >
+                                            {completing ? 'Finalizando…' : 'Completar reunión'}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         </div>

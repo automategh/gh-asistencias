@@ -43,6 +43,7 @@ const location = useLocation()
         { icon: Plus, name: "Nueva Reunion", path: "/new-meeting", roles: ["Admin", "Lider"] },
         { icon: Calendar, name: "Reuniones", path: "/meets", roles: ["Admin", "Lider", "User"] },
         { icon: UserCog, name: "Perfil", path: "/configure-profile", roles: ["Admin", "Lider", "User"] },
+        { icon: UserCog, name: "Permisos", path: "/permissions", roles: ["Admin"] },
         
         
     ]

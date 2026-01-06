@@ -7,6 +7,7 @@ import { Calendar } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { get, ref, query, orderByChild, startAt, limitToFirst, equalTo } from 'firebase/database'
+import { completeMeeting } from '@/services/meetings.service'
 
 interface UserMeetingIndex {
     readonly meetingId: string
@@ -34,6 +35,7 @@ function MeetsPage() {
     const [error, setError] = useState<string | null>(null)
     const [mine, setMine] = useState<MeetingWithIndex[]>([])
     const [created, setCreated] = useState<Meeting[]>([])
+    const [completing, setCompleting] = useState<Record<string, boolean>>({})
     const now = useMemo<number>(() => Date.now(), [])
 
     useEffect(() => {
@@ -122,9 +124,35 @@ function MeetsPage() {
                         <h2 className="text-xl font-bold text-foreground mb-4">Mis próximas reuniones</h2>
                         {mine.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {mine.map((m) => (
-                                    <MeetingCard key={m.id} meeting={m} />
-                                ))}
+                                {mine.map((m) => {
+                                    const canComplete = (() => {
+                                        const ended = Date.now() >= m.endTime
+                                        const canByStatus = m.status === 'closed'
+                                        return (m.createdBy === user?.uid) && (ended || canByStatus) && m.status !== 'completed' && m.status !== 'cancelled'
+                                    })()
+                                    return (
+                                        <MeetingCard
+                                            key={m.id}
+                                            meeting={m}
+                                            canComplete={canComplete}
+                                            completing={completing[m.id]}
+                                            onComplete={async (meetingId) => {
+                                                if (!database || !user?.uid) return
+                                                setCompleting((prev) => ({ ...prev, [meetingId]: true }))
+                                                try {
+                                                    const updated = await completeMeeting(database, meetingId, user.uid)
+                                                    // Actualiza en listas locales
+                                                    setMine((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
+                                                    setCreated((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
+                                                } catch (e) {
+                                                    console.error('No fue posible completar la reunión:', e)
+                                                } finally {
+                                                    setCompleting((prev) => ({ ...prev, [meetingId]: false }))
+                                                }
+                                            }}
+                                        />
+                                    )
+                                })}
                             </div>
                         ) : (
                             EmptyState
@@ -135,9 +163,34 @@ function MeetsPage() {
                         <h2 className="text-xl font-bold text-foreground mb-4">Creadas por mí</h2>
                         {created.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {created.map((m) => (
-                                    <MeetingCard key={m.id} meeting={m} />
-                                ))}
+                                {created.map((m) => {
+                                    const canComplete = (() => {
+                                        const ended = Date.now() >= m.endTime
+                                        const canByStatus = m.status === 'closed'
+                                        return (m.createdBy === user?.uid) && (ended || canByStatus) && m.status !== 'completed' && m.status !== 'cancelled'
+                                    })()
+                                    return (
+                                        <MeetingCard
+                                            key={m.id}
+                                            meeting={m}
+                                            canComplete={canComplete}
+                                            completing={completing[m.id]}
+                                            onComplete={async (meetingId) => {
+                                                if (!database || !user?.uid) return
+                                                setCompleting((prev) => ({ ...prev, [meetingId]: true }))
+                                                try {
+                                                    const updated = await completeMeeting(database, meetingId, user.uid)
+                                                    setMine((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
+                                                    setCreated((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
+                                                } catch (e) {
+                                                    console.error('No fue posible completar la reunión:', e)
+                                                } finally {
+                                                    setCompleting((prev) => ({ ...prev, [meetingId]: false }))
+                                                }
+                                            }}
+                                        />
+                                    )
+                                })}
                             </div>
                         ) : (
                             EmptyState

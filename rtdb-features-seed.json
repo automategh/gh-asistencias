@@ -1,0 +1,13 @@
+{
+  "features": {
+    "viewDashboard": true,
+    "configureProfile": true,
+    "viewMeetingList": true,
+    "viewMeeting": true,
+    "createMeeting": true,
+    "manageAttendance": true,
+    "manageDepartments": false,
+    "manageTraining": false,
+    "managePermissions": true
+  }
+}

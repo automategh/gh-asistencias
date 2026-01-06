@@ -6,7 +6,17 @@ import type { Meeting } from '@/types/meeting'
  * Tarjeta de reunión/capacitación.
  * Presenta título, fechas, ubicación y acciones.
  */
-export default function MeetingCard({ meeting }: { meeting: Meeting }) {
+export default function MeetingCard({
+    meeting,
+    canComplete,
+    onComplete,
+    completing,
+}: {
+    meeting: Meeting
+    canComplete?: boolean
+    onComplete?: (meetingId: string) => void
+    completing?: boolean
+}) {
     const startDate = new Date(meeting.startTime)
     const endDate = new Date(meeting.endTime)
 
@@ -82,6 +92,18 @@ export default function MeetingCard({ meeting }: { meeting: Meeting }) {
                         Asistencia
                     </Link>
                 </div>
+                {canComplete && onComplete && (
+                    <div className="mt-3">
+                        <button
+                            type="button"
+                            disabled={completing}
+                            onClick={() => onComplete(meeting.id)}
+                            className="w-full px-6 py-2 bg-emerald-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-emerald-700 disabled:opacity-50 text-sm"
+                        >
+                            {completing ? 'Finalizando…' : 'Completar reunión'}
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     )
