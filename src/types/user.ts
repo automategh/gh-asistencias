@@ -22,3 +22,17 @@ export interface UserProfile {
   readonly identify?: string | null
   readonly immediateBoss?: string | null
 }
+
+import type { RecintoKey } from "@/lib/firebase/databaseResolver"
+
+/**
+ * Usuario agregado con metadatos de base de datos para administración multi-recinto.
+ */
+export interface CrossDbUserItem {
+  readonly uid: string
+  readonly name: string
+  readonly email: string
+  readonly role?: string | null
+  readonly recinto: RecintoKey
+  readonly databaseUrl: string
+}

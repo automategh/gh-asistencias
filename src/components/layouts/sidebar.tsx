@@ -1,5 +1,5 @@
 import { useAuth } from "@/context/AuthContext"
-import { Calendar, ChevronLeft, ChevronRight, Home, LogOut, Menu, Plus, UserCircle, UserCog, X } from "lucide-react"
+import { Calendar, ChevronLeft, ChevronRight, Home, LogOut, Menu, Plus, UserCircle, UserCog, UserPen, X } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 
@@ -42,8 +42,8 @@ const location = useLocation()
         { icon: Home, name: "Dashboard", path: "/", roles: ["Admin", "Lider", "User"] },
         { icon: Plus, name: "Nueva Reunion", path: "/new-meeting", roles: ["Admin", "Lider"] },
         { icon: Calendar, name: "Reuniones", path: "/meets", roles: ["Admin", "Lider", "User"] },
-        { icon: UserCog, name: "Perfil", path: "/configure-profile", roles: ["Admin", "Lider", "User"] },
-        { icon: UserCog, name: "Permisos", path: "/permissions", roles: ["Admin"] },
+        { icon: UserPen, name: "Perfil", path: "/configure-profile", roles: ["Admin", "Lider", "User"] },
+        {icon: UserCog, name: "Permisos", path: "/permissions", roles: ["Admin"] }
         
         
     ]

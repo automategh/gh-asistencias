@@ -29,19 +29,9 @@
     "users": {
       ".indexOn": ["name", "email", "role"]
     },
-    "features": {
-      ".read": "auth != null",
-      ".write": "root.child('users/' + auth.uid + '/role').val() === 'Admin'"
-    },
     "roles": {
       ".read": "auth != null",
       ".write": "root.child('users/' + auth.uid + '/role').val() === 'Admin'"
-    },
-    "userPermissions": {
-      ".read": "auth != null",
-      "$uid": {
-        ".write": "root.child('users/' + auth.uid + '/role').val() === 'Admin'"
-      }
     }
   }
 }

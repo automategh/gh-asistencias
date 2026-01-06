@@ -4,7 +4,6 @@ import { Routes, Route } from 'react-router-dom'
 import LoginPage from './pages/auth/LoginPage'
 import ProtectedRoute from './components/auth/protected-route'
 import PublicOnlyRoute from './components/auth/public-route'
-import FeatureRoute from './components/auth/feature-route'
 import ConfigurationProfilePage from './pages/configuration/ConfigurationPage'
 import DashboardPage from './pages/dashboard/DashboardPage'
 import NewMeetPage from './pages/meets/NewMeetPage'
@@ -21,20 +20,12 @@ function App() {
                 <Route element={<ProtectedRoute />}>
                     <Route path="/" element={<DashboardPage />} />
                     <Route path="/configure-profile" element={<ConfigurationProfilePage />} />
-                    {/* Crear reunión: requiere feature createMeeting */}
-                    <Route element={<FeatureRoute feature={'createMeeting'} />}>
-                        <Route path="/new-meeting" element={<NewMeetPage />} />
-                    </Route>
+                    <Route path="/new-meeting" element={<NewMeetPage />} />
                     <Route path="/meets" element={<MeetsPage />} />
                     <Route path="/meeting/:id" element={<DetailMeetPage />} />
-                    {/* Asistencia: requiere feature manageAttendance */}
-                    <Route element={<FeatureRoute feature={'manageAttendance'} />}>
-                        <Route path="/attendance/:id" element={<AttendancePage />} />
-                    </Route>
-                    {/* Administración de roles y permisos */}
-                    
+                    <Route path="/attendance/:id" element={<AttendancePage />} />
                     <Route path="/permissions" element={<PermissionsPage />} />
-                    
+
                 </Route>
                 <Route element={<PublicOnlyRoute />}>
                     <Route path="/login" element={<LoginPage />} />
