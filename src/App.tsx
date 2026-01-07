@@ -11,6 +11,7 @@ import PermissionsPage from './pages/permissions/PermissionsPage'
 import MeetsPage from './pages/meets/MeetsPage'
 import DetailMeetPage from './pages/meets/DetailMeetPage'
 import AttendancePage from './pages/meets/AttendancePage'
+import ChekinPage from './pages/meets/ChekinPage'
 
 
 function App() {
@@ -25,7 +26,7 @@ function App() {
                     <Route path="/meeting/:id" element={<DetailMeetPage />} />
                     <Route path="/attendance/:id" element={<AttendancePage />} />
                     <Route path="/permissions" element={<PermissionsPage />} />
-
+                    <Route path="/checkin/:id" element={<ChekinPage />} />
                 </Route>
                 <Route element={<PublicOnlyRoute />}>
                     <Route path="/login" element={<LoginPage />} />

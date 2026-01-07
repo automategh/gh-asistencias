@@ -87,7 +87,7 @@ export default function MeetingCard({
                         Detalles
                         <ArrowRight className="w-4 h-4" />
                     </Link>
-                    <Link to={`/attendance/${meeting.id}`} className="px-6 py-2 bg-transparent border-2 border-primary text-primary font-semibold rounded-lg transition-all duration-300 hover:bg-primary hover:text-primary-foreground hover:shadow-lg active:scale-95 text-center text-sm flex items-center justify-center gap-2">
+                    <Link to={`/checkin/${meeting.id}`} className="px-6 py-2 bg-transparent border-2 border-primary text-primary font-semibold rounded-lg transition-all duration-300 hover:bg-primary hover:text-primary-foreground hover:shadow-lg active:scale-95 text-center text-sm flex items-center justify-center gap-2">
                         <Users className="w-4 h-4" />
                         Asistencia
                     </Link>

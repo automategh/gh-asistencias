@@ -25,10 +25,6 @@ export default function ProtectedRoute(): JSX.Element {
     const isOnProfileRoute: boolean = PROFILE_ROUTES.some(prefix => location.pathname.startsWith(prefix))
 
     useEffect(() => {
-        if (!database) {
-            throw new Error('la database no está disponible ')
-        }
-
         let cancelled = false
 
         async function checkProfile(): Promise<void> {
@@ -44,18 +40,21 @@ export default function ProtectedRoute(): JSX.Element {
                 return
             }
 
-            // Verifica en la base de datos si el perfil está completo
+            // Espera a que la DB esté lista (no marcar como incompleto aún)
             if (!database) {
-                setProfileComplete(false)
                 return
             }
 
-            const identifyRef = ref(database, `users/${uid}/identify`)
-            const snapshot = await get(identifyRef)
-            const isComplete = snapshot.exists()
+            try {
+                const identifyRef = ref(database, `users/${uid}/identify`)
+                const snapshot = await get(identifyRef)
+                const isComplete = snapshot.exists()
 
-            if (!cancelled) {
-                setProfileComplete(prev => (prev === isComplete ? prev : isComplete))
+                if (!cancelled) {
+                    setProfileComplete(prev => (prev === isComplete ? prev : isComplete))
+                }
+            } catch {
+                if (!cancelled) setProfileComplete(false)
             }
         }
 
@@ -69,17 +68,20 @@ export default function ProtectedRoute(): JSX.Element {
     }, [uid, isOnProfileRoute, database]) // Tamaño y orden constantes
 
     // Evita redirigir mientras se determina auth y perfil
-    if (loading && profileComplete === null) {
+    if (loading) {
+        console.log("Autenticando usuario...")
         return <div className="p-4 text-sm text-gray-500">Cargando…</div>
     }
 
-    if (!uid) {
-        return <Navigate to="/login" replace state={{ from: location }} />
-    }
-
     if (!isOnProfileRoute && profileComplete === false) {
+        console.log("Perfil incompleto, redirigiendo a configuración...")
         // Redirige a la ruta de configuración de perfil
         return <Navigate to="/configure-profile" />
+    }
+
+    if (!uid) {
+        console.log("Usuario no autenticado, redirigiendo a login...")
+        return <Navigate to="/login" replace state={{ from: location }} />
     }
 
     return <Outlet />
