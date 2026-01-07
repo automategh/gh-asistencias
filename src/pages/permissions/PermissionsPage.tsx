@@ -1,9 +1,9 @@
 import Layout from "@/components/layouts/layout"
 import { useEffect, useMemo, useState } from "react"
-import type { AppRole } from "@/types/permissions"
 import type { CrossDbUserItem } from "@/types/user"
 import { listAllUsersAcrossDatabases, filterUsers, assignRoleInUserDatabase } from "@/services/roles.service"
 import { getAllAvailableDatabases, type RecintoKey } from "@/lib/firebase/databaseResolver"
+import type { AppRole } from "@/types/permissions"
 
 /**
  * Módulo de Asignación de Roles (sin permisos).
