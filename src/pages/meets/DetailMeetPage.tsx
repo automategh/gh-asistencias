@@ -144,7 +144,7 @@ function DetailMeetPage() {
     return (
         <Layout>
             <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
-                <header className="bg-card border-b border-border sticky top-0 z-50 backdrop-blur-xl">
+                <header className="bg-card border-b border-border sticky top-0 z-20 backdrop-blur-xl">
                     <nav className="max-w-6xl mx-auto px-6 py-4">
                         <h1 className="text-3xl font-bold mt-4 text-foreground">{meeting?.title}</h1>
                     </nav>
