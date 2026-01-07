@@ -1,8 +1,9 @@
 import { getAllAvailableDatabases, type RecintoKey } from "@/lib/firebase/databaseResolver"
 import { getDatabaseForUrl } from "@/services/firebase"
 import { get, ref, update, type Database } from "firebase/database"
-import type { AppRole } from "@/types/permissions"
+
 import type { CrossDbUserItem } from "@/types/user"
+import type { AppRole } from "@/types/permissions"
 
 /**
  * Lista todos los usuarios desde todas las bases de datos disponibles.
