@@ -1,7 +1,7 @@
 import { QRCodeSVG } from "qrcode.react"
 
 export function QRCodeDisplay({ meetingId }: { meetingId: string }) {
-    const qrValue = `${window.location.origin}/user/checkin/${meetingId}`
+    const qrValue = `${window.location.origin}/checkin/${meetingId}?method=qr`
 
     return (
         <div className="flex justify-center">

@@ -1,6 +1,7 @@
 import { ArrowRight, Calendar, Clock, MapPin, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Meeting } from '@/types/meeting'
+import { useAuth } from '@/context/AuthContext'
 
 /**
  * Tarjeta de reunión/capacitación.
@@ -20,9 +21,13 @@ export default function MeetingCard({
     const startDate = new Date(meeting.startTime)
     const endDate = new Date(meeting.endTime)
 
+    const { user } = useAuth()
+
     function formatDateTime(d: Date): string {
         return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
     }
+
+    const ownerMeet = meeting.createdBy === user?.uid
 
     function statusLabelAndClass(): { label: string; className: string } {
         switch (meeting.status) {
@@ -92,7 +97,7 @@ export default function MeetingCard({
                         Asistencia
                     </Link>
                 </div>
-                {canComplete && onComplete && (
+                {canComplete && onComplete && ownerMeet && (
                     <div className="mt-3">
                         <button
                             type="button"

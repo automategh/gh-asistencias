@@ -53,6 +53,12 @@ export interface Meeting {
   readonly closedAt?: number
   /** UID de quien cerró la reunión si aplica */
   readonly closedBy?: string
+  /** Fecha de cancelación (epoch ms) si aplica */
+  readonly cancelledAt?: number
+  /** UID de quien canceló la reunión si aplica */
+  readonly cancelledBy?: string
+  /** Razón de la cancelación (opcional) */
+  readonly cancellationReason?: string | null
 }
 
 /** Rol del participante dentro de la reunión */

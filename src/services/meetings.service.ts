@@ -287,3 +287,33 @@ export async function completeMeeting(
     const newSnap = await get(meetingRef)
     return newSnap.val() as Meeting
 }
+
+
+export async function cancelMeeting(
+    database: Database,
+    meetingId: string,
+    byUid: string,
+    reason?: string,
+): Promise<Meeting> {
+    // Asegura que la reunión exista
+    const meetingRef = ref(database, `meetings/${meetingId}`)
+    const snap = await get(meetingRef)
+    if (!snap.exists()) {
+        throw new Error('La reunión no existe')
+    }
+
+    const now = Date.now()
+    const patch = {
+        status: 'cancelled',
+        cancelledAt: now,
+        cancelledBy: byUid,
+        cancellationReason: typeof reason === 'string' && reason.trim().length > 0 ? reason.trim() : null
+    }
+
+    await update(meetingRef, patch)
+
+    // Relee para devolver el estado consistente
+    const updatedSnap = await get(meetingRef)
+    const updated = updatedSnap.val() as Meeting
+    return updated
+}

@@ -1,7 +1,7 @@
 import Layout from '@/components/layouts/layout'
 import { QRCodeDisplay } from '@/components/meet/qr-code-display'
 import { useDatabase } from '@/context/DatabaseContext'
-import { closeMeeting, completeMeeting, getMeetingById } from '@/services/meetings.service'
+import { cancelMeeting, closeMeeting, completeMeeting, getMeetingById } from '@/services/meetings.service'
 import type { Meeting } from '@/types/meeting'
 import { BarChart3, Calendar, Clock, FileText, MapPin } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -16,6 +16,7 @@ function DetailMeetPage() {
     const [meeting, setMeeting] = useState<Meeting | null>(null)
     const [closing, setClosing] = useState(false)
     const [completing, setCompleting] = useState(false)
+    const [cancel, setCancel] = useState(false)
 
     useEffect(() => {
         if (!database || !id) {
@@ -25,6 +26,7 @@ function DetailMeetPage() {
         getMeetingById(database, id)
             .then((m) => {
                 setMeeting(m)
+
             })
             .catch((error) => {
                 console.error('Error al cargar la reunión:', error)
@@ -101,8 +103,20 @@ function DetailMeetPage() {
 
     const isFinalStatus = useMemo(() => {
         const s = meeting?.status
-        return s === 'closed' || s === 'completed' || s === 'cancelled'
+        return s === 'closed' || s === 'completed'
     }, [meeting])
+
+    /** 
+     * Permiso de cancelación: creador, manager o Admin
+     * */ 
+    const canCancel = useMemo(() => {
+        if (!meeting || !user) return false
+        if (isFinalStatus) return false
+        const isCreator = meeting.createdBy === user.uid
+        const isManager = Array.isArray(meeting.managers) ? meeting.managers.includes(user.uid) : false
+        const isAdmin = role === 'Admin'
+        return isCreator || isManager || isAdmin
+    }, [meeting, user, role, isFinalStatus])
 
     async function handleCloseMeeting() {
         if (!database || !meeting || !user) return
@@ -117,6 +131,9 @@ function DetailMeetPage() {
         }
     }
 
+    /**
+     * Permiso de completar: creador, manager o Admin y reunión finalizada
+     */
     const canComplete = useMemo(() => {
         if (!meeting || !user) return false
         if (meeting.status === 'completed' || meeting.status === 'cancelled') return false
@@ -139,6 +156,23 @@ function DetailMeetPage() {
         } finally {
             setCompleting(false)
         }
+    }
+
+    async function handleCancelMeeting() {
+        if (!database || !meeting || !user) return
+        setCancel(true)
+
+        try {
+            // Opcional: podrías pedir un motivo y pasarlo como cuarto parámetro
+            const updated = await cancelMeeting(database, meeting.id, user.uid)
+            setMeeting(updated)
+        } catch (error) {
+            console.error('No fue posible cancelar la reunión:', error)
+        } finally {
+            setCancel(false)
+        }
+
+
     }
 
     return (
@@ -214,7 +248,7 @@ function DetailMeetPage() {
                                         to={`/attendance/${meeting?.id}`}
                                         className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5"
                                     >
-                                        <BarChart3 className="w-5 h-5" />
+                                        <BarChart3 className="w-4 h-4" />
                                         Ver Asistencia
                                     </Link>
                                     {canClose && !isFinalStatus && (
@@ -235,6 +269,16 @@ function DetailMeetPage() {
                                             className="ml-4 inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-emerald-700 disabled:opacity-50"
                                         >
                                             {completing ? 'Finalizando…' : 'Completar reunión'}
+                                        </button>
+                                    )}
+                                    {canCancel && !isFinalStatus && (
+                                        <button
+                                            type="button"
+                                            disabled={cancel}
+                                            onClick={handleCancelMeeting}
+                                            className="ml-4 inline-flex items-center gap-2 px-6 py-3 bg-red-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-red-700 disabled:opacity-50"
+                                        >
+                                            {cancel ? 'Cancelando…' : 'Cancelar reunión'}
                                         </button>
                                     )}
                                 </div>
