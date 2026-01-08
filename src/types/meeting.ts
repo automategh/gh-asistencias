@@ -84,6 +84,8 @@ export interface MeetingParticipant {
   readonly attendance?: AttendanceStatus | null
   /** Marca temporal del check-in (epoch ms) */
   readonly checkedInAt?: number
+  /** Método utilizado para el check-in (opcional) */
+  readonly checkinMethod?: "qr" | "manual"
 }
 
 /** Datos requeridos para crear una reunión */

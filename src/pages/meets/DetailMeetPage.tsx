@@ -249,7 +249,7 @@ function DetailMeetPage() {
                                         className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5"
                                     >
                                         <BarChart3 className="w-4 h-4" />
-                                        Ver Asistencia
+                                        Ver Asistencias
                                     </Link>
                                     {canClose && !isFinalStatus && (
                                         <button

@@ -128,6 +128,7 @@ function AttendancePage() {
                                     <th className="text-center py-3 px-4 font-semibold text-foreground">Rol</th>
                                     <th className="text-center py-3 px-4 font-semibold text-foreground">Invitación</th>
                                     <th className="text-center py-3 px-4 font-semibold text-foreground">Estado</th>
+                                    <th className="text-center py-3 px-4 font-semibold text-foreground">Método</th>
                                     <th className="text-center py-3 px-4 font-semibold text-foreground">Hora de Ingreso</th>
                                 </tr>
                             </thead>
@@ -163,6 +164,7 @@ function AttendancePage() {
                                                 </div>
                                             </td>
                                             <td className="py-3 px-4 text-foreground text-center capitalize">{a.attendance ?? '—'}</td>
+                                            <td className="py-3 px-4 text-foreground text-center capitalize">{a.checkinMethod ?? '—'}</td>
                                             <td className="py-3 px-4 text-foreground text-center">{typeof a.checkedInAt === 'number' ? new Date(a.checkedInAt).toLocaleString('es-ES') : '—'}</td>
                                         </tr>
                                     ))
