@@ -18,6 +18,7 @@
       }
     },
     "userMeetings": {
+      ".indexOn": ["startTime", "status"],
       "$uid": {
         ".indexOn": ["startTime", "status"],
         "$meetingId": {

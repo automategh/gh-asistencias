@@ -2,25 +2,16 @@ import Layout from '@/components/layouts/layout'
 import MeetingCard from '@/components/meet/meeting-card'
 import { useAuth } from '@/context/AuthContext'
 import { useDatabase } from '@/context/DatabaseContext'
-import type { Meeting, MeetingStatus } from '@/types/meeting'
+import type { Meeting } from '@/types/meeting'
 import { Calendar } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import { get, ref, query, orderByChild, startAt, limitToFirst, equalTo } from 'firebase/database'
+// (sin acceso directo a firebase aquí; se maneja en el servicio)
 import { completeMeeting } from '@/services/meetings.service'
+import { getUserCreatedMeetings, getUserCreatedMeetingsAcross, getUserInvitedMeetings, getUserInvitedMeetingsAcross, type MeetingWithIndex } from '@/services/meetings.listing.service'
+ 
 
-interface UserMeetingIndex {
-    readonly meetingId: string
-    readonly startTime: number
-    readonly status: MeetingStatus
-    readonly role: 'attendee' | 'speaker' | 'host'
-    readonly inviteStatus: 'invited' | 'accepted' | 'declined'
-    readonly attendance?: 'absent' | 'present' | 'late' | null
-}
-
-interface MeetingWithIndex extends Meeting {
-    readonly index?: UserMeetingIndex | null
-}
+// Tipos movidos al servicio: UserMeetingIndex y MeetingWithIndex
 
 /**
  * Vista de reuniones: participación y creadas por el usuario.
@@ -29,14 +20,19 @@ interface MeetingWithIndex extends Meeting {
  */
 function MeetsPage() {
     const { user } = useAuth()
-    const { database } = useDatabase()
+    const { database, databaseUrl, isCorporateUser, availableDatabases } = useDatabase()
 
     const [loading, setLoading] = useState<boolean>(true)
     const [error, setError] = useState<string | null>(null)
     const [mine, setMine] = useState<MeetingWithIndex[]>([])
-    const [created, setCreated] = useState<Meeting[]>([])
+    const [invitedRaw, setInvitedRaw] = useState<MeetingWithIndex[]>([])
+    const [created, setCreated] = useState<MeetingWithIndex[]>([])
     const [completing, setCompleting] = useState<Record<string, boolean>>({})
     const now = useMemo<number>(() => Date.now(), [])
+
+    // Controles de filtro/orden para "citadas"
+    const [invitedFilter, setInvitedFilter] = useState<'upcoming' | 'all'>('all')
+    const [invitedSort, setInvitedSort] = useState<'asc' | 'desc'>('asc')
 
     useEffect(() => {
         let cancelled = false
@@ -50,29 +46,34 @@ function MeetsPage() {
                     return
                 }
 
-                // Participación: próximas (order by startTime)
-                const idxSnap = await get(query(ref(database, `userMeetings/${user.uid}`), orderByChild('startTime'), startAt(now), limitToFirst(100)))
-                const idxVal = idxSnap.val() as Record<string, UserMeetingIndex> | null
-                const indexList = idxVal ? Object.values(idxVal) : []
+                const LOOKBACK_MS = 12 * 60 * 60 * 1000
 
-                const meetings: MeetingWithIndex[] = []
-                for (const idx of indexList) {
-                    // Filtrar por estado abierto si se desea solo próximas abiertas
-                    if (idx.status !== 'scheduled') continue
-                    const msnap = await get(ref(database, `meetings/${idx.meetingId}`))
-                    const mval = msnap.val() as Meeting | null
-                    if (mval) meetings.push({ ...mval, index: idx })
+                let invited: MeetingWithIndex[] = []
+                let createdList: MeetingWithIndex[] | Meeting[] = []
+
+                if (isCorporateUser && availableDatabases.length > 0) {
+                    // Multi-recinto: agrupar de todas las BDs disponibles
+                    invited = await getUserInvitedMeetingsAcross(
+                        availableDatabases.map((d) => ({ url: d.url, key: d.key })),
+                        user.uid,
+                        now,
+                        LOOKBACK_MS
+                    )
+                    createdList = await getUserCreatedMeetingsAcross(
+                        availableDatabases.map((d) => ({ url: d.url, key: d.key })),
+                        user.uid
+                    )
+                } else {
+                    // Una sola base (seleccionada)
+                    invited = await getUserInvitedMeetings(database, user.uid, now, LOOKBACK_MS)
+                    createdList = await getUserCreatedMeetings(database, user.uid)
                 }
 
-                // Creadas por mí
-                const createdSnap = await get(query(ref(database, 'meetings'), orderByChild('createdBy'), equalTo(user.uid)))
-                const createdVal = createdSnap.val() as Record<string, Meeting> | null
-                const createdList = createdVal ? Object.values(createdVal) : []
-
                 if (!cancelled) {
-                    // Ordenar por fecha ascendente
-                    setMine(meetings.sort((a, b) => a.startTime - b.startTime))
-                    setCreated(createdList.sort((a, b) => a.startTime - b.startTime))
+                    setInvitedRaw(invited)
+                    setCreated(
+                        [...createdList].sort((a, b) => a.startTime - b.startTime)
+                    )
                 }
             } catch (err) {
                 if (!cancelled) setError(err instanceof Error ? err.message : 'No fue posible cargar las reuniones')
@@ -83,7 +84,14 @@ function MeetsPage() {
         // Ejecutar
         load().catch(() => setError('No fue posible cargar las reuniones'))
         return () => { cancelled = true }
-    }, [database, user?.uid, now])
+    }, [database, databaseUrl, user?.uid, now, isCorporateUser, availableDatabases])
+
+    // Aplica filtro/orden a las citadas sin reconsultar BD
+    useEffect(() => {
+        const filtered = invitedRaw.filter(m => invitedFilter === 'upcoming' ? (typeof m.endTime === 'number' && m.endTime >= now) : true)
+        const sorted = filtered.sort((a, b) => invitedSort === 'desc' ? a.startTime - b.startTime : b.startTime - a.startTime)
+        setMine(sorted)
+    }, [invitedRaw, invitedFilter, invitedSort, now])
 
     const EmptyState = (
         <div className="bg-card rounded-2xl border border-border p-6 text-center py-16">
@@ -121,7 +129,29 @@ function MeetsPage() {
                     )}
 
                     <section>
-                        <h2 className="text-xl font-bold text-foreground mb-4">Mis próximas reuniones</h2>
+                        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                            <h2 className="text-xl font-bold text-foreground">Reuniones a las que me han citado</h2>
+                            <div className="flex items-center gap-3">
+                                <label className="text-sm text-muted-foreground">Mostrar</label>
+                                <select
+                                    value={invitedFilter}
+                                    onChange={(e) => setInvitedFilter(e.target.value as 'upcoming' | 'all')}
+                                    className="px-3 py-2 bg-input border border-border rounded text-sm"
+                                >
+                                    <option value="upcoming">Próximas y en curso</option>
+                                    <option value="all">Todas las citadas (hoy/recientes)</option>
+                                </select>
+                                <label className="text-sm text-muted-foreground">Ordenar</label>
+                                <select
+                                    value={invitedSort}
+                                    onChange={(e) => setInvitedSort(e.target.value as 'asc' | 'desc')}
+                                    className="px-3 py-2 bg-input border border-border rounded text-sm"
+                                >
+                                    <option value="asc">Más próximas primero</option>
+                                    <option value="desc">Más recientes primero</option>
+                                </select>
+                            </div>
+                        </div>
                         {mine.length > 0 ? (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {mine.map((m) => {
@@ -137,10 +167,15 @@ function MeetsPage() {
                                             canComplete={canComplete}
                                             completing={completing[m.id]}
                                             onComplete={async (meetingId) => {
-                                                if (!database || !user?.uid) return
+                                                if (!user?.uid) return
                                                 setCompleting((prev) => ({ ...prev, [meetingId]: true }))
                                                 try {
-                                                    const updated = await completeMeeting(database, meetingId, user.uid)
+                                                    // Si el item proviene de otro recinto, completar en esa BD
+                                                    const dbToUse = (m as MeetingWithIndex).source?.url
+                                                        ? (await import('@/services/firebase')).getDatabaseForUrl((m as MeetingWithIndex).source!.url)
+                                                        : database
+                                                    if (!dbToUse) throw new Error('Base de datos no disponible para completar')
+                                                    const updated = await completeMeeting(dbToUse, meetingId, user.uid)
                                                     // Actualiza en listas locales
                                                     setMine((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
                                                     setCreated((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
@@ -176,10 +211,14 @@ function MeetsPage() {
                                             canComplete={canComplete}
                                             completing={completing[m.id]}
                                             onComplete={async (meetingId) => {
-                                                if (!database || !user?.uid) return
+                                                if (!user?.uid) return
                                                 setCompleting((prev) => ({ ...prev, [meetingId]: true }))
                                                 try {
-                                                    const updated = await completeMeeting(database, meetingId, user.uid)
+                                                    const dbToUse = (m as MeetingWithIndex).source?.url
+                                                        ? (await import('@/services/firebase')).getDatabaseForUrl((m as MeetingWithIndex).source!.url)
+                                                        : database
+                                                    if (!dbToUse) throw new Error('Base de datos no disponible para completar')
+                                                    const updated = await completeMeeting(dbToUse, meetingId, user.uid)
                                                     setMine((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
                                                     setCreated((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
                                                 } catch (e) {

@@ -12,11 +12,15 @@ export default function MeetingCard({
     canComplete,
     onComplete,
     completing,
+    onOpenDetails,
+    onOpenCheckin,
 }: {
     meeting: Meeting
     canComplete?: boolean
     onComplete?: (meetingId: string) => void
     completing?: boolean
+    onOpenDetails?: (meetingId: string) => void
+    onOpenCheckin?: (meetingId: string) => void
 }) {
     const startDate = new Date(meeting.startTime)
     const endDate = new Date(meeting.endTime)
@@ -88,14 +92,36 @@ export default function MeetingCard({
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                    <Link to={`/meeting/${meeting.id}`} className="px-6 py-2 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:shadow-md text-center text-sm flex items-center justify-center gap-2">
-                        Detalles
-                        <ArrowRight className="w-4 h-4" />
-                    </Link>
-                    <Link to={`/checkin/${meeting.id}`} className="px-6 py-2 bg-transparent border-2 border-primary text-primary font-semibold rounded-lg transition-all duration-300 hover:bg-primary hover:text-primary-foreground hover:shadow-lg active:scale-95 text-center text-sm flex items-center justify-center gap-2">
-                        <Users className="w-4 h-4" />
-                        Asistencia
-                    </Link>
+                    {onOpenDetails ? (
+                        <button
+                            type="button"
+                            onClick={() => onOpenDetails(meeting.id)}
+                            className="px-6 py-2 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:shadow-md text-center text-sm flex items-center justify-center gap-2"
+                        >
+                            Detalles
+                            <ArrowRight className="w-4 h-4" />
+                        </button>
+                    ) : (
+                        <Link to={`/meeting/${meeting.id}`} className="px-6 py-2 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:shadow-md text-center text-sm flex items-center justify-center gap-2">
+                            Detalles
+                            <ArrowRight className="w-4 h-4" />
+                        </Link>
+                    )}
+                    {onOpenCheckin ? (
+                        <button
+                            type="button"
+                            onClick={() => onOpenCheckin(meeting.id)}
+                            className="px-6 py-2 bg-transparent border-2 border-primary text-primary font-semibold rounded-lg transition-all duration-300 hover:bg-primary hover:text-primary-foreground hover:shadow-lg active:scale-95 text-center text-sm flex items-center justify-center gap-2"
+                        >
+                            <Users className="w-4 h-4" />
+                            Asistencia
+                        </button>
+                    ) : (
+                        <Link to={`/checkin/${meeting.id}`} className="px-6 py-2 bg-transparent border-2 border-primary text-primary font-semibold rounded-lg transition-all duration-300 hover:bg-primary hover:text-primary-foreground hover:shadow-lg active:scale-95 text-center text-sm flex items-center justify-center gap-2">
+                            <Users className="w-4 h-4" />
+                            Asistencia
+                        </Link>
+                    )}
                 </div>
                 {canComplete && onComplete && ownerMeet && (
                     <div className="mt-3">
