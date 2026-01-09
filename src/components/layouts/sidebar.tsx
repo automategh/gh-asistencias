@@ -1,4 +1,6 @@
 import { useAuth } from "@/context/AuthContext"
+import { useDatabase } from "@/context/DatabaseContext"
+import { cn } from "@/lib/utils"
 import { Calendar, ChevronLeft, ChevronRight, Home, LogOut, Menu, Plus, UserCircle, UserCog, UserPen, X } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Link, useLocation } from "react-router-dom"
@@ -10,11 +12,20 @@ interface SidebarProps {
 export function Sidebar({ onCollapsedChange }: SidebarProps) {
 
     const { user, logout, role } = useAuth()
-    
-const location = useLocation()
+
+    const location = useLocation()
 
     // Estado móvil (se cierra automáticamente al cambiar de ruta)
     const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false)
+
+    const [showDbModal, setShowDbModal] = useState<boolean>(false)
+
+    const { availableDatabases, isCorporateUser, setSelectedDatabase, recinto } = useDatabase()
+
+    const handleDbChange = (url: string, key: typeof recinto) => {
+        setSelectedDatabase(url, key);
+        setShowDbModal(false);
+    };
 
     // Persistencia de colapso en localStorage para evitar “abrirse” en cada navegación
     const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
@@ -43,11 +54,11 @@ const location = useLocation()
         { icon: Plus, name: "Nueva Reunion", path: "/new-meeting", roles: ["Admin", "Lider"] },
         { icon: Calendar, name: "Reuniones", path: "/meets", roles: ["Admin", "Lider", "User"] },
         { icon: UserPen, name: "Perfil", path: "/configure-profile", roles: ["Admin", "Lider", "User"] },
-        {icon: UserCog, name: "Permisos", path: "/permissions", roles: ["Admin"] }
-        
-        
+        { icon: UserCog, name: "Permisos", path: "/permissions", roles: ["Admin"] }
+
+
     ]
-    
+
 
     return (
         <>
@@ -92,7 +103,8 @@ const location = useLocation()
                 {/* User Info */}
                 <div className="p-4 border-b border-border">
                     <div
-                        className={`flex items-center gap-3 p-3 bg-muted/30 rounded-lg ${isCollapsed ? "lg:justify-center lg:p-3" : ""}`}
+                        className={`flex items-center gap-3 p-3 bg-muted/30 rounded-lg ${isCollapsed ? "lg:justify-center lg:p-3" : ""} cursor-pointer`}
+                        onClick={() => setShowDbModal(true)}
                     >
                         <div className="w-10 h-10 bg-linear-to-br from-secondary to-accent rounded-full flex items-center justify-center shrink-0">
                             <UserCircle className="w-5 h-5 text-secondary-foreground" />
@@ -143,6 +155,8 @@ const location = useLocation()
                     </ul>
                 </nav>
 
+                
+
                 {/* Logout Button */}
                 <div className="p-4 border-t border-border">
                     <button
@@ -160,6 +174,46 @@ const location = useLocation()
                     </button>
                 </div>
             </aside>
+
+            {/* Modal de selección de base de datos para usuarios corporativos  */}
+                {isCorporateUser && showDbModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-100">
+                        <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl">
+                            <div className="flex items-center justify-between mb-4">
+                                <h2 className="text-xl font-bold text-[#273c2a]">Cambiar de recinto</h2>
+                                <button
+                                    onClick={() => setShowDbModal(false)}
+                                    className="text-gray-400 hover:text-gray-600"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-6">
+                                Selecciona el recinto que deseas visualizar:
+                            </p>
+                            <div className="space-y-3">
+                                {availableDatabases.map((db) => (
+                                    <button
+                                        key={db.key}
+                                        onClick={() => handleDbChange(db.url, db.key)}
+                                        className={cn(
+                                            "w-full px-4 py-3 text-left border rounded-lg transition-colors",
+                                            db.key === recinto
+                                                ? "border-[#F2B05F] bg-[#F2B05F]/10 font-semibold"
+                                                : "border-[#B0B3B2] hover:bg-[#F2B05F]/10 hover:border-[#F2B05F]"
+                                        )}
+                                    >
+                                        <span className="text-[#273c2a]">{db.name}</span>
+                                        {db.key === recinto && (
+                                            <span className="ml-2 text-xs text-[#F2B05F]">(Actual)</span>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                )}
         </>
     )
 }
