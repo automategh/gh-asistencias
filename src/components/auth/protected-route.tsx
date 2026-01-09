@@ -3,6 +3,7 @@ import { useDatabase } from '@/context/DatabaseContext'
 import { get, ref } from 'firebase/database'
 import { useEffect, useState, type JSX } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { findUserDatabaseByUid } from '@/services/user.discovery.service'
 
 
 /**
@@ -14,7 +15,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
  */
 export default function ProtectedRoute(): JSX.Element {
     const { user, loading } = useAuth()
-    const { database } = useDatabase()
+    const { database, availableDatabases, setSelectedDatabase } = useDatabase()
     const location = useLocation()
     const [profileComplete, setProfileComplete] = useState<boolean | null>(null)
 
@@ -40,22 +41,34 @@ export default function ProtectedRoute(): JSX.Element {
                 return
             }
 
-            // Espera a que la DB esté lista (no marcar como incompleto aún)
-            if (!database) {
-                return
+            // 1) Si hay DB actual, intenta validar ahí
+            if (database) {
+                try {
+                    const identifyRef = ref(database, `users/${uid}/identify`)
+                    const snapshot = await get(identifyRef)
+                    const isComplete = snapshot.exists()
+                    if (!cancelled && isComplete) {
+                        setProfileComplete(true)
+                        return
+                    }
+                } catch {
+                    // Ignorar y continuar al discovery multi-base
+                }
             }
 
+            // 2) Descubrir automáticamente en qué base está el usuario
             try {
-                const identifyRef = ref(database, `users/${uid}/identify`)
-                const snapshot = await get(identifyRef)
-                const isComplete = snapshot.exists()
-
-                if (!cancelled) {
-                    setProfileComplete(prev => (prev === isComplete ? prev : isComplete))
+                const candidates = availableDatabases.map(d => ({ url: d.url, key: d.key }))
+                const found = await findUserDatabaseByUid(candidates, uid)
+                if (!cancelled && found) {
+                    setProfileComplete(true)
+                    return
                 }
             } catch {
-                if (!cancelled) setProfileComplete(false)
+                // Si falla, continuará abajo como incompleto
             }
+
+            if (!cancelled) setProfileComplete(false)
         }
 
         checkProfile().catch(() => {
@@ -65,7 +78,7 @@ export default function ProtectedRoute(): JSX.Element {
         return () => {
             cancelled = true
         }
-    }, [uid, isOnProfileRoute, database]) // Tamaño y orden constantes
+    }, [uid, isOnProfileRoute, database, availableDatabases, setSelectedDatabase]) // Tamaño y orden constantes
 
     // Evita redirigir mientras se determina auth y perfil
     if (loading) {

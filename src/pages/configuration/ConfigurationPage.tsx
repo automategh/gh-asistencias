@@ -10,12 +10,13 @@ import type { Departament } from '@/types/departament';
 import { getLeaderNames, updateUserProfile } from '@/services/user.service';
 import Layout from '@/components/layouts/layout';
 import { useDatabase } from '@/context/DatabaseContext';
+import { DEFAULT_DATABASE_URL } from '@/services/firebase';
 
 
 function ConfigurationProfilePage() {
 
     const { user: firebaseUser } = useAuth();
-    const { database } = useDatabase();
+    const { database, isCorporateUser, databaseUrl } = useDatabase();
     const [user, setUser] = useState<UserProfile | null>(null)
     const [isEditing, setIsEditing] = useState<boolean>(false);
     const [departaments, setDepartaments] = useState<Departament[]>([]);
@@ -30,6 +31,9 @@ function ConfigurationProfilePage() {
     const [passwordForm, setPasswordForm] = useState<{ current: string; next: string; confirm: string }>({ current: '', next: '', confirm: '' });
     const [showPwd, setShowPwd] = useState<{ current: boolean; next: boolean; confirm: boolean }>({ current: false, next: false, confirm: false });
     const isEmailPasswordUser = Boolean(firebaseUser?.providerData?.some(p => p?.providerId === 'password'));
+
+    const [isMyDatabase, setIsMyDatabase] = useState<boolean | null>(null);
+    const isLocked = isMyDatabase === false;
 
 
     useEffect(() => {
@@ -59,15 +63,20 @@ function ConfigurationProfilePage() {
         getLeaderNames(database)
             .then(names => {
                 // Aquí podrías usar los nombres de líderes si es necesario
-                console.log(names);
                 setLeaders(names);
             })
             .catch(error => {
                 console.error("Error al obtener nombres de líderes:", error);
             });
+    
+        if ((isCorporateUser) && (DEFAULT_DATABASE_URL === databaseUrl)) {
+            setIsMyDatabase(true);
+        } else {
+            setIsMyDatabase(false);
+        }
 
         fetchUserData();
-    }, [database, firebaseUser]);
+    }, [database, firebaseUser, isCorporateUser, databaseUrl]);
 
 
     /**
@@ -88,6 +97,10 @@ function ConfigurationProfilePage() {
     function handleSave(): void {
         if (!database || !firebaseUser?.uid) {
             console.error("No se puede guardar el perfil: falta base de datos o usuario");
+            return;
+        }
+        if (isLocked) {
+            console.warn('Intento de guardar en base no propia');
             return;
         }
         // Actualizar en Realtime Database
@@ -146,7 +159,7 @@ function ConfigurationProfilePage() {
             .toUpperCase() || ' '
     
     const completePerfil = user && user.identify && user.department && user.immediateBoss;
-
+    
     return (
         <Layout>
             <div className="bg-linear-to-br from-background via-muted/5 to-background">
@@ -158,6 +171,13 @@ function ConfigurationProfilePage() {
 
 
                 <div className="max-w-4xl mx-auto p-6 mt-8">
+                    {isMyDatabase === false && (
+                        <div className="mb-6 rounded-2xl border border-red-300 bg-red-50 text-red-700 p-4">
+                            <p className="text-sm">
+                                No estás en tu base de datos. Por lo tanto, no podrás ver tu información ni editar tu perfil en esta base.
+                            </p>
+                        </div>
+                    )}
                     {/* Profile Card */}
                     <div className="bg-card rounded-2xl border border-border p-8 mb-6">
                         <div className="flex items-center gap-6 mb-8 pb-8 border-b border-border">
@@ -182,7 +202,9 @@ function ConfigurationProfilePage() {
                                         })
                                         setIsEditing(true)
                                     }}
-                                    className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5"
+                                    disabled={isLocked}
+                                    title={isLocked ? 'No puedes editar tu perfil en esta base' : undefined}
+                                    className={`px-6 py-3 font-semibold rounded-lg transition-all duration-300 ${isLocked ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary text-primary-foreground hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5'}`}
                                 >
                                     Editar Perfil
                                 </button>
@@ -220,12 +242,13 @@ function ConfigurationProfilePage() {
                                 </label>
                                 {isEditing ? (
                                     <input
+                                        disabled={isLocked}
                                         type="text"
                                         name="identify"
                                         value={formData.identify || ""}
                                         onChange={handleInputChange}
                                         placeholder="Ej: 123456789, 00000000"
-                                        className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
+                                        className={`w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 ${isLocked ? 'bg-muted/30 text-muted-foreground' : 'focus:ring-primary text-foreground'}`}
                                     />
                                 ) : (
                                     <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
@@ -242,10 +265,11 @@ function ConfigurationProfilePage() {
                                 </label>
                                 {isEditing ? (
                                     <select
+                                        disabled={isLocked}
                                         name="immediateBoss"
                                         value={formData.immediateBoss || ""}
                                         onChange={handleInputChange}
-                                        className="w-full px-4 py-3  border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
+                                        className={`w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 ${isLocked ? 'bg-muted/30 text-muted-foreground' : 'focus:ring-primary text-foreground'}`}
                                     >
                                         <option value="">Selecciona un líder</option>
                                         {leaders.map((leader, index) => (
@@ -280,10 +304,11 @@ function ConfigurationProfilePage() {
                                 </label>
                                 {isEditing ? (
                                     <select
+                                        disabled={isLocked}
                                         name="department"
                                         value={formData.department || ""}
                                         onChange={handleInputChange}
-                                        className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
+                                        className={`w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 ${isLocked ? 'bg-muted/30 text-muted-foreground' : 'focus:ring-primary text-foreground'}`}
                                     >
                                         <option value="">Selecciona un departamento</option>
                                         {departaments.map((dep) => (
@@ -304,7 +329,9 @@ function ConfigurationProfilePage() {
                                 <div className="flex gap-4 pt-6">
                                     <button
                                         onClick={handleSave}
-                                        className="flex-1 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                                        disabled={isLocked}
+                                        title={isLocked ? 'No puedes guardar cambios en esta base' : undefined}
+                                        className={`flex-1 px-6 py-3 font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-2 ${isLocked ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary text-primary-foreground hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5'}`}
                                     >
                                         <Save className="w-5 h-5" />
                                         Guardar Cambios
