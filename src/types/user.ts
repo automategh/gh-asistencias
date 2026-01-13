@@ -36,3 +36,14 @@ export interface CrossDbUserItem {
   readonly recinto: RecintoKey
   readonly databaseUrl: string
 }
+
+export interface RegisterFormData {
+  name: string
+  email: string
+  identify: string
+  department: string
+  password: string
+  confirmPassword: string
+  recint: string
+  leader: string
+}

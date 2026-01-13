@@ -12,6 +12,7 @@ import MeetsPage from './pages/meets/MeetsPage'
 import DetailMeetPage from './pages/meets/DetailMeetPage'
 import AttendancePage from './pages/meets/AttendancePage'
 import ChekinPage from './pages/meets/ChekinPage'
+import RegisterPage from './pages/auth/RegisterPage'
 
 
 function App() {
@@ -30,6 +31,7 @@ function App() {
                 </Route>
                 <Route element={<PublicOnlyRoute />}>
                     <Route path="/login" element={<LoginPage />} />
+                    <Route path="/register" element={<RegisterPage />} />
                 </Route>
             </Routes>
         </>

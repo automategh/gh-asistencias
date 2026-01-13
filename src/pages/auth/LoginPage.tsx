@@ -1,5 +1,6 @@
 import { useAuth } from "@/context/AuthContext"
-import { Mail, Lock, AlertCircle } from "lucide-react"
+import { Mail, Lock } from "lucide-react"
+import { Link } from "react-router-dom";
 
 function LoginPage() {
 
@@ -34,7 +35,7 @@ function LoginPage() {
                                 required
                             />
                         </div>
-                        
+
                     </div>
 
                     <div>
@@ -93,6 +94,17 @@ function LoginPage() {
                             <span>Iniciar sesión con Microsoft</span>
                         </span>
                     </button>
+
+                    <div className="my-4">
+                        <div className="flex items-center justify-center">
+                            <span className="mx-3 text-sm">No tienes cuenta?</span>
+                        </div >
+                        <div className="flex items-center justify-center mt-2">
+                            <span className="mx-3 text-xs text-blue-500 hover:text-blue-700 cursor-pointer">
+                                <Link to="/register" className="underline underline-offset-4 decoration-2">Regístrate aquí</Link>
+                            </span>
+                        </div>
+                    </div>
                 </form>
             </div>
 

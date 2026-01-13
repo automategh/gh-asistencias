@@ -29,6 +29,9 @@ export const auth = app ? getAuth(app) : null;
 export const analytics = app ? getAnalytics(app) : null;
 
 export const DEFAULT_DATABASE_URL = firebaseConfig.databaseURL ?? null;
+export const DATABASE_CCCI_URL = import.meta.env.VITE_FIREBASE_DATABASE_URL_CCCI ?? null;
+export const DATABASE_CCCR_URL = import.meta.env.VITE_FIREBASE_DATABASE_URL_CCCR ?? null;
+export const DATABASE_CEVP_URL = import.meta.env.VITE_FIREBASE_DATABASE_URL_CEVP ?? null;
 
 export const getDatabaseForUrl = (databaseUrl?: string | null) => {
   if (!app) {

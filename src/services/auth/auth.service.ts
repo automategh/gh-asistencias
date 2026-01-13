@@ -1,8 +1,22 @@
-import { OAuthProvider, signInWithPopup, signOut } from "firebase/auth";
-import { auth, getDatabaseForUrl } from "../firebase";
-import { resolveDatabaseByEmail } from "@/lib/firebase/databaseResolver";
+import { createUserWithEmailAndPassword, OAuthProvider, signInWithPopup, signOut, updateProfile } from "firebase/auth";
+import { auth, DATABASE_CCCI_URL, DATABASE_CCCR_URL, DATABASE_CEVP_URL, DEFAULT_DATABASE_URL, getDatabaseForUrl } from "../firebase";
+import { getDatabaseByRecinto, resolveDatabaseByEmail, type RecintoKey } from "@/lib/firebase/databaseResolver";
 import { get, ref, set } from "firebase/database";
+import type { RegisterFormData } from "@/types/user";
 
+interface UserRecord {
+    uid: string;
+    name: string;
+    email: string;
+    role: string;
+    immediateBoss?: string | null;
+    identify?: string | null;
+    department?: string | null;
+    active: boolean;
+    recint?: string | null;
+    createdAt: string;
+    lastLogin: string;
+}
 
 // Configuración del proveedor de OAuth para Microsoft
 const microsoftProvider = new OAuthProvider('microsoft.com');
@@ -116,6 +130,91 @@ export const loginWithMicrosoft = async () => {
         console.error("Error durante la autenticación con Microsoft:", error);
         throw error;
     }
+}
+
+export const registerWithEmailPassword = async (data: RegisterFormData) => {
+    if (!auth) throw new Error('Firebase Auth no inicializado');
+
+    try {
+
+        // Validar que el email no exista en ninguna BD
+        const existingUser = await findUserByEmailInAllDatabases(data.email);
+
+        if (existingUser) {
+            throw new Error("Este correo electrónico ya ha sido registrado.");
+        }
+
+        // Crear usuario en Firebase Auth
+        const result = await createUserWithEmailAndPassword(auth, data.email, data.password);
+        const user = result.user;
+
+        //actualizamos el perfil del usuario con el nombre
+        await updateProfile(user, { displayName: data.name });
+
+        // Obtener la base de datos según el recinto seleccionado
+        const db = getDatabaseByRecinto(data.recint as RecintoKey);
+
+        if (!db) {
+            throw new Error('Base de datos no encontrada para el recinto seleccionado.');
+        }
+
+        const userRef = ref(db, `users/${user.uid}`);
+
+        // Crear el registro del usuario en la base de datos correspondiente
+        const newUserRecord: UserRecord = {
+            uid: user.uid,
+            name: data.name,
+            email: data.email,
+            role: "User", // rol por defecto
+            active: false, // el usuario debe ser activado por un admin
+            createdAt: new Date().toISOString(),
+            lastLogin: new Date().toISOString(),
+            identify: data.identify,
+            department: data.department,
+            recint: data.recint,
+            immediateBoss: data.leader,
+        };
+
+        await set(userRef, newUserRecord);
+        return { user };
+    } catch (error) {
+        console.error("Error durante el registro de usuario:", error);
+        throw error;
+    }
+}
+
+/**
+ * Busca un usuario por email en todas las bases de datos.
+ * @param email Correo electrónico del usuario.
+ * @returns El usuario encontrado y la URL de la BD donde se encuentra, o null si no existe.
+ */
+async function findUserByEmailInAllDatabases(email: string): Promise<{ user: UserRecord; databaseUrl: string } | null> {
+    const allDatabases = [
+        DEFAULT_DATABASE_URL,
+        DATABASE_CCCI_URL,
+        DATABASE_CCCR_URL,
+        DATABASE_CEVP_URL,
+    ];
+
+    for (const databaseUrl of allDatabases) {
+        const database = getDatabaseForUrl(databaseUrl);
+        if (!database) continue;
+
+        const usersRef = ref(database, 'users');
+        const snapshot = await get(usersRef);
+
+        if (snapshot.exists()) {
+            const users = snapshot.val();
+            for (const userId in users) {
+                const user = users[userId] as UserRecord;
+                if (user.email?.toLowerCase() === email.toLowerCase()) {
+                    return { user, databaseUrl };
+                }
+            }
+        }
+    }
+
+    return null;
 }
 
 

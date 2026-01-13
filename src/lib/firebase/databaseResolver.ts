@@ -1,5 +1,6 @@
 
-import { DEFAULT_DATABASE_URL } from "@/services/firebase";
+import { DEFAULT_DATABASE_URL, getDatabaseForUrl } from "@/services/firebase";
+import type { Database } from "firebase/database";
 
 export type RecintoKey = "corporativo" | "ccci" | "cccr" | "cevp";
 
@@ -23,13 +24,6 @@ const ccciUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL_CCCI ?? null;
 const cccrUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL_CCCR ?? null;
 const cevpUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL_CEVP ?? null;
 
-// Log de inicialización para debug
-console.log("🔧 Inicializando DatabaseResolver con URLs:", {
-    corporateUrl: corporateUrl ? "✅ Configurada" : "❌ No configurada",
-    ccciUrl: ccciUrl ? "✅ Configurada" : "❌ No configurada",
-    cccrUrl: cccrUrl ? "✅ Configurada" : "❌ No configurada",
-    cevpUrl: cevpUrl ? "✅ Configurada" : "❌ No configurada"
-});
 
 const fallbackUrl = corporateUrl ?? ccciUrl;
 
@@ -98,14 +92,6 @@ export const resolveDatabaseByEmail = (email?: string | null): DatabaseResolutio
 export const getAllAvailableDatabases = (): Array<{ key: RecintoKey; name: string; url: string }> => {
     const databases: Array<{ key: RecintoKey; name: string; url: string }> = [];
 
-    // Log para debug
-    console.log("📊 Verificando bases de datos disponibles:", {
-        corporateUrl,
-        ccciUrl,
-        cccrUrl,
-        cevpUrl
-    });
-
     if (corporateUrl) {
         databases.push({ key: "corporativo", name: "Corporativo", url: corporateUrl });
     }
@@ -118,8 +104,6 @@ export const getAllAvailableDatabases = (): Array<{ key: RecintoKey; name: strin
     if (cevpUrl) {
         databases.push({ key: "cevp", name: "CEVP - Valle del Pacífico", url: cevpUrl });
     }
-
-    console.log("✅ Bases de datos encontradas:", databases.length, databases.map(db => db.name).join(", "));
 
     return databases;
 };
@@ -171,4 +155,29 @@ export const resolveDatabaseByRecintoName = (recintoName?: string | null): Datab
         recinto: "corporativo",
     };
 };
+
+/**
+ * Devuelve la instancia de Realtime Database para el recinto dado.
+ * Si el recinto no existe en la configuración, retorna null.
+ * 
+ * @param recinto Clave del recinto
+ * @returns Instancia de Database o null
+ */
+export function getDatabaseByRecinto(recinto: RecintoKey): Database | null {
+  const candidates = getAllAvailableDatabases()
+  const match = candidates.find(d => d.key === recinto)
+  return match ? (getDatabaseForUrl(match.url) ?? null) : null
+}
+
+/**
+ * Devuelve la URL de la base de datos para el recinto dado, o null si no está configurado.
+ * 
+ * @param recinto Clave del recinto
+ * @returns URL de la base de datos o null
+ */
+export function getDatabaseUrlByRecinto(recinto: RecintoKey): string | null {
+  const candidates = getAllAvailableDatabases()
+  const match = candidates.find(d => d.key === recinto)
+  return match ? match.url : null
+}
 

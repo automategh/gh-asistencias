@@ -1,4 +1,4 @@
-import { get, ref, update, type Database } from "firebase/database";
+import { equalTo, get, orderByChild, query, ref, update, type Database } from "firebase/database";
 import type { UserProfile } from "@/types/user";
 
 /**
@@ -13,7 +13,12 @@ export async function getUserLeaders(
     }
 
     const usersRef = ref(database, "users");
-    const snapshot = await get(usersRef);
+    const leadersQuery = query(
+        usersRef,
+        orderByChild("role"),
+        equalTo("Lider")
+    )
+    const snapshot = await get(leadersQuery);
     const values = snapshot.val() as Record<string, Partial<UserProfile>> | null;
 
     if (!values) return [];

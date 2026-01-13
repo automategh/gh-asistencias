@@ -1,6 +1,7 @@
 import { resolveDatabaseByEmail } from "@/lib/firebase/databaseResolver";
-import { loginWithMicrosoft, logout } from "@/services/auth/auth.service";
+import { loginWithMicrosoft, logout, registerWithEmailPassword } from "@/services/auth/auth.service";
 import { auth, getDatabaseForUrl } from "@/services/firebase";
+import type { RegisterFormData } from "@/types/user";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { get, ref } from "firebase/database";
 import React, { createContext, useContext, useEffect, useState } from "react";
@@ -11,6 +12,7 @@ interface AuthContextType {
     loading: boolean;
     role: string | null;
     loginWithMicrosoft: () => Promise<void>;
+    registerWithEmailPassword: (data: RegisterFormData) => Promise<void>;
     logout: () => Promise<void>;
 }
 
@@ -97,6 +99,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }
 
+    const handleRegisterWithEmailPassword = async (data: RegisterFormData) => {
+        setLoading(true);
+        try {
+            await registerWithEmailPassword(data);
+            // El usuario debe activar su cuenta y asignar recinto antes de poder loguearse
+            setUser(null);
+        } finally {
+            setLoading(false);
+        }
+    }
+
     const handleLogout = async () => {
         setLoading(true);
         try {
@@ -113,6 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         role,
         loginWithMicrosoft: handleLoginWithMicrosoft,
+        registerWithEmailPassword: handleRegisterWithEmailPassword,
         logout: handleLogout,
     }
 
