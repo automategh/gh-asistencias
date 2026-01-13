@@ -68,11 +68,15 @@ function ConfigurationProfilePage() {
             .catch(error => {
                 console.error("Error al obtener nombres de líderes:", error);
             });
-    
-        if ((isCorporateUser) && (DEFAULT_DATABASE_URL === databaseUrl)) {
-            setIsMyDatabase(true);
+
+        if (isCorporateUser) {
+            if (DEFAULT_DATABASE_URL === databaseUrl) {
+                setIsMyDatabase(true);
+            } else {
+                setIsMyDatabase(false);
+            }
         } else {
-            setIsMyDatabase(false);
+            setIsMyDatabase(true);
         }
 
         fetchUserData();
@@ -114,6 +118,8 @@ function ConfigurationProfilePage() {
                 console.error("Error al actualizar el perfil:", error);
             });
     }
+
+    console.log(databaseUrl)
 
     function handlePasswordFieldChange(event: ChangeEvent<HTMLInputElement>): void {
         const { name, value } = event.target;
@@ -157,9 +163,9 @@ function ConfigurationProfilePage() {
             .trim()
             .charAt(0)
             .toUpperCase() || ' '
-    
+
     const completePerfil = user && user.identify && user.department && user.immediateBoss;
-    
+
     return (
         <Layout>
             <div className="bg-linear-to-br from-background via-muted/5 to-background">

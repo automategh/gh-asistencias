@@ -1,4 +1,4 @@
-import { createUserWithEmailAndPassword, OAuthProvider, signInWithPopup, signOut, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, OAuthProvider, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile } from "firebase/auth";
 import { auth, DATABASE_CCCI_URL, DATABASE_CCCR_URL, DATABASE_CEVP_URL, DEFAULT_DATABASE_URL, getDatabaseForUrl } from "../firebase";
 import { getDatabaseByRecinto, resolveDatabaseByEmail, type RecintoKey } from "@/lib/firebase/databaseResolver";
 import { get, ref, set } from "firebase/database";
@@ -132,6 +132,13 @@ export const loginWithMicrosoft = async () => {
     }
 }
 
+/**
+ * Registra un nuevo usuario con email y contraseña.
+ * 
+ * @param data Datos del formulario de registro.
+ * @returns Objeto con la información del usuario registrado.
+ * @throws Error si el correo ya está registrado o si ocurre un problema durante el registro.
+ */
 export const registerWithEmailPassword = async (data: RegisterFormData) => {
     if (!auth) throw new Error('Firebase Auth no inicializado');
 
@@ -179,6 +186,69 @@ export const registerWithEmailPassword = async (data: RegisterFormData) => {
         return { user };
     } catch (error) {
         console.error("Error durante el registro de usuario:", error);
+        throw error;
+    }
+}
+
+type LoginProps = {
+    email: string;
+    password: string;
+}
+
+export const loginWithEmailPassword = async (props: LoginProps) => {
+    if (!auth) throw new Error("Firebase auth no está inicializado");
+
+    try {
+        // Autenticar usuario en Firebase Auth
+        const result = await signInWithEmailAndPassword(auth, props.email, props.password);
+        const user = result.user;
+
+        // Buscar el usuario en todas las BDs para obtener su recinto
+        const userFound = await findUserByEmailInAllDatabases(user.email ?? "");
+
+        if (!userFound) {
+            await logout();
+            throw new Error('Usuario no encontrado en la base de datos.');
+        }
+
+        const { user: dbUser, databaseUrl } = userFound;
+
+        // Validar si el usuario está activo
+        if (dbUser.active == false) {
+            await logout();
+            throw new Error('Usuario inactivo. Contacte al administrador para la asignación de recinto.');
+        }
+
+        // Validar si tiene recinto asignado
+        if (!dbUser.recint) {
+            await logout();
+            throw new Error('Usuario pendiente de asignación de recinto. Contacte al administrador.');
+        }
+
+        const database = getDatabaseForUrl(databaseUrl);
+
+        if (!database) {
+            throw new Error('Realtime Database no inicializado');
+        }
+
+        const userRef = ref(database, `users/${user.uid}`);
+
+        await set(userRef, {
+            ...dbUser,
+            lastLogin: new Date().toISOString(),
+        });
+
+        localStorage.setItem("selectedDatabase", JSON.stringify({ url: databaseUrl, key: dbUser.recint as RecintoKey }));
+
+        return {
+            user: user,
+            role: dbUser.role,
+            recinto: dbUser.recint as RecintoKey,
+            active: dbUser.active,
+            databaseUrl,
+        };
+    } catch (error) {
+        console.error("Error durante el login con email y contraseña:", error);
         throw error;
     }
 }

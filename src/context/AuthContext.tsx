@@ -1,5 +1,5 @@
 import { resolveDatabaseByEmail } from "@/lib/firebase/databaseResolver";
-import { loginWithMicrosoft, logout, registerWithEmailPassword } from "@/services/auth/auth.service";
+import { loginWithEmailPassword, loginWithMicrosoft, logout, registerWithEmailPassword } from "@/services/auth/auth.service";
 import { auth, getDatabaseForUrl } from "@/services/firebase";
 import type { RegisterFormData } from "@/types/user";
 import { onAuthStateChanged, type User } from "firebase/auth";
@@ -12,6 +12,7 @@ interface AuthContextType {
     loading: boolean;
     role: string | null;
     loginWithMicrosoft: () => Promise<void>;
+    loginWithEmailPassword: (email: string, password: string) => Promise<void>;
     registerWithEmailPassword: (data: RegisterFormData) => Promise<void>;
     logout: () => Promise<void>;
 }
@@ -99,6 +100,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }
 
+    const handleLoginWithEmailPassword = async (email: string, password: string) => {
+        setLoading(true);
+        try {
+            const result = await loginWithEmailPassword({email, password});
+
+            if (!result.active) {
+                await logout();
+                throw new Error("Error al obtener datos del usuario.");
+            }
+
+            if (!result.recinto || !result.databaseUrl) {
+                await logout();
+                throw new Error("Usuario sin recinto asignado. Contacte al administrador.");
+            }
+
+            localStorage.setItem('selectedDatabase', JSON.stringify({ url: result.databaseUrl, key: result.recinto ?? "" }));
+
+            setUser(result.user);
+        } catch (e) {
+            console.error("Error login email:", e);
+            setUser(null);
+            localStorage.removeItem('selectedDatabase');
+        } finally {
+            setLoading(false);
+        }
+    }
+
     const handleRegisterWithEmailPassword = async (data: RegisterFormData) => {
         setLoading(true);
         try {
@@ -126,6 +154,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         role,
         loginWithMicrosoft: handleLoginWithMicrosoft,
+        loginWithEmailPassword: handleLoginWithEmailPassword,
         registerWithEmailPassword: handleRegisterWithEmailPassword,
         logout: handleLogout,
     }
