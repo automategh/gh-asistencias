@@ -33,6 +33,7 @@ export interface CrossDbUserItem {
   readonly name: string
   readonly email: string
   readonly role?: string | null
+  readonly active?: boolean | null
   readonly recinto: RecintoKey
   readonly databaseUrl: string
 }

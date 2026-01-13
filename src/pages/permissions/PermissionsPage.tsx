@@ -1,7 +1,7 @@
 import Layout from "@/components/layouts/layout"
 import { useEffect, useMemo, useState } from "react"
 import type { CrossDbUserItem } from "@/types/user"
-import { listAllUsersAcrossDatabases, filterUsers, assignRoleInUserDatabase } from "@/services/roles.service"
+import { listAllUsersAcrossDatabases, filterUsers, assignRoleInUserDatabase, activateUserInUserDatabase, deactivateUserInUserDatabase } from "@/services/roles.service"
 import { getAllAvailableDatabases, type RecintoKey } from "@/lib/firebase/databaseResolver"
 import type { AppRole } from "@/types/permissions"
 
@@ -15,8 +15,10 @@ export default function PermissionsPage() {
     const [searchText, setSearchText] = useState<string>("")
     const [roleFilter, setRoleFilter] = useState<AppRole | "ALL">("ALL")
     const [recintoFilter, setRecintoFilter] = useState<RecintoKey | "ALL">("ALL")
+    const [activeFilter, setActiveFilter] = useState<boolean | "ALL">("ALL")
     const [loading, setLoading] = useState<boolean>(true)
     const [error, setError] = useState<string | null>(null)
+    const [activating, setActivating] = useState<Record<string, boolean>>({})
 
     const availableRecintos = useMemo(() => getAllAvailableDatabases(), [])
 
@@ -41,13 +43,39 @@ export default function PermissionsPage() {
     }, [])
 
     useEffect(() => {
-        const filtered = filterUsers(allUsers, { searchText, recinto: recintoFilter, role: roleFilter })
+        const filtered = filterUsers(allUsers, { searchText, recinto: recintoFilter, role: roleFilter, active: activeFilter })
         setVisible(filtered)
-    }, [allUsers, searchText, recintoFilter, roleFilter])
+    }, [allUsers, searchText, recintoFilter, roleFilter, activeFilter])
 
     async function assignRole(u: CrossDbUserItem, role: AppRole): Promise<void> {
         await assignRoleInUserDatabase(u, role)
         setAllUsers(prev => prev.map(x => x.uid === u.uid && x.databaseUrl === u.databaseUrl ? { ...x, role } : x))
+    }
+
+    async function activateUser(u: CrossDbUserItem): Promise<void> {
+        const key = `${u.databaseUrl}-${u.uid}`
+        setActivating(prev => ({ ...prev, [key]: true }))
+        try {
+            await activateUserInUserDatabase(u)
+            setAllUsers(prev => prev.map(x => x.uid === u.uid && x.databaseUrl === u.databaseUrl ? { ...x, active: true } : x))
+        } catch (e) {
+            console.error("No fue posible activar el usuario:", e)
+        } finally {
+            setActivating(prev => ({ ...prev, [key]: false }))
+        }
+    }
+
+    async function deactivateUser(u: CrossDbUserItem): Promise<void> {
+        const key = `${u.databaseUrl}-${u.uid}`
+        setActivating(prev => ({ ...prev, [key]: true }))
+        try {
+            await deactivateUserInUserDatabase(u)
+            setAllUsers(prev => prev.map(x => x.uid === u.uid && x.databaseUrl === u.databaseUrl ? { ...x, active: false } : x))
+        } catch (e) {
+            console.error("No fue posible desactivar el usuario:", e)
+        } finally {
+            setActivating(prev => ({ ...prev, [key]: false }))
+        }
     }
 
     return (
@@ -85,6 +113,18 @@ export default function PermissionsPage() {
                                 <option value="Instructor">Instructor</option>
                                 <option value="User">User</option>
                             </select>
+                            <select
+                                value={activeFilter === "ALL" ? "ALL" : String(activeFilter)}
+                                onChange={(e) => {
+                                    const v = e.target.value
+                                    setActiveFilter(v === "ALL" ? "ALL" : v === "true")
+                                }}
+                                className="px-3 py-2 bg-input border border-border rounded"
+                            >
+                                <option value="ALL">Todos los estados</option>
+                                <option value="true">Activos</option>
+                                <option value="false">Inactivos</option>
+                            </select>
                         </div>
                     </section>
 
@@ -99,6 +139,7 @@ export default function PermissionsPage() {
                                             <p className="text-sm font-semibold text-foreground">{u.name}</p>
                                             <p className="text-xs text-muted-foreground">{u.email}</p>
                                             <p className="text-xs text-muted-foreground mt-1">Recinto: <span className="font-medium">{u.recinto}</span></p>
+                                            <p className="text-xs mt-1">Estado: <span className={u.active ? "text-green-600" : "text-red-600"}>{u.active ? "Activo" : "Inactivo"}</span></p>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <span className="text-sm text-muted-foreground">Rol</span>
@@ -109,6 +150,25 @@ export default function PermissionsPage() {
                                                 <option value="Instructor">Instructor</option>
                                                 <option value="User">User</option>
                                             </select>
+                                            {u.active ? (
+                                                <button
+                                                    className={`px-3 py-2 rounded text-sm border border-red-600 text-red-600 hover:bg-red-600/10`}
+                                                    disabled={activating[`${u.databaseUrl}-${u.uid}`]}
+                                                    onClick={() => deactivateUser(u)}
+                                                    title="Desactivar usuario"
+                                                >
+                                                    {activating[`${u.databaseUrl}-${u.uid}`] ? "Desactivando…" : "Desactivar"}
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    className={`px-3 py-2 rounded text-sm border border-primary text-primary hover:bg-primary/10`}
+                                                    disabled={activating[`${u.databaseUrl}-${u.uid}`]}
+                                                    onClick={() => activateUser(u)}
+                                                    title="Activar usuario"
+                                                >
+                                                    {activating[`${u.databaseUrl}-${u.uid}`] ? "Activando…" : "Activar"}
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
