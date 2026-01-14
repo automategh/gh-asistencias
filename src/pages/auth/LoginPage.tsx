@@ -27,7 +27,7 @@ function LoginPage() {
         try {
             await loginWithEmailPassword(email.trim(), password)
             navigate("/")
-        }catch (err) {
+        } catch (err) {
             const e = err as { code?: string; message?: string }
             let message = e?.message || "Error al iniciar sesión."
             switch (e?.code) {
@@ -53,9 +53,17 @@ function LoginPage() {
     }
 
     return (
-            <div className="min-h-screen bg-linear-to-br from-background via-muted/20 to-background">
-                <div className="flex justify-center items-center">
-                    <form className="bg-card rounded-2xl border border-border p-6 space-y-5">
+        <div className="min-h-screen bg-linear-to-br from-background via-muted/20 to-background">
+            <div className="flex justify-center items-center">
+                <div>
+                    <div className="max-w-sm w-full aspect-video relative">
+                        <img
+                            src="/Logo-heroica-green.png"
+                            alt="Logo Heroica"
+                            className="w-full h-full object-contain"
+                        />
+                    </div>
+                    <form className=" bg-card rounded-2xl border border-border p-6 space-y-5">
                         <div className="mb-6">
                             <h2 className="text-2xl font-bold text-foreground mb-1">Inicio de Sesión </h2>
                             <p className="text-sm text-muted-foreground">Accede con tu correo </p>
@@ -155,7 +163,9 @@ function LoginPage() {
                 </div>
 
             </div>
-        )
-    }
 
-    export default LoginPage
+        </div>
+    )
+}
+
+export default LoginPage
