@@ -13,6 +13,7 @@ import DetailMeetPage from './pages/meets/DetailMeetPage'
 import AttendancePage from './pages/meets/AttendancePage'
 import ChekinPage from './pages/meets/ChekinPage'
 import RegisterPage from './pages/auth/RegisterPage'
+import RoleRoute from './components/auth/role-route'
 
 
 function App() {
@@ -22,11 +23,26 @@ function App() {
                 <Route element={<ProtectedRoute />}>
                     <Route path="/" element={<DashboardPage />} />
                     <Route path="/configure-profile" element={<ConfigurationProfilePage />} />
-                    <Route path="/new-meeting" element={<NewMeetPage />} />
+                    <Route path="/new-meeting" element={(
+                        <RoleRoute allowed={["Admin", "HR", "Lider", "Instructor"]}>
+                            <NewMeetPage />
+                        </RoleRoute>
+                    )} />
                     <Route path="/meets" element={<MeetsPage />} />
                     <Route path="/meeting/:id" element={<DetailMeetPage />} />
-                    <Route path="/attendance/:id" element={<AttendancePage />} />
-                    <Route path="/permissions" element={<PermissionsPage />} />
+                    <Route path="/attendance/:id" element={(
+                        <RoleRoute allowed={["Admin", "HR", "Lider", "Instructor"]}>
+                            <AttendancePage />
+                        </RoleRoute>
+                    )} />
+                    <Route
+                        path="/permissions"
+                        element={(
+                            <RoleRoute allowed={["Admin", "HR"]}>
+                                <PermissionsPage />
+                            </RoleRoute>
+                        )}
+                    />
                     <Route path="/checkin/:id" element={<ChekinPage />} />
                 </Route>
                 <Route element={<PublicOnlyRoute />}>
