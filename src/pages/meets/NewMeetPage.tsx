@@ -14,7 +14,7 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import type { MeetingKind, ParticipantInput, ParticipantRole } from '@/types/meeting'
 import { createMeeting, addParticipants } from '@/services/meetings.service'
-import { get, ref } from 'firebase/database'
+import { listAllUsersAcrossDatabases } from '@/services/roles.service'
 
 /**
  * Convierte un valor `datetime-local` a epoch ms, interpretándolo en zona local
@@ -91,26 +91,21 @@ function NewMeetPage() {
     useEffect(() => {
         let cancelled = false
         async function loadUsers(): Promise<void> {
-            if (!database) return
-
-            const snapshot = await get(ref(database, 'users'))
+            const crossDbUsers = await listAllUsersAcrossDatabases()
             if (cancelled) return
-            const values = snapshot.val() as Record<string, { name?: string; email?: string } | undefined> | null
-            const list: UserItem[] = []
-            if (values) {
-                for (const [uid, data] of Object.entries(values)) {
-                    const email = String(data?.email ?? '')
-                    const name = String(data?.name ?? '')
-                    if (email && name) list.push({ uid, name, email })
-                }
-            }
+
+            const list: UserItem[] = crossDbUsers.map(user => ({
+                uid: user.uid,
+                name: user.name,
+                email: user.email,
+            }))
             // Ordenar alfabéticamente por nombre para mejor UX
             list.sort((a, b) => a.name.localeCompare(b.name))
             setAllUsers(list)
         }
         loadUsers().catch(() => {})
         return () => { cancelled = true }
-    }, [database])
+    }, [])
 
     const filteredUsers = useMemo(() => {
         const q = search.trim().toLowerCase()
