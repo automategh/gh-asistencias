@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { MeetingKind, ParticipantInput, ParticipantRole } from '@/types/meeting'
 import { createMeeting, addParticipants } from '@/services/meetings.service'
 import { listAllUsersAcrossDatabases } from '@/services/roles.service'
+import type { RecintoKey } from '@/lib/firebase/databaseResolver'
 
 /**
  * Convierte un valor `datetime-local` a epoch ms, interpretándolo en zona local
@@ -77,9 +78,10 @@ function NewMeetPage() {
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
 
-    type UserItem = { uid: string; name: string; email: string }
+    type UserItem = { uid: string; name: string; email: string; recinto: RecintoKey; department?: string | null }
     const [allUsers, setAllUsers] = useState<UserItem[]>([])
     const [search, setSearch] = useState<string>('')
+    const [groupBy, setGroupBy] = useState<'none' | 'recinto' | 'department' | 'recintoDepartment'>('none')
     const [selected, setSelected] = useState<Array<ParticipantInput>>([])
 
     /** Maneja cambios de cualquier control del formulario */
@@ -98,6 +100,8 @@ function NewMeetPage() {
                 uid: user.uid,
                 name: user.name,
                 email: user.email,
+                recinto: user.recinto,
+                department: user.department ?? null,
             }))
             // Ordenar alfabéticamente por nombre para mejor UX
             list.sort((a, b) => a.name.localeCompare(b.name))
@@ -121,6 +125,21 @@ function NewMeetPage() {
         })
     }
 
+    /** Añade en bloque todos los usuarios proporcionados (evita duplicados) */
+    function addUsersBulk(users: UserItem[], role: ParticipantRole = 'attendee'): void {
+        setSelected(prev => {
+            const existing = new Set(prev.map(p => p.uid))
+            const additions: ParticipantInput[] = []
+            users.forEach(u => {
+                if (!existing.has(u.uid)) {
+                    additions.push({ uid: u.uid, name: u.name, email: u.email, role })
+                }
+            })
+            if (additions.length === 0) return prev
+            return [...prev, ...additions]
+        })
+    }
+
     /** Elimina un usuario de la lista de seleccionados */
     function removeUser(uid: string): void {
         setSelected(prev => prev.filter(p => p.uid !== uid))
@@ -132,6 +151,22 @@ function NewMeetPage() {
     }
 
     // Selección/rol de usuarios gestionados desde la lista filtrada y la lista de seleccionados
+
+    const groupedUsers = useMemo(() => {
+        if (groupBy === 'none') return null
+        const groups: Record<string, UserItem[]> = {}
+        filteredUsers.forEach(u => {
+            const departmentKey = u.department && u.department.trim().length > 0 ? u.department.trim() : 'Sin departamento'
+            const key = groupBy === 'recinto'
+                ? u.recinto
+                : groupBy === 'department'
+                    ? departmentKey
+                    : `${u.recinto}||${departmentKey}`
+            if (!groups[key]) groups[key] = []
+            groups[key].push(u)
+        })
+        return groups
+    }, [filteredUsers, groupBy])
 
     /**
      * Envía el formulario: valida campos, crea la reunión y persiste
@@ -290,18 +325,33 @@ function NewMeetPage() {
                             <label className="block text-sm font-semibold text-foreground mb-2">Participantes</label>
                             <div className="grid md:grid-cols-2 gap-6">
                                 <div>
-                                    <input
-                                        type="text"
-                                        name="participantSearch"
-                                        value={search}
-                                        onChange={(e) => setSearch(e.target.value)}
-                                        placeholder="Buscar por nombre o correo"
-                                        className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                                    />
+                                    <div className="flex flex-col gap-3">
+                                        <input
+                                            type="text"
+                                            name="participantSearch"
+                                            value={search}
+                                            onChange={(e) => setSearch(e.target.value)}
+                                            placeholder="Buscar por nombre o correo"
+                                            className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                        />
+                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                            <span>Agrupar por</span>
+                                            <select
+                                                value={groupBy}
+                                                onChange={(e) => setGroupBy(e.target.value as 'none' | 'recinto' | 'department' | 'recintoDepartment')}
+                                                className="px-3 py-1.5 bg-input border border-border rounded text-xs"
+                                            >
+                                                <option value="none">Sin agrupación</option>
+                                                <option value="recinto">Recinto</option>
+                                                <option value="department">Departamento</option>
+                                                <option value="recintoDepartment">Recinto y departamento</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                     <div className="mt-3 h-80 overflow-y-auto border border-border rounded">
                                         {filteredUsers.length === 0 ? (
                                             <div className="p-3 text-sm text-muted-foreground">Sin resultados</div>
-                                        ) : (
+                                        ) : groupBy === 'none' || !groupedUsers ? (
                                             <ul>
                                                 {filteredUsers.map(u => (
                                                     <li key={u.uid} className="flex items-center justify-between px-3 py-2 border-b border-border last:border-b-0">
@@ -313,6 +363,59 @@ function NewMeetPage() {
                                                     </li>
                                                 ))}
                                             </ul>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                {Object.entries(groupedUsers).map(([groupKey, users]) => {
+                                                    const isRecintoDepartment = groupBy === 'recintoDepartment'
+                                                    let displayRecinto: string | null = null
+                                                    let displayDepartment: string | null = null
+
+                                                    if (isRecintoDepartment) {
+                                                        const [recintoKey, departmentKey] = groupKey.split('||')
+                                                        displayRecinto = recintoKey
+                                                        displayDepartment = departmentKey
+                                                    }
+
+                                                    return (
+                                                        <div key={groupKey} className="border-b border-border last:border-b-0 pb-2">
+                                                            <div className="flex items-center justify-between px-3 py-2">
+                                                                <div>
+                                                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                                                        {groupBy === 'recinto' && `Recinto: ${groupKey}`}
+                                                                        {groupBy === 'department' && `Departamento: ${groupKey}`}
+                                                                        {isRecintoDepartment && displayRecinto && displayDepartment && `Recinto: ${displayRecinto} · Departamento: ${displayDepartment}`}
+                                                                    </p>
+                                                                    {(groupBy === 'department' || isRecintoDepartment) && (
+                                                                        <p className="text-[11px] text-muted-foreground">
+                                                                            {isRecintoDepartment && displayDepartment && displayRecinto
+                                                                                ? `Estos son los de ${displayDepartment.toLowerCase()} del recinto ${displayRecinto.toLowerCase()}.`
+                                                                                : `Estos son los de ${groupKey.toLowerCase()}.`}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => addUsersBulk(users)}
+                                                                    className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary-light"
+                                                                >
+                                                                    Agregar todos
+                                                                </button>
+                                                            </div>
+                                                            <ul>
+                                                                {users.map(u => (
+                                                                    <li key={u.uid} className="flex items-center justify-between px-3 py-1.5">
+                                                                        <div>
+                                                                            <p className="text-sm font-medium text-foreground">{u.name}</p>
+                                                                            <p className="text-xs text-muted-foreground">{u.email}</p>
+                                                                        </div>
+                                                                        <button type="button" onClick={() => addUser(u)} className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary-light">Añadir</button>
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
                                         )}
                                     </div>
                                 </div>
