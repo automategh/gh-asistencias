@@ -64,8 +64,15 @@ function DashboardPage() {
     const [loading, setLoading] = useState<boolean>(false)
     const [error, setError] = useState<string | null>(null)
 
+    /**
+     * Indica si el usuario actual puede filtrar por recintos.
+     * Solo es verdadero cuando el recinto resuelto es "corporativo".
+     */
     const canFilterRecintos = recinto === 'corporativo'
 
+    /**
+     * Años disponibles para el filtro del dashboard (año anterior, actual y siguiente).
+     */
     const years = useMemo<number[]>(() => {
         const currentYear = now.getFullYear()
         return [currentYear - 1, currentYear, currentYear + 1]
@@ -74,6 +81,11 @@ function DashboardPage() {
     useEffect(() => {
         let cancelled = false
 
+        /**
+         * Carga y calcula las métricas de asistencia según los filtros
+         * seleccionados (mes, año, tipo y recinto) y actualiza el estado
+         * del resumen (`summary`).
+         */
         async function loadMetrics(): Promise<void> {
             if (dbLoading) return
 
@@ -155,6 +167,11 @@ function DashboardPage() {
     const totalMeetings = summary?.totalMeetings ?? 0
     const attendanceRate = totalInvited > 0 ? Math.round((totalPresent * 100) / totalInvited) : 0
 
+    /**
+     * Etiqueta legible del recinto actualmente aplicado en el dashboard.
+     * Para corporativo puede ser "Todos los recintos" o un recinto específico;
+     * para el resto, siempre muestra su propio recinto.
+     */
     const currentRecintoLabel = useMemo(() => {
         if (canFilterRecintos) {
             if (recintoFilter === 'ALL') return 'Todos los recintos'
