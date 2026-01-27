@@ -7,8 +7,11 @@ import type { AppRole } from "@/types/permissions"
 
 /**
  * Lista todos los usuarios desde todas las bases de datos disponibles.
- * Realiza una lectura completa de `users` en cada instancia y agrega metadatos
- * del recinto y la URL de la base de datos para permitir asignación de rol específica.
+ *
+ * - Lee el nodo `users` de cada instancia configurada.
+ * - Normaliza nombre, correo, rol y estado activo.
+ * - Adjunta metadatos de recinto (key) y `databaseUrl` para futuras operaciones.
+ * - Devuelve la lista ordenada alfabéticamente por nombre para mejor UX.
  */
 export async function listAllUsersAcrossDatabases(): Promise<CrossDbUserItem[]> {
   const dbs = getAllAvailableDatabases()
@@ -44,8 +47,10 @@ export async function listAllUsersAcrossDatabases(): Promise<CrossDbUserItem[]> 
 }
 
 /**
- * Asigna un rol en la base de datos específica del usuario.
- * Escribe bajo `users/{uid}/role` en la instancia correspondiente.
+ * Asigna un rol de aplicación a un usuario en su base de datos de origen.
+ *
+ * Escribe bajo `users/{uid}/role` en la instancia correspondiente, usando
+ * la `databaseUrl` incluida en el `CrossDbUserItem`.
  */
 export async function assignRoleInUserDatabase(user: CrossDbUserItem, role: AppRole): Promise<void> {
   const db = getDatabaseForUrl(user.databaseUrl)
@@ -54,8 +59,10 @@ export async function assignRoleInUserDatabase(user: CrossDbUserItem, role: AppR
 }
 
 /**
- * Activa al usuario en su base de datos específica.
- * Escribe `users/{uid}/active = true` en la instancia correspondiente.
+ * Activa a un usuario en su base de datos específica.
+ *
+ * Escribe `users/{uid}/active = true` en la instancia correspondiente,
+ * respetando siempre la BD indicada por `user.databaseUrl`.
  */
 export async function activateUserInUserDatabase(user: CrossDbUserItem): Promise<void> {
   const db = getDatabaseForUrl(user.databaseUrl)
@@ -64,8 +71,10 @@ export async function activateUserInUserDatabase(user: CrossDbUserItem): Promise
 }
 
 /**
- * Desactiva al usuario en su base de datos específica.
- * Escribe `users/{uid}/active = false` en la instancia correspondiente.
+ * Desactiva a un usuario en su base de datos específica.
+ *
+ * Escribe `users/{uid}/active = false` en la instancia correspondiente,
+ * respetando siempre la BD indicada por `user.databaseUrl`.
  */
 export async function deactivateUserInUserDatabase(user: CrossDbUserItem): Promise<void> {
   const db = getDatabaseForUrl(user.databaseUrl)
@@ -74,7 +83,10 @@ export async function deactivateUserInUserDatabase(user: CrossDbUserItem): Promi
 }
 
 /**
- * Filtro utilitario en memoria para búsqueda y filtros de recinto/rol.
+ * Filtro utilitario en memoria para trabajar con listados de usuarios cruzados.
+ *
+ * Permite combinar búsqueda por texto (nombre/correo) con filtros de recinto,
+ * rol y estado activo/inactivo sin reconsultar la base de datos.
  */
 export function filterUsers(
   users: ReadonlyArray<CrossDbUserItem>,

@@ -6,8 +6,11 @@ import { getAllAvailableDatabases, type RecintoKey } from "@/lib/firebase/databa
 import type { AppRole } from "@/types/permissions"
 
 /**
- * Módulo de Asignación de Roles (sin permisos).
- * Lista usuarios de las 4 bases de datos y permite asignar un rol.
+ * Página de gestión de permisos y roles.
+ *
+ * - Lista usuarios provenientes de todas las bases de datos configuradas.
+ * - Permite filtrar por nombre/correo, recinto, rol y estado (activo/inactivo).
+ * - Habilita cambio de rol y activación/desactivación respetando la BD de origen.
  */
 export default function PermissionsPage() {
     const [allUsers, setAllUsers] = useState<CrossDbUserItem[]>([])
@@ -24,7 +27,11 @@ export default function PermissionsPage() {
 
     useEffect(() => {
         let cancelled = false
-        async function loadAll() {
+        /**
+         * Carga inicial de usuarios desde todas las bases de datos disponibles.
+         * Actualiza `allUsers` y maneja estado de carga/errores.
+         */
+        async function loadAll(): Promise<void> {
             try {
                 setLoading(true)
                 setError(null)
@@ -43,15 +50,31 @@ export default function PermissionsPage() {
     }, [])
 
     useEffect(() => {
+        /**
+         * Aplica los filtros de búsqueda, recinto, rol y estado
+         * sobre la lista completa de usuarios y actualiza `visible`.
+         */
         const filtered = filterUsers(allUsers, { searchText, recinto: recintoFilter, role: roleFilter, active: activeFilter })
         setVisible(filtered)
     }, [allUsers, searchText, recintoFilter, roleFilter, activeFilter])
 
+    /**
+     * Asigna un rol a un usuario en su base de datos correspondiente
+     * y sincroniza el cambio en el estado local.
+     *
+     * @param u Usuario cruzado (incluye URL de su BD)
+     * @param role Rol de aplicación a establecer
+     */
     async function assignRole(u: CrossDbUserItem, role: AppRole): Promise<void> {
         await assignRoleInUserDatabase(u, role)
         setAllUsers(prev => prev.map(x => x.uid === u.uid && x.databaseUrl === u.databaseUrl ? { ...x, role } : x))
     }
 
+    /**
+     * Activa a un usuario en su base de datos de origen y
+     * refleja el cambio en el listado local.
+     * Gestiona también un estado de "busy" por usuario.
+     */
     async function activateUser(u: CrossDbUserItem): Promise<void> {
         const key = `${u.databaseUrl}-${u.uid}`
         setActivating(prev => ({ ...prev, [key]: true }))
@@ -65,6 +88,11 @@ export default function PermissionsPage() {
         }
     }
 
+    /**
+     * Desactiva a un usuario en su base de datos de origen y
+     * refleja el cambio en el listado local.
+     * Gestiona también un estado de "busy" por usuario.
+     */
     async function deactivateUser(u: CrossDbUserItem): Promise<void> {
         const key = `${u.databaseUrl}-${u.uid}`
         setActivating(prev => ({ ...prev, [key]: true }))
