@@ -8,6 +8,7 @@ import ConfigurationProfilePage from './pages/configuration/ConfigurationPage'
 import DashboardPage from './pages/dashboard/DashboardPage'
 import NewMeetPage from './pages/meets/NewMeetPage'
 import PermissionsPage from './pages/permissions/PermissionsPage'
+import DepartmentsPage from './pages/configuration/DepartmentsPage'
 import MeetsPage from './pages/meets/MeetsPage'
 import DetailMeetPage from './pages/meets/DetailMeetPage'
 import AttendancePage from './pages/meets/AttendancePage'
@@ -23,6 +24,14 @@ function App() {
                 <Route element={<ProtectedRoute />}>
                     <Route path="/" element={<DashboardPage />} />
                     <Route path="/configure-profile" element={<ConfigurationProfilePage />} />
+                    <Route
+                        path="/departments"
+                        element={(
+                            <RoleRoute allowed={["Admin", "HR"]}>
+                                <DepartmentsPage />
+                            </RoleRoute>
+                        )}
+                    />
                     <Route path="/new-meeting" element={(
                         <RoleRoute allowed={["Admin", "HR", "Lider", "Instructor"]}>
                             <NewMeetPage />

@@ -1,9 +1,14 @@
-import { get, ref, type Database } from "firebase/database";
+import { get, push, ref, remove, set, update, type Database } from "firebase/database";
 import { getDatabaseForUrl } from "@/services/firebase";
 import { getAllAvailableDatabases, type RecintoKey } from "@/lib/firebase/databaseResolver";
+import type { Departament } from "@/types/departament";
 
 
-export async function getDepartaments(database: Database) {
+/**
+ * Obtiene todos los departamentos de la base de datos actual.
+ * Cada entrada incluye su `id` (clave en RTDB) y metadatos almacenados.
+ */
+export async function getDepartaments(database: Database): Promise<Departament[]> {
 
     if (!database) {
         throw new Error("La base de datos no está disponible");
@@ -11,14 +16,84 @@ export async function getDepartaments(database: Database) {
 
     const departamentsRef = ref(database, "departaments");
     const snapshot = await get(departamentsRef);
-    const values = snapshot.val();
+    const values = snapshot.val() as Record<string, { name: string; createdAt: string }> | null;
 
-    // Convertir el objeto de departamentos en un array de departamentos pero añadiendo el id en su propio objeto
-    const departaments = Object.keys(values || {}).map((key) => ({
+    if (!values) return [];
+
+    const departaments: Departament[] = Object.keys(values).map((key) => ({
         id: key,
-        ...values[key],
+        name: values[key].name,
+        createdAt: values[key].createdAt,
     }));
     return departaments;
+}
+
+/**
+ * Crea un nuevo departamento en la base de datos actual.
+ *
+ * @param database Instancia de Realtime Database
+ * @param name Nombre del departamento
+ */
+export async function createDepartament(database: Database, name: string): Promise<Departament> {
+    if (!database) {
+        throw new Error("La base de datos no está disponible");
+    }
+
+    const cleanName = name.trim();
+    if (!cleanName) {
+        throw new Error("El nombre del departamento es obligatorio");
+    }
+
+    const departamentsRef = ref(database, "departaments");
+    const newRef = push(departamentsRef);
+    const id = newRef.key;
+
+    if (!id) {
+        throw new Error("No fue posible generar el id del departamento");
+    }
+
+    const nowIso = new Date().toISOString();
+    const departament: Departament = {
+        id,
+        name: cleanName,
+        createdAt: nowIso,
+    };
+
+    await set(newRef, { name: departament.name, createdAt: departament.createdAt });
+    return departament;
+}
+
+/**
+ * Actualiza el nombre de un departamento existente.
+ *
+ * @param database Instancia de Realtime Database
+ * @param id Clave del departamento en RTDB
+ * @param name Nuevo nombre del departamento
+ */
+export async function updateDepartament(database: Database, id: string, name: string): Promise<void> {
+    if (!database) {
+        throw new Error("La base de datos no está disponible");
+    }
+
+    const cleanName = name.trim();
+    if (!cleanName) {
+        throw new Error("El nombre del departamento es obligatorio");
+    }
+
+    const departamentRef = ref(database, `departaments/${id}`);
+    await update(departamentRef, { name: cleanName });
+}
+
+/**
+ * Elimina un departamento existente por su id.
+ */
+export async function deleteDepartament(database: Database, id: string): Promise<void> {
+    if (!database) {
+        throw new Error("La base de datos no está disponible");
+    }
+
+    const departamentRef = ref(database, `departaments/${id}`);
+    await remove(departamentRef);
 }
 
 /**
