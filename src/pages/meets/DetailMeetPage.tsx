@@ -108,7 +108,7 @@ function DetailMeetPage() {
 
     /** 
      * Permiso de cancelación: creador, manager o Admin
-     * */ 
+     * */
     const canCancel = useMemo(() => {
         if (!meeting || !user) return false
         if (isFinalStatus) return false
@@ -244,13 +244,16 @@ function DetailMeetPage() {
                                 </div>
 
                                 <div className="mt-8 pt-6 border-t border-border">
-                                    <Link
-                                        to={`/attendance/${meeting?.id}`}
-                                        className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5"
-                                    >
-                                        <BarChart3 className="w-4 h-4" />
-                                        Ver Asistencias
-                                    </Link>
+                                    {role === 'Admin' || role === 'HR' || role === 'Lider' || role === 'Instructor' ? (
+                                        <Link
+                                            to={`/attendance/${meeting?.id}`}
+                                            className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5"
+                                        >
+                                            <BarChart3 className="w-4 h-4" />
+                                            Ver Asistencias
+                                        </Link>
+                                    ) : ''}
+
                                     {canClose && !isFinalStatus && (
                                         <button
                                             type="button"
