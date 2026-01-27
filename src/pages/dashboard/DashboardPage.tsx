@@ -52,7 +52,7 @@ const MONTH_LABELS = [
  */
 function DashboardPage() {
     const { logout, user } = useAuth()
-    const { database, availableDatabases, recinto, isCorporateUser, loading: dbLoading } = useDatabase()
+    const { database, availableDatabases, recinto, loading: dbLoading } = useDatabase()
 
     const now = useMemo(() => new Date(), [])
     const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear())
@@ -63,6 +63,8 @@ function DashboardPage() {
     const [summary, setSummary] = useState<AttendanceSummary | null>(null)
     const [loading, setLoading] = useState<boolean>(false)
     const [error, setError] = useState<string | null>(null)
+
+    const canFilterRecintos = recinto === 'corporativo'
 
     const years = useMemo<number[]>(() => {
         const currentYear = now.getFullYear()
@@ -90,7 +92,7 @@ function DashboardPage() {
 
                 let result: AttendanceSummary
 
-                if (isCorporateUser) {
+                if (canFilterRecintos) {
                     const recintosToUse = recintoFilter === 'ALL'
                         ? availableDatabases
                         : availableDatabases.filter((db) => db.key === recintoFilter)
@@ -141,7 +143,7 @@ function DashboardPage() {
         dbLoading,
         database,
         availableDatabases,
-        isCorporateUser,
+        canFilterRecintos,
         recintoFilter,
         selectedYear,
         selectedMonth,
@@ -154,14 +156,14 @@ function DashboardPage() {
     const attendanceRate = totalInvited > 0 ? Math.round((totalPresent * 100) / totalInvited) : 0
 
     const currentRecintoLabel = useMemo(() => {
-        if (isCorporateUser) {
+        if (canFilterRecintos) {
             if (recintoFilter === 'ALL') return 'Todos los recintos'
             const match = availableDatabases.find((db) => db.key === recintoFilter)
             return match?.name ?? recintoFilter
         }
         const match = availableDatabases.find((db) => db.key === recinto)
         return match?.name ?? recinto
-    }, [availableDatabases, recinto, recintoFilter, isCorporateUser])
+    }, [availableDatabases, recinto, recintoFilter, canFilterRecintos])
 
     const byType = summary?.byType ?? getEmptyAttendanceSummary().byType
 
@@ -250,7 +252,7 @@ function DashboardPage() {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs text-muted-foreground">Recinto</span>
-                                    {isCorporateUser ? (
+                                    {canFilterRecintos ? (
                                         <select
                                             value={recintoFilter}
                                             onChange={(e) => setRecintoFilter(e.target.value as RecintoFilter)}
