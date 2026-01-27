@@ -21,13 +21,14 @@ export async function listAllUsersAcrossDatabases(): Promise<CrossDbUserItem[]> 
     const database: Database | null = getDatabaseForUrl(dbInfo.url)
     if (!database) continue
     const snap = await get(ref(database, "users"))
-    const val = snap.val() as Record<string, { name?: string; email?: string; role?: string | null; active?: boolean | null }> | null
+    const val = snap.val() as Record<string, { name?: string; email?: string; role?: string | null; active?: boolean | null; department?: string | null }> | null
     if (!val) continue
     for (const [uid, u] of Object.entries(val)) {
       const name = String(u?.name ?? "").trim()
       const email = String(u?.email ?? "").trim()
       const role = (u?.role ?? null)
       const active = (u?.active ?? null)
+      const department = (u?.department ?? null)
       if (!name || !email) continue
       results.push({
         uid,
@@ -35,6 +36,7 @@ export async function listAllUsersAcrossDatabases(): Promise<CrossDbUserItem[]> 
         email,
         role,
         active,
+        department,
         recinto: dbInfo.key as RecintoKey,
         databaseUrl: dbInfo.url,
       })

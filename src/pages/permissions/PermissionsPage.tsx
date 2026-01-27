@@ -22,6 +22,7 @@ export default function PermissionsPage() {
     const [loading, setLoading] = useState<boolean>(true)
     const [error, setError] = useState<string | null>(null)
     const [activating, setActivating] = useState<Record<string, boolean>>({})
+    const [activatingDepartment, setActivatingDepartment] = useState<Record<string, boolean>>({})
 
     const availableRecintos = useMemo(() => getAllAvailableDatabases(), [])
 
@@ -57,6 +58,18 @@ export default function PermissionsPage() {
         const filtered = filterUsers(allUsers, { searchText, recinto: recintoFilter, role: roleFilter, active: activeFilter })
         setVisible(filtered)
     }, [allUsers, searchText, recintoFilter, roleFilter, activeFilter])
+
+    const inactiveGroupsByDepartment = useMemo(() => {
+        const groups: Record<string, CrossDbUserItem[]> = {}
+        visible.forEach((u) => {
+            if (u.active) return
+            const deptRaw = (u.department ?? "").trim()
+            const dept = deptRaw.length > 0 ? deptRaw : "Sin departamento"
+            if (!groups[dept]) groups[dept] = []
+            groups[dept].push(u)
+        })
+        return groups
+    }, [visible])
 
     /**
      * Asigna un rol a un usuario en su base de datos correspondiente
@@ -103,6 +116,32 @@ export default function PermissionsPage() {
             console.error("No fue posible desactivar el usuario:", e)
         } finally {
             setActivating(prev => ({ ...prev, [key]: false }))
+        }
+    }
+
+    /**
+     * Activa en bloque a todos los usuarios inactivos de un departamento
+     * (según la vista filtrada actual) utilizando la función `activateUser`.
+     */
+    async function activateDepartment(department: string): Promise<void> {
+        const usersInDept = visible.filter((u) => {
+            const deptRaw = (u.department ?? "").trim()
+            const dept = deptRaw.length > 0 ? deptRaw : "Sin departamento"
+            return !u.active && dept === department
+        })
+
+        if (usersInDept.length === 0) return
+
+        setActivatingDepartment(prev => ({ ...prev, [department]: true }))
+        try {
+            for (const u of usersInDept) {
+                // Reutiliza la lógica de activación individual
+                // para mantener consistente el estado local.
+                // La activación se hace secuencialmente para evitar saturar la red.
+                await activateUser(u)
+            }
+        } finally {
+            setActivatingDepartment(prev => ({ ...prev, [department]: false }))
         }
     }
 
@@ -160,47 +199,103 @@ export default function PermissionsPage() {
                     <section className="bg-card rounded-2xl border border-border p-6">
                         <h2 className="text-xl font-bold text-foreground mb-4">Usuarios ({visible.length})</h2>
                         <div className="space-y-4">
-                            {visible.map(u => (
-                                <div key={`${u.databaseUrl}-${u.uid}`} className="border border-border rounded-lg p-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-sm font-semibold text-foreground">{u.name}</p>
-                                            <p className="text-xs text-muted-foreground">{u.email}</p>
-                                            <p className="text-xs text-muted-foreground mt-1">Recinto: <span className="font-medium">{u.recinto}</span></p>
-                                            <p className="text-xs mt-1">Estado: <span className={u.active ? "text-green-600" : "text-red-600"}>{u.active ? "Activo" : "Inactivo"}</span></p>
+                            {/* Vista agrupada por departamento cuando se están viendo inactivos */}
+                            {!loading && activeFilter === false && Object.keys(inactiveGroupsByDepartment).length > 0 ? (
+                                Object.entries(inactiveGroupsByDepartment).map(([dept, users]) => (
+                                    <div key={dept} className="border border-border rounded-lg p-4 space-y-3">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div>
+                                                <p className="text-sm font-semibold text-foreground">Departamento: {dept}</p>
+                                                <p className="text-xs text-muted-foreground">Estos son los de {dept.toLowerCase()} inactivos.</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="px-3 py-2 rounded text-sm border border-primary text-primary hover:bg-primary/10"
+                                                disabled={activatingDepartment[dept]}
+                                                onClick={() => activateDepartment(dept)}
+                                            >
+                                                {activatingDepartment[dept] ? "Activando…" : "Activar todos"}
+                                            </button>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm text-muted-foreground">Rol</span>
-                                            <select value={u.role ?? "User"} onChange={(e) => assignRole(u, e.target.value as AppRole)} className="px-2 py-2 bg-input border border-border rounded text-sm capitalize">
-                                                <option value="Admin">Admin</option>
-                                                <option value="Lider">Lider</option>
-                                                <option value="HR">HR</option>
-                                                <option value="Instructor">Instructor</option>
-                                                <option value="User">User</option>
-                                            </select>
-                                            {u.active ? (
-                                                <button
-                                                    className={`px-3 py-2 rounded text-sm border border-red-600 text-red-600 hover:bg-red-600/10`}
-                                                    disabled={activating[`${u.databaseUrl}-${u.uid}`]}
-                                                    onClick={() => deactivateUser(u)}
-                                                    title="Desactivar usuario"
-                                                >
-                                                    {activating[`${u.databaseUrl}-${u.uid}`] ? "Desactivando…" : "Desactivar"}
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    className={`px-3 py-2 rounded text-sm border border-primary text-primary hover:bg-primary/10`}
-                                                    disabled={activating[`${u.databaseUrl}-${u.uid}`]}
-                                                    onClick={() => activateUser(u)}
-                                                    title="Activar usuario"
-                                                >
-                                                    {activating[`${u.databaseUrl}-${u.uid}`] ? "Activando…" : "Activar"}
-                                                </button>
-                                            )}
+                                        <div className="space-y-2">
+                                            {users.map((u) => (
+                                                <div key={`${u.databaseUrl}-${u.uid}`} className="border border-border rounded-lg p-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <div>
+                                                            <p className="text-sm font-semibold text-foreground">{u.name}</p>
+                                                            <p className="text-xs text-muted-foreground">{u.email}</p>
+                                                            <p className="text-xs text-muted-foreground mt-1">Recinto: <span className="font-medium">{u.recinto}</span></p>
+                                                            <p className="text-xs mt-1">Estado: <span className={u.active ? "text-green-600" : "text-red-600"}>{u.active ? "Activo" : "Inactivo"}</span></p>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-sm text-muted-foreground">Rol</span>
+                                                            <select value={u.role ?? "User"} onChange={(e) => assignRole(u, e.target.value as AppRole)} className="px-2 py-2 bg-input border border-border rounded text-sm capitalize">
+                                                                <option value="Admin">Admin</option>
+                                                                <option value="Lider">Lider</option>
+                                                                <option value="HR">HR</option>
+                                                                <option value="Instructor">Instructor</option>
+                                                                <option value="User">User</option>
+                                                            </select>
+                                                            <button
+                                                                className={`px-3 py-2 rounded text-sm border border-primary text-primary hover:bg-primary/10`}
+                                                                disabled={activating[`${u.databaseUrl}-${u.uid}`]}
+                                                                onClick={() => activateUser(u)}
+                                                                title="Activar usuario"
+                                                            >
+                                                                {activating[`${u.databaseUrl}-${u.uid}`] ? "Activando…" : "Activar"}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                ))
+                            ) : (
+                                <>
+                                    {visible.map(u => (
+                                        <div key={`${u.databaseUrl}-${u.uid}`} className="border border-border rounded-lg p-4">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-sm font-semibold text-foreground">{u.name}</p>
+                                                    <p className="text-xs text-muted-foreground">{u.email}</p>
+                                                    <p className="text-xs text-muted-foreground mt-1">Recinto: <span className="font-medium">{u.recinto}</span></p>
+                                                    <p className="text-xs mt-1">Estado: <span className={u.active ? "text-green-600" : "text-red-600"}>{u.active ? "Activo" : "Inactivo"}</span></p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm text-muted-foreground">Rol</span>
+                                                    <select value={u.role ?? "User"} onChange={(e) => assignRole(u, e.target.value as AppRole)} className="px-2 py-2 bg-input border border-border rounded text-sm capitalize">
+                                                        <option value="Admin">Admin</option>
+                                                        <option value="Lider">Lider</option>
+                                                        <option value="HR">HR</option>
+                                                        <option value="Instructor">Instructor</option>
+                                                        <option value="User">User</option>
+                                                    </select>
+                                                    {u.active ? (
+                                                        <button
+                                                            className={`px-3 py-2 rounded text-sm border border-red-600 text-red-600 hover:bg-red-600/10`}
+                                                            disabled={activating[`${u.databaseUrl}-${u.uid}`]}
+                                                            onClick={() => deactivateUser(u)}
+                                                            title="Desactivar usuario"
+                                                        >
+                                                            {activating[`${u.databaseUrl}-${u.uid}`] ? "Desactivando…" : "Desactivar"}
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            className={`px-3 py-2 rounded text-sm border border-primary text-primary hover:bg-primary/10`}
+                                                            disabled={activating[`${u.databaseUrl}-${u.uid}`]}
+                                                            onClick={() => activateUser(u)}
+                                                            title="Activar usuario"
+                                                        >
+                                                            {activating[`${u.databaseUrl}-${u.uid}`] ? "Activando…" : "Activar"}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </>
+                            )}
                             {!loading && visible.length === 0 && (<div className="text-sm text-muted-foreground">Sin resultados</div>)}
                         </div>
                     </section>
