@@ -21,7 +21,9 @@ function RegisterPage() {
         password: "",
         confirmPassword: "",
         recint: "",
-        leader: ""
+        leader: "",
+        worksAtHeroica: true,
+        companyName: "",
     });
     const [error, setError] = useState<string | null>(null);
 
@@ -60,6 +62,14 @@ function RegisterPage() {
         updateField(name as keyof RegisterFormData, value as RegisterFormData[keyof RegisterFormData])
     }
 
+    const handleHeroicaCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { checked } = e.target
+        updateField("worksAtHeroica", checked)
+        if (checked) {
+            updateField("companyName", "")
+        }
+    }
+
     const updateField = <K extends keyof RegisterFormData>(name: K, value: RegisterFormData[K]) => {
         setFormData(prev => ({ ...prev, [name]: value }))
     }
@@ -72,6 +82,7 @@ function RegisterPage() {
         if (!data.identify.trim()) return "La identificación es obligatoria.";
         if (!data.department.trim()) return "El departamento es obligatorio.";
         if (!data.recint.trim()) return "El recinto es obligatorio.";
+        if (!data.worksAtHeroica && !data.companyName.trim()) return "La empresa es obligatoria si no trabajas en Grupo Heroica.";
         if (!data.password) return "La contraseña es obligatoria.";
         if (data.password.length < 8) return "La contraseña debe tener al menos 8 caracteres."
         if (data.password !== data.confirmPassword) return "Las contraseñas no coinciden.";
@@ -200,6 +211,33 @@ function RegisterPage() {
                                 </select>
                                 <ChevronDown className="absolute right-3 top-3.5 w-5 h-5 text-muted-foreground pointer-events-none" />
                             </div>
+                        </div>
+
+                        <div className="md:col-span-2 flex flex-col gap-2">
+                            <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                <input
+                                    type="checkbox"
+                                    name="worksAtHeroica"
+                                    checked={formData.worksAtHeroica}
+                                    onChange={handleHeroicaCheckboxChange}
+                                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                                />
+                                <span>¿Trabajas en Grupo Heroica?</span>
+                            </label>
+                            {!formData.worksAtHeroica && (
+                                <div>
+                                    <label className="block text-xs font-medium text-foreground mb-1">Empresa donde trabajas *</label>
+                                    <input
+                                        type="text"
+                                        name="companyName"
+                                        value={formData.companyName}
+                                        onChange={handleChange}
+                                        placeholder="Nombre de la empresa"
+                                        className="w-full px-4 py-2.5 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 focus:border-transparent hover:bg-white dark:hover:bg-slate-800"
+                                        required
+                                    />
+                                </div>
+                            )}
                         </div>
 
                         <div>

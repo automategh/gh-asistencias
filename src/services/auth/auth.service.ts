@@ -14,6 +14,7 @@ interface UserRecord {
     department?: string | null;
     active: boolean;
     recint?: string | null;
+    companyName?: string | null;
     createdAt: string;
     lastLogin: string;
 }
@@ -180,6 +181,7 @@ export const registerWithEmailPassword = async (data: RegisterFormData) => {
             department: data.department,
             recint: data.recint,
             immediateBoss: data.leader,
+            companyName: data.worksAtHeroica ? null : (data.companyName || null),
         };
 
         await set(userRef, newUserRecord);

@@ -21,6 +21,7 @@ export interface UserProfile {
   readonly department?: string | null
   readonly identify?: string | null
   readonly immediateBoss?: string | null
+  readonly companyName?: string | null
 }
 
 import type { RecintoKey } from "@/lib/firebase/databaseResolver"
@@ -48,4 +49,6 @@ export interface RegisterFormData {
   confirmPassword: string
   recint: string
   leader: string
+  worksAtHeroica: boolean
+  companyName: string
 }

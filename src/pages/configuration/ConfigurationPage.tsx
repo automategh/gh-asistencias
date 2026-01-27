@@ -1,6 +1,6 @@
 import { useAuth } from '@/context/AuthContext';
 import { get, ref } from 'firebase/database';
-import { Building2, Eye, EyeOff, Lock, Mail, Shield, User, Save, IdCardIcon } from 'lucide-react';
+import { Building2, Eye, EyeOff, Lock, Mail, Shield, User, Save, IdCardIcon, Briefcase } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import type { UserProfile } from '@/types/user'
 import { useEffect, useState } from 'react'
@@ -166,6 +166,10 @@ function ConfigurationProfilePage() {
 
     const completePerfil = user && user.identify && user.department && user.immediateBoss;
 
+    const companyLabel: string = (user?.companyName && user.companyName.trim().length > 0)
+        ? user.companyName
+        : 'Grupo Heroica';
+
     return (
         <Layout>
             <div className="bg-linear-to-br from-background via-muted/5 to-background">
@@ -326,6 +330,17 @@ function ConfigurationProfilePage() {
                                         {user?.department || "No especificado"}
                                     </div>
                                 )}
+                            </div>
+
+                            {/* Empresa */}
+                            <div>
+                                <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                                    <Briefcase className="w-4 h-4 text-primary" />
+                                    Empresa donde trabajas
+                                </label>
+                                <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
+                                    {companyLabel}
+                                </div>
                             </div>
 
 
