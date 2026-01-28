@@ -57,11 +57,28 @@ function RegisterPage() {
             });
     }, [])
 
+    /**
+     * Maneja el cambio de valor en los elementos de formulario (inputs y selects)
+     * y actualiza el estado formData usando el atributo name del elemento.
+     *
+     * @param e Evento de cambio del elemento HTML (input o select).
+     * @returns void
+     */
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target
         updateField(name as keyof RegisterFormData, value as RegisterFormData[keyof RegisterFormData])
     }
 
+    /**
+     * Maneja el cambio del checkbox "¿Trabajas en Grupo Heroica?".
+     *
+     * - Actualiza la bandera `worksAtHeroica` en el estado del formulario.
+     * - Cuando el usuario marca que sí trabaja en Grupo Heroica, limpia el campo `companyName`
+     *   porque no es necesario indicar una empresa externa.
+     *
+     * @param e Evento de cambio del input checkbox.
+     * @returns void
+     */    
     const handleHeroicaCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { checked } = e.target
         updateField("worksAtHeroica", checked)
