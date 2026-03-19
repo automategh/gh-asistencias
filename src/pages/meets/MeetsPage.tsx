@@ -2,10 +2,10 @@ import Layout from '@/components/layouts/layout'
 import MeetingCard from '@/components/meet/meeting-card'
 import { useAuth } from '@/context/AuthContext'
 import { useDatabase } from '@/context/DatabaseContext'
-import type { Meeting } from '@/types/meeting'
+import type { Meeting, MeetingStatus } from '@/types/meeting'
 import { Calendar } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 // (sin acceso directo a firebase aquí; se maneja en el servicio)
 import { completeMeeting } from '@/services/meetings.service'
 import { getUserCreatedMeetings, getUserCreatedMeetingsAcross, getUserInvitedMeetings, getUserInvitedMeetingsAcross, type MeetingWithIndex } from '@/services/meetings.listing.service'
@@ -24,15 +24,16 @@ function MeetsPage() {
 
     const [loading, setLoading] = useState<boolean>(true)
     const [error, setError] = useState<string | null>(null)
-    const [mine, setMine] = useState<MeetingWithIndex[]>([])
     const [invitedRaw, setInvitedRaw] = useState<MeetingWithIndex[]>([])
     const [created, setCreated] = useState<MeetingWithIndex[]>([])
     const [completing, setCompleting] = useState<Record<string, boolean>>({})
     const now = useMemo<number>(() => Date.now(), [])
 
-    // Controles de filtro/orden para "citadas"
-    const [invitedFilter, setInvitedFilter] = useState<'upcoming' | 'all'>('all')
-    const [invitedSort, setInvitedSort] = useState<'asc' | 'desc'>('asc')
+    // Controles de filtros compartidos para ambas pestañas
+    const [searchTerm, setSearchTerm] = useState<string>('')
+    const [statusFilter, setStatusFilter] = useState<MeetingStatus | 'all'>('all')
+    const [dateFrom, setDateFrom] = useState<string>('')
+    const [dateTo, setDateTo] = useState<string>('')
     const [activeTab, setActiveTab] = useState<'invited' | 'created'>('invited')
 
     useEffect(() => {
@@ -42,7 +43,7 @@ function MeetsPage() {
                 setLoading(true)
                 setError(null)
                 if (!database || !user?.uid) {
-                    setMine([])
+                    setInvitedRaw([])
                     setCreated([])
                     return
                 }
@@ -87,12 +88,114 @@ function MeetsPage() {
         return () => { cancelled = true }
     }, [database, databaseUrl, user?.uid, now, isCorporateUser, availableDatabases])
 
-    // Aplica filtro/orden a las citadas sin reconsultar BD
-    useEffect(() => {
-        const filtered = invitedRaw.filter(m => invitedFilter === 'upcoming' ? (typeof m.endTime === 'number' && m.endTime >= now) : true)
-        const sorted = filtered.sort((a, b) => invitedSort === 'desc' ? a.startTime - b.startTime : b.startTime - a.startTime)
-        setMine(sorted)
-    }, [invitedRaw, invitedFilter, invitedSort, now])
+    /**
+     * Aplica los filtros de fecha, estado y búsqueda sobre una lista de reuniones.
+     */
+    const applyFilters = useCallback((meetings: MeetingWithIndex[]): MeetingWithIndex[] => {
+        let result = meetings
+
+        let fromTimestamp: number | null = null
+        let toTimestamp: number | null = null
+
+        if (dateFrom) {
+            const fromDate = new Date(dateFrom)
+            fromTimestamp = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate()).getTime()
+        }
+
+        if (dateTo) {
+            const toDate = new Date(dateTo)
+            toTimestamp = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23, 59, 59, 999).getTime()
+        }
+
+        if (fromTimestamp !== null || toTimestamp !== null) {
+            result = result.filter((meeting) => {
+                const start = meeting.startTime
+                if (fromTimestamp !== null && start < fromTimestamp) {
+                    return false
+                }
+                if (toTimestamp !== null && start > toTimestamp) {
+                    return false
+                }
+                return true
+            })
+        }
+
+        if (statusFilter !== 'all') {
+            result = result.filter((meeting) => meeting.status === statusFilter)
+        }
+
+        const normalizedSearch = searchTerm.trim().toLowerCase()
+        if (normalizedSearch.length > 0) {
+            result = result.filter((meeting) => {
+                const title = meeting.title.toLowerCase()
+                const description = (meeting.description ?? '').toLowerCase()
+                return title.includes(normalizedSearch) || description.includes(normalizedSearch)
+            })
+        }
+
+        const sorted = [...result].sort((a, b) => a.startTime - b.startTime)
+
+        return sorted
+    }, [dateFrom, dateTo, statusFilter, searchTerm])
+
+    /**
+     * Listas visibles según los filtros actuales.
+     */
+    const invitedVisible = useMemo<MeetingWithIndex[]>(
+        () => applyFilters(invitedRaw),
+        [invitedRaw, applyFilters]
+    )
+
+    const createdVisible = useMemo<MeetingWithIndex[]>(
+        () => applyFilters(created),
+        [created, applyFilters]
+    )
+
+    /**
+     * Determina si el usuario actual puede completar una reunión.
+     */
+    const canUserCompleteMeeting = (meeting: MeetingWithIndex, currentUserId: string | undefined): boolean => {
+        if (!currentUserId) {
+            return false
+        }
+        const hasEnded = Date.now() >= meeting.endTime
+        const isClosableByStatus = meeting.status === 'closed'
+        const isCreator = meeting.createdBy === currentUserId
+        const isAlreadyFinalized = meeting.status === 'completed' || meeting.status === 'cancelled'
+
+        return isCreator && (hasEnded || isClosableByStatus) && !isAlreadyFinalized
+    }
+
+    /**
+     * Completa una reunión en la base de datos correspondiente y sincroniza el estado local.
+     */
+    const handleCompleteMeeting = async (meeting: MeetingWithIndex): Promise<void> => {
+        if (!user?.uid) {
+            return
+        }
+
+        const meetingId = meeting.id
+        setCompleting((prev) => ({ ...prev, [meetingId]: true }))
+
+        try {
+            const dbToUse = meeting.source?.url
+                ? (await import('@/services/firebase')).getDatabaseForUrl(meeting.source.url)
+                : database
+
+            if (!dbToUse) {
+                throw new Error('Base de datos no disponible para completar')
+            }
+
+            const updated = await completeMeeting(dbToUse, meetingId, user.uid)
+
+            setInvitedRaw((prev) => prev.map((currentMeeting) => (currentMeeting.id === meetingId ? { ...currentMeeting, status: updated.status } : currentMeeting)))
+            setCreated((prev) => prev.map((currentMeeting) => (currentMeeting.id === meetingId ? { ...currentMeeting, status: updated.status } : currentMeeting)))
+        } catch (exception) {
+            console.error('No fue posible completar la reunión:', exception)
+        } finally {
+            setCompleting((prev) => ({ ...prev, [meetingId]: false }))
+        }
+    }
 
     const EmptyState = (
         <div className="bg-card rounded-2xl border border-border p-6 text-center py-16">
@@ -128,6 +231,56 @@ function MeetsPage() {
                     {error && (
                         <div className="p-3 text-sm text-red-600 border border-red-300 rounded">{error}</div>
                     )}
+
+                    {/* Filtros compartidos */}
+                    <section className="bg-card border border-border rounded-lg p-4 space-y-3 mb-4">
+                        <h2 className="text-sm font-semibold text-muted-foreground">Filtros</h2>
+                        <div className="flex flex-wrap gap-3 items-end">
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-muted-foreground">Buscar</label>
+                                <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(event) => setSearchTerm(event.target.value)}
+                                    placeholder="Título o descripción"
+                                    className="px-3 py-2 bg-input border border-border rounded text-sm min-w-45"
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-muted-foreground">Desde</label>
+                                <input
+                                    type="date"
+                                    value={dateFrom}
+                                    onChange={(event) => setDateFrom(event.target.value)}
+                                    className="px-3 py-2 bg-input border border-border rounded text-sm"
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-muted-foreground">Hasta</label>
+                                <input
+                                    type="date"
+                                    value={dateTo}
+                                    onChange={(event) => setDateTo(event.target.value)}
+                                    className="px-3 py-2 bg-input border border-border rounded text-sm"
+                                />
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-muted-foreground">Estado</label>
+                                <select
+                                    value={statusFilter}
+                                    onChange={(event) => setStatusFilter(event.target.value as MeetingStatus | 'all')}
+                                    className="px-3 py-2 bg-input border border-border rounded text-sm min-w-40"
+                                >
+                                    <option value="all">Todos</option>
+                                    <option value="draft">Borrador</option>
+                                    <option value="scheduled">Programadas</option>
+                                    <option value="closed">Cerradas</option>
+                                    <option value="completed">Completadas</option>
+                                    <option value="cancelled">Canceladas</option>
+                                </select>
+                            </div>
+                        </div>
+                    </section>
                     <div className="border-b border-border mb-4 flex gap-4">
                         <button
                             type="button"
@@ -157,60 +310,18 @@ function MeetsPage() {
                         <section>
                             <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
                                 <h2 className="text-xl font-bold text-foreground">Reuniones a las que me han citado</h2>
-                                <div className="flex items-center gap-3">
-                                    <label className="text-sm text-muted-foreground">Mostrar</label>
-                                    <select
-                                        value={invitedFilter}
-                                        onChange={(e) => setInvitedFilter(e.target.value as 'upcoming' | 'all')}
-                                        className="px-3 py-2 bg-input border border-border rounded text-sm"
-                                    >
-                                        <option value="upcoming">Próximas y en curso</option>
-                                        <option value="all">Todas las citadas (hoy/recientes)</option>
-                                    </select>
-                                    <label className="text-sm text-muted-foreground">Ordenar</label>
-                                    <select
-                                        value={invitedSort}
-                                        onChange={(e) => setInvitedSort(e.target.value as 'asc' | 'desc')}
-                                        className="px-3 py-2 bg-input border border-border rounded text-sm"
-                                    >
-                                        <option value="asc">Más próximas primero</option>
-                                        <option value="desc">Más recientes primero</option>
-                                    </select>
-                                </div>
                             </div>
-                            {mine.length > 0 ? (
+                            {invitedVisible.length > 0 ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {mine.map((m) => {
-                                        const canComplete = (() => {
-                                            const ended = Date.now() >= m.endTime
-                                            const canByStatus = m.status === 'closed'
-                                            return (m.createdBy === user?.uid) && (ended || canByStatus) && m.status !== 'completed' && m.status !== 'cancelled'
-                                        })()
+                                    {invitedVisible.map((m) => {
+                                        const canComplete = canUserCompleteMeeting(m, user?.uid)
                                         return (
                                             <MeetingCard
                                                 key={m.id}
                                                 meeting={m}
                                                 canComplete={canComplete}
                                                 completing={completing[m.id]}
-                                                onComplete={async (meetingId) => {
-                                                    if (!user?.uid) return
-                                                    setCompleting((prev) => ({ ...prev, [meetingId]: true }))
-                                                    try {
-                                                        // Si el item proviene de otro recinto, completar en esa BD
-                                                        const dbToUse = (m as MeetingWithIndex).source?.url
-                                                            ? (await import('@/services/firebase')).getDatabaseForUrl((m as MeetingWithIndex).source!.url)
-                                                            : database
-                                                        if (!dbToUse) throw new Error('Base de datos no disponible para completar')
-                                                        const updated = await completeMeeting(dbToUse, meetingId, user.uid)
-                                                        // Actualiza en listas locales
-                                                        setMine((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
-                                                        setCreated((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
-                                                    } catch (e) {
-                                                        console.error('No fue posible completar la reunión:', e)
-                                                    } finally {
-                                                        setCompleting((prev) => ({ ...prev, [meetingId]: false }))
-                                                    }
-                                                }}
+                                                onComplete={async () => handleCompleteMeeting(m)}
                                             />
                                         )
                                     })}
@@ -223,38 +334,20 @@ function MeetsPage() {
 
                     {activeTab === 'created' && (
                         <section>
-                            <h2 className="text-xl font-bold text-foreground mb-4">Creadas por mí</h2>
-                            {created.length > 0 ? (
+                            <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                                <h2 className="text-xl font-bold text-foreground">Creadas por mí</h2>
+                            </div>
+                            {createdVisible.length > 0 ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {created.map((m) => {
-                                        const canComplete = (() => {
-                                            const ended = Date.now() >= m.endTime
-                                            const canByStatus = m.status === 'closed'
-                                            return (m.createdBy === user?.uid) && (ended || canByStatus) && m.status !== 'completed' && m.status !== 'cancelled'
-                                        })()
+                                    {createdVisible.map((m) => {
+                                        const canComplete = canUserCompleteMeeting(m, user?.uid)
                                         return (
                                             <MeetingCard
                                                 key={m.id}
                                                 meeting={m}
                                                 canComplete={canComplete}
                                                 completing={completing[m.id]}
-                                                onComplete={async (meetingId) => {
-                                                    if (!user?.uid) return
-                                                    setCompleting((prev) => ({ ...prev, [meetingId]: true }))
-                                                    try {
-                                                        const dbToUse = (m as MeetingWithIndex).source?.url
-                                                            ? (await import('@/services/firebase')).getDatabaseForUrl((m as MeetingWithIndex).source!.url)
-                                                            : database
-                                                        if (!dbToUse) throw new Error('Base de datos no disponible para completar')
-                                                        const updated = await completeMeeting(dbToUse, meetingId, user.uid)
-                                                        setMine((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
-                                                        setCreated((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
-                                                    } catch (e) {
-                                                        console.error('No fue posible completar la reunión:', e)
-                                                    } finally {
-                                                        setCompleting((prev) => ({ ...prev, [meetingId]: false }))
-                                                    }
-                                                }}
+                                                onComplete={async () => handleCompleteMeeting(m)}
                                             />
                                         )
                                     })}
