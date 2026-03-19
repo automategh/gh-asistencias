@@ -11,6 +11,8 @@ import { getLeaderNames, updateUserProfile } from '@/services/user.service';
 import Layout from '@/components/layouts/layout';
 import { useDatabase } from '@/context/DatabaseContext';
 import { DEFAULT_DATABASE_URL } from '@/services/firebase';
+import { SignaturePadCanvas } from '@/components/profile/signature-pad';
+import { persistUserSignature } from '@/services/user-signature.service';
 
 
 function ConfigurationProfilePage() {
@@ -20,6 +22,7 @@ function ConfigurationProfilePage() {
     const [user, setUser] = useState<UserProfile | null>(null)
     const [isEditing, setIsEditing] = useState<boolean>(false);
     const [departaments, setDepartaments] = useState<Departament[]>([]);
+    const [signature, setSignature] = useState<string | null>(null);
     type EditableProfile = Partial<Pick<UserProfile, 'name' | 'department' | 'identify' | 'immediateBoss'>>
     const [formData, setFormData] = useState<EditableProfile>({
         name: '',
@@ -47,6 +50,7 @@ function ConfigurationProfilePage() {
                 const snapshot = await get(userRef);
                 const value = snapshot.val();
                 setUser(value);
+                setSignature(typeof value?.signatureUrl === 'string' ? value.signatureUrl : null);
             } catch (error) {
                 console.error("Error al obtener datos del usuario:", error);
             }
@@ -98,7 +102,7 @@ function ConfigurationProfilePage() {
         })
     }
 
-    function handleSave(): void {
+    async function handleSave(): Promise<void> {
         if (!database || !firebaseUser?.uid) {
             console.error("No se puede guardar el perfil: falta base de datos o usuario");
             return;
@@ -107,16 +111,23 @@ function ConfigurationProfilePage() {
             console.warn('Intento de guardar en base no propia');
             return;
         }
-        // Actualizar en Realtime Database
-        updateUserProfile(database, firebaseUser.uid, formData)
-            .then(updatedProfile => {
-                console.log("Perfil actualizado:", updatedProfile);
-                setUser(updatedProfile);
-                setIsEditing(false);
+        try {
+            const signatureUrlToSave = await persistUserSignature({
+                uid: firebaseUser.uid,
+                signature,
             })
-            .catch(error => {
-                console.error("Error al actualizar el perfil:", error);
+
+            const updatedProfile = await updateUserProfile(database, firebaseUser.uid, {
+                ...formData,
+                signatureUrl: signatureUrlToSave,
             });
+
+            console.log("Perfil actualizado:", updatedProfile);
+            setUser(updatedProfile);
+            setIsEditing(false);
+        } catch (error) {
+            console.error("Error al actualizar el perfil:", error);
+        }
     }
 
     console.log(databaseUrl)
@@ -341,6 +352,50 @@ function ConfigurationProfilePage() {
                                 <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
                                     {companyLabel}
                                 </div>
+                            </div>
+
+                            {/* Firma */}
+                            <div className="space-y-3">
+                                <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-primary/40 text-[10px] text-primary font-semibold">
+                                        F
+                                    </span>
+                                    Firma manuscrita
+                                </label>
+
+                                {user?.signatureUrl || signature ? (
+                                    <div>
+                                        <p className="text-xs text-muted-foreground mb-1">Firma actual registrada:</p>
+                                        <div className="inline-block border border-border bg-white rounded-md px-3 py-2">
+                                            <img
+                                                src={signature || user?.signatureUrl || ''}
+                                                alt="Firma registrada"
+                                                className="max-h-24 object-contain"
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-muted-foreground">Aún no has registrado tu firma.</p>
+                                )}
+
+                                {isEditing && !isLocked && (
+                                    <div className="space-y-2">
+                                        <p className="text-xs text-muted-foreground">
+                                            Dibuja tu firma y pulsa "Confirmar" para asociarla a tu perfil. Los cambios se guardan al pulsar
+                                            "Guardar Cambios".
+                                        </p>
+                                        {!signature && (
+                                            <SignaturePadCanvas
+                                                height={160}
+                                                disabled={false}
+                                                onSave={(sig) => {
+                                                    setSignature(sig)
+                                                }}
+                                            />
+                                            
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
 
