@@ -125,7 +125,6 @@ function ConfigurationProfilePage() {
                 signatureUrl: signatureUrlToSave,
             });
 
-            console.log("Perfil actualizado:", updatedProfile);
             setUser(updatedProfile);
             setIsEditing(false);
         } catch (error) {
@@ -134,9 +133,6 @@ function ConfigurationProfilePage() {
             setSavingProfile(false);
         }
     }
-
-    console.log(databaseUrl)
-
     function handlePasswordFieldChange(event: ChangeEvent<HTMLInputElement>): void {
         const { name, value } = event.target;
         setPasswordForm(prev => ({ ...prev, [name]: value }));
