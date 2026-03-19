@@ -33,6 +33,7 @@ function MeetsPage() {
     // Controles de filtro/orden para "citadas"
     const [invitedFilter, setInvitedFilter] = useState<'upcoming' | 'all'>('all')
     const [invitedSort, setInvitedSort] = useState<'asc' | 'desc'>('asc')
+    const [activeTab, setActiveTab] = useState<'invited' | 'created'>('invited')
 
     useEffect(() => {
         let cancelled = false
@@ -127,114 +128,142 @@ function MeetsPage() {
                     {error && (
                         <div className="p-3 text-sm text-red-600 border border-red-300 rounded">{error}</div>
                     )}
+                    <div className="border-b border-border mb-4 flex gap-4">
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('invited')}
+                            className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                activeTab === 'invited'
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                            }`}
+                        >
+                            Citadas a mí
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('created')}
+                            className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${
+                                activeTab === 'created'
+                                    ? 'border-primary text-primary'
+                                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                            }`}
+                        >
+                            Creadas por mí
+                        </button>
+                    </div>
 
-                    <section>
-                        <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-                            <h2 className="text-xl font-bold text-foreground">Reuniones a las que me han citado</h2>
-                            <div className="flex items-center gap-3">
-                                <label className="text-sm text-muted-foreground">Mostrar</label>
-                                <select
-                                    value={invitedFilter}
-                                    onChange={(e) => setInvitedFilter(e.target.value as 'upcoming' | 'all')}
-                                    className="px-3 py-2 bg-input border border-border rounded text-sm"
-                                >
-                                    <option value="upcoming">Próximas y en curso</option>
-                                    <option value="all">Todas las citadas (hoy/recientes)</option>
-                                </select>
-                                <label className="text-sm text-muted-foreground">Ordenar</label>
-                                <select
-                                    value={invitedSort}
-                                    onChange={(e) => setInvitedSort(e.target.value as 'asc' | 'desc')}
-                                    className="px-3 py-2 bg-input border border-border rounded text-sm"
-                                >
-                                    <option value="asc">Más próximas primero</option>
-                                    <option value="desc">Más recientes primero</option>
-                                </select>
+                    {activeTab === 'invited' && (
+                        <section>
+                            <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                                <h2 className="text-xl font-bold text-foreground">Reuniones a las que me han citado</h2>
+                                <div className="flex items-center gap-3">
+                                    <label className="text-sm text-muted-foreground">Mostrar</label>
+                                    <select
+                                        value={invitedFilter}
+                                        onChange={(e) => setInvitedFilter(e.target.value as 'upcoming' | 'all')}
+                                        className="px-3 py-2 bg-input border border-border rounded text-sm"
+                                    >
+                                        <option value="upcoming">Próximas y en curso</option>
+                                        <option value="all">Todas las citadas (hoy/recientes)</option>
+                                    </select>
+                                    <label className="text-sm text-muted-foreground">Ordenar</label>
+                                    <select
+                                        value={invitedSort}
+                                        onChange={(e) => setInvitedSort(e.target.value as 'asc' | 'desc')}
+                                        className="px-3 py-2 bg-input border border-border rounded text-sm"
+                                    >
+                                        <option value="asc">Más próximas primero</option>
+                                        <option value="desc">Más recientes primero</option>
+                                    </select>
+                                </div>
                             </div>
-                        </div>
-                        {mine.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {mine.map((m) => {
-                                    const canComplete = (() => {
-                                        const ended = Date.now() >= m.endTime
-                                        const canByStatus = m.status === 'closed'
-                                        return (m.createdBy === user?.uid) && (ended || canByStatus) && m.status !== 'completed' && m.status !== 'cancelled'
-                                    })()
-                                    return (
-                                        <MeetingCard
-                                            key={m.id}
-                                            meeting={m}
-                                            canComplete={canComplete}
-                                            completing={completing[m.id]}
-                                            onComplete={async (meetingId) => {
-                                                if (!user?.uid) return
-                                                setCompleting((prev) => ({ ...prev, [meetingId]: true }))
-                                                try {
-                                                    // Si el item proviene de otro recinto, completar en esa BD
-                                                    const dbToUse = (m as MeetingWithIndex).source?.url
-                                                        ? (await import('@/services/firebase')).getDatabaseForUrl((m as MeetingWithIndex).source!.url)
-                                                        : database
-                                                    if (!dbToUse) throw new Error('Base de datos no disponible para completar')
-                                                    const updated = await completeMeeting(dbToUse, meetingId, user.uid)
-                                                    // Actualiza en listas locales
-                                                    setMine((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
-                                                    setCreated((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
-                                                } catch (e) {
-                                                    console.error('No fue posible completar la reunión:', e)
-                                                } finally {
-                                                    setCompleting((prev) => ({ ...prev, [meetingId]: false }))
-                                                }
-                                            }}
-                                        />
-                                    )
-                                })}
-                            </div>
-                        ) : (
-                            EmptyState
-                        )}
-                    </section>
+                            {mine.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {mine.map((m) => {
+                                        const canComplete = (() => {
+                                            const ended = Date.now() >= m.endTime
+                                            const canByStatus = m.status === 'closed'
+                                            return (m.createdBy === user?.uid) && (ended || canByStatus) && m.status !== 'completed' && m.status !== 'cancelled'
+                                        })()
+                                        return (
+                                            <MeetingCard
+                                                key={m.id}
+                                                meeting={m}
+                                                canComplete={canComplete}
+                                                completing={completing[m.id]}
+                                                onComplete={async (meetingId) => {
+                                                    if (!user?.uid) return
+                                                    setCompleting((prev) => ({ ...prev, [meetingId]: true }))
+                                                    try {
+                                                        // Si el item proviene de otro recinto, completar en esa BD
+                                                        const dbToUse = (m as MeetingWithIndex).source?.url
+                                                            ? (await import('@/services/firebase')).getDatabaseForUrl((m as MeetingWithIndex).source!.url)
+                                                            : database
+                                                        if (!dbToUse) throw new Error('Base de datos no disponible para completar')
+                                                        const updated = await completeMeeting(dbToUse, meetingId, user.uid)
+                                                        // Actualiza en listas locales
+                                                        setMine((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
+                                                        setCreated((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
+                                                    } catch (e) {
+                                                        console.error('No fue posible completar la reunión:', e)
+                                                    } finally {
+                                                        setCompleting((prev) => ({ ...prev, [meetingId]: false }))
+                                                    }
+                                                }}
+                                            />
+                                        )
+                                    })}
+                                </div>
+                            ) : (
+                                EmptyState
+                            )}
+                        </section>
+                    )}
 
-                    <section>
-                        <h2 className="text-xl font-bold text-foreground mb-4">Creadas por mí</h2>
-                        {created.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {created.map((m) => {
-                                    const canComplete = (() => {
-                                        const ended = Date.now() >= m.endTime
-                                        const canByStatus = m.status === 'closed'
-                                        return (m.createdBy === user?.uid) && (ended || canByStatus) && m.status !== 'completed' && m.status !== 'cancelled'
-                                    })()
-                                    return (
-                                        <MeetingCard
-                                            key={m.id}
-                                            meeting={m}
-                                            canComplete={canComplete}
-                                            completing={completing[m.id]}
-                                            onComplete={async (meetingId) => {
-                                                if (!user?.uid) return
-                                                setCompleting((prev) => ({ ...prev, [meetingId]: true }))
-                                                try {
-                                                    const dbToUse = (m as MeetingWithIndex).source?.url
-                                                        ? (await import('@/services/firebase')).getDatabaseForUrl((m as MeetingWithIndex).source!.url)
-                                                        : database
-                                                    if (!dbToUse) throw new Error('Base de datos no disponible para completar')
-                                                    const updated = await completeMeeting(dbToUse, meetingId, user.uid)
-                                                    setMine((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
-                                                    setCreated((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
-                                                } catch (e) {
-                                                    console.error('No fue posible completar la reunión:', e)
-                                                } finally {
-                                                    setCompleting((prev) => ({ ...prev, [meetingId]: false }))
-                                                }
-                                            }}
-                                        />
-                                    )
-                                })}
-                            </div>
-                        ) : (
-                            EmptyState
-                        )}
-                    </section>
+                    {activeTab === 'created' && (
+                        <section>
+                            <h2 className="text-xl font-bold text-foreground mb-4">Creadas por mí</h2>
+                            {created.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {created.map((m) => {
+                                        const canComplete = (() => {
+                                            const ended = Date.now() >= m.endTime
+                                            const canByStatus = m.status === 'closed'
+                                            return (m.createdBy === user?.uid) && (ended || canByStatus) && m.status !== 'completed' && m.status !== 'cancelled'
+                                        })()
+                                        return (
+                                            <MeetingCard
+                                                key={m.id}
+                                                meeting={m}
+                                                canComplete={canComplete}
+                                                completing={completing[m.id]}
+                                                onComplete={async (meetingId) => {
+                                                    if (!user?.uid) return
+                                                    setCompleting((prev) => ({ ...prev, [meetingId]: true }))
+                                                    try {
+                                                        const dbToUse = (m as MeetingWithIndex).source?.url
+                                                            ? (await import('@/services/firebase')).getDatabaseForUrl((m as MeetingWithIndex).source!.url)
+                                                            : database
+                                                        if (!dbToUse) throw new Error('Base de datos no disponible para completar')
+                                                        const updated = await completeMeeting(dbToUse, meetingId, user.uid)
+                                                        setMine((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
+                                                        setCreated((prev) => prev.map((mm) => (mm.id === meetingId ? { ...mm, status: updated.status } : mm)))
+                                                    } catch (e) {
+                                                        console.error('No fue posible completar la reunión:', e)
+                                                    } finally {
+                                                        setCompleting((prev) => ({ ...prev, [meetingId]: false }))
+                                                    }
+                                                }}
+                                            />
+                                        )
+                                    })}
+                                </div>
+                            ) : (
+                                EmptyState
+                            )}
+                        </section>
+                    )}
                 </div>
             </div>
         </Layout>
