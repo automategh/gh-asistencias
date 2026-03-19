@@ -2,7 +2,7 @@ import Layout from '@/components/layouts/layout'
 import MeetingCard from '@/components/meet/meeting-card'
 import { useAuth } from '@/context/AuthContext'
 import { useDatabase } from '@/context/DatabaseContext'
-import type { Meeting, MeetingStatus } from '@/types/meeting'
+import type { Meeting, MeetingKind, MeetingStatus } from '@/types/meeting'
 import { Calendar } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -32,6 +32,7 @@ function MeetsPage() {
     // Controles de filtros compartidos para ambas pestañas
     const [searchTerm, setSearchTerm] = useState<string>('')
     const [statusFilter, setStatusFilter] = useState<MeetingStatus | 'all'>('all')
+    const [meetingTypeFilter, setMeetingTypeFilter] = useState<MeetingKind | 'all'>('all')
     const [dateFrom, setDateFrom] = useState<string>('')
     const [dateTo, setDateTo] = useState<string>('')
     const [activeTab, setActiveTab] = useState<'invited' | 'created'>('invited')
@@ -124,6 +125,10 @@ function MeetsPage() {
             result = result.filter((meeting) => meeting.status === statusFilter)
         }
 
+        if (meetingTypeFilter !== 'all') {
+            result = result.filter((meeting) => meeting.type === meetingTypeFilter)
+        }
+
         const normalizedSearch = searchTerm.trim().toLowerCase()
         if (normalizedSearch.length > 0) {
             result = result.filter((meeting) => {
@@ -132,11 +137,10 @@ function MeetsPage() {
                 return title.includes(normalizedSearch) || description.includes(normalizedSearch)
             })
         }
-
         const sorted = [...result].sort((a, b) => a.startTime - b.startTime)
 
         return sorted
-    }, [dateFrom, dateTo, statusFilter, searchTerm])
+    }, [dateFrom, dateTo, statusFilter, meetingTypeFilter, searchTerm])
 
     /**
      * Listas visibles según los filtros actuales.
@@ -277,6 +281,19 @@ function MeetsPage() {
                                     <option value="closed">Cerradas</option>
                                     <option value="completed">Completadas</option>
                                     <option value="cancelled">Canceladas</option>
+                                </select>
+                            </div>
+                            <div className="flex flex-col gap-1">
+                                <label className="text-xs text-muted-foreground">Tipo</label>
+                                <select
+                                    value={meetingTypeFilter}
+                                    onChange={(event) => setMeetingTypeFilter(event.target.value as MeetingKind | 'all')}
+                                    className="px-3 py-2 bg-input border border-border rounded text-sm min-w-40"
+                                >
+                                    <option value="all">Todos</option>
+                                    <option value="meeting">Reunión</option>
+                                    <option value="training">Capacitación</option>
+                                    <option value="custom">Personalizado</option>
                                 </select>
                             </div>
                         </div>
