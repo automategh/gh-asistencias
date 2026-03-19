@@ -9,6 +9,11 @@
  * - `active`: indica si la cuenta está activa.
  * - `createdAt`: fecha ISO cuando se creó el registro.
  * - `lastLogin`: fecha ISO del último inicio de sesión.
+ * - `department`: departamento al que pertenece el usuario (opcional).
+ * - `identify`: número de identificación personal (opcional).
+ * - `immediateBoss`: nombre del jefe directo (opcional).
+ * - `companyName`: nombre de la empresa (opcional).
+ * - `signatureUrl`: URL de la firma digital del usuario (opcional).
  */
 export interface UserProfile {
   readonly uid: string
