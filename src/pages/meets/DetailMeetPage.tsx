@@ -1,7 +1,7 @@
 import Layout from '@/components/layouts/layout'
 import { QRCodeDisplay } from '@/components/meet/qr-code-display'
 import { useDatabase } from '@/context/DatabaseContext'
-import { cancelMeeting, closeMeeting, completeMeeting, getMeetingById } from '@/services/meetings.service'
+import { cancelMeeting, closeMeeting, completeMeeting, getMeetingById, reopenMeeting } from '@/services/meetings.service'
 import type { Meeting } from '@/types/meeting'
 import { BarChart3, Calendar, Clock, FileText, MapPin } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -17,6 +17,7 @@ function DetailMeetPage() {
     const [closing, setClosing] = useState(false)
     const [completing, setCompleting] = useState(false)
     const [cancel, setCancel] = useState(false)
+    const [reopening, setReopening] = useState(false)
 
     useEffect(() => {
         if (!database || !id) {
@@ -118,6 +119,21 @@ function DetailMeetPage() {
         return isCreator || isManager || isAdmin
     }, [meeting, user, role, isFinalStatus])
 
+    /**
+     * Permiso para reabrir una reunión cerrada o cancelada.
+     * Solo creador, manager o Admin pueden reabrir.
+     */
+    const canReopen = useMemo(() => {
+        if (!meeting || !user) return false
+        const status = meeting.status
+        if (status !== 'closed' && status !== 'cancelled') return false
+
+        const isCreator = meeting.createdBy === user.uid
+        const isManager = Array.isArray(meeting.managers) ? meeting.managers.includes(user.uid) : false
+        const isAdmin = role === 'Admin'
+        return isCreator || isManager || isAdmin
+    }, [meeting, user, role])
+
     async function handleCloseMeeting() {
         if (!database || !meeting || !user) return
         setClosing(true)
@@ -171,8 +187,19 @@ function DetailMeetPage() {
         } finally {
             setCancel(false)
         }
+    }
 
-
+    async function handleReopenMeeting() {
+        if (!database || !meeting || !user) return
+        setReopening(true)
+        try {
+            const updated = await reopenMeeting(database, meeting.id, user.uid)
+            setMeeting(updated)
+        } catch (error) {
+            console.error('No fue posible reabrir la reunión:', error)
+        } finally {
+            setReopening(false)
+        }
     }
 
     return (
@@ -244,46 +271,61 @@ function DetailMeetPage() {
                                 </div>
 
                                 <div className="mt-8 pt-6 border-t border-border">
-                                    {role === 'Admin' || role === 'HR' || role === 'Lider' || role === 'Instructor' ? (
-                                        <Link
-                                            to={`/attendance/${meeting?.id}`}
-                                            className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5"
-                                        >
-                                            <BarChart3 className="w-4 h-4" />
-                                            Ver Asistencias
-                                        </Link>
-                                    ) : ''}
-
-                                    {canClose && !isFinalStatus && (
-                                        <button
-                                            type="button"
-                                            disabled={closing}
-                                            onClick={handleCloseMeeting}
-                                            className="ml-4 inline-flex items-center gap-2 px-6 py-3 bg-amber-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-amber-700 disabled:opacity-50"
-                                        >
-                                            {closing ? 'Cerrando…' : 'Cerrar reunión'}
-                                        </button>
-                                    )}
-                                    {canComplete && (
-                                        <button
-                                            type="button"
-                                            disabled={completing}
-                                            onClick={handleCompleteMeeting}
-                                            className="ml-4 inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-emerald-700 disabled:opacity-50"
-                                        >
-                                            {completing ? 'Finalizando…' : 'Completar reunión'}
-                                        </button>
-                                    )}
-                                    {canCancel && !isFinalStatus && (
-                                        <button
-                                            type="button"
-                                            disabled={cancel}
-                                            onClick={handleCancelMeeting}
-                                            className="ml-4 inline-flex items-center gap-2 px-6 py-3 bg-red-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-red-700 disabled:opacity-50"
-                                        >
-                                            {cancel ? 'Cancelando…' : 'Cancelar reunión'}
-                                        </button>
-                                    )}
+                                    <div className="flex flex-wrap items-center justify-between gap-4">
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            {canComplete && (
+                                                <button
+                                                    type="button"
+                                                    disabled={completing}
+                                                    onClick={handleCompleteMeeting}
+                                                    className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-emerald-700 disabled:opacity-50"
+                                                >
+                                                    {completing ? 'Finalizando…' : 'Completar reunión'}
+                                                </button>
+                                            )}
+                                            {canClose && !isFinalStatus && (
+                                                <button
+                                                    type="button"
+                                                    disabled={closing}
+                                                    onClick={handleCloseMeeting}
+                                                    className="inline-flex items-center gap-2 px-6 py-3 bg-amber-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-amber-700 disabled:opacity-50"
+                                                >
+                                                    {closing ? 'Cerrando…' : 'Cerrar reunión'}
+                                                </button>
+                                            )}
+                                            {canReopen && (
+                                                <button
+                                                    type="button"
+                                                    disabled={reopening}
+                                                    onClick={handleReopenMeeting}
+                                                    className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-blue-700 disabled:opacity-50"
+                                                >
+                                                    {reopening ? 'Reabriendo…' : 'Volver a abrir reunión'}
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            {canCancel && !isFinalStatus && (
+                                                <button
+                                                    type="button"
+                                                    disabled={cancel}
+                                                    onClick={handleCancelMeeting}
+                                                    className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-red-700 disabled:opacity-50"
+                                                >
+                                                    {cancel ? 'Cancelando…' : 'Cancelar reunión'}
+                                                </button>
+                                            )}
+                                            {role === 'Admin' || role === 'HR' || role === 'Lider' || role === 'Instructor' ? (
+                                                <Link
+                                                    to={`/attendance/${meeting?.id}`}
+                                                    className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5"
+                                                >
+                                                    <BarChart3 className="w-4 h-4" />
+                                                    Ver asistencias
+                                                </Link>
+                                            ) : null}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

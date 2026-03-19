@@ -320,3 +320,66 @@ export async function cancelMeeting(
     const updated = updatedSnap.val() as Meeting
     return updated
 }
+
+/**
+ * Reabre una reunión previamente cerrada o cancelada cambiando su estado a `scheduled`.
+ * También limpia metadatos de cierre/cancelación y actualiza el índice `userMeetings`.
+ *
+ * Reglas de negocio:
+ * - Solo el `createdBy` o un `manager` pueden reabrir.
+ * - No permite reabrir reuniones completadas.
+ */
+export async function reopenMeeting(
+    database: Database | null,
+    meetingId: string,
+    actorUid: string,
+): Promise<Meeting> {
+    assertDatabase(database)
+
+    const meetingRef = ref(database, `meetings/${meetingId}`)
+    const snapshot = await get(meetingRef)
+    if (!snapshot.exists()) {
+        throw new Error("La reunión no existe")
+    }
+
+    const meeting = snapshot.val() as Meeting
+
+    if (meeting.status === "completed") {
+        throw new Error("No es posible reabrir una reunión completada")
+    }
+
+    if (meeting.status !== "closed" && meeting.status !== "cancelled") {
+        throw new Error("Solo pueden reabrirse reuniones cerradas o canceladas")
+    }
+
+    const isCreator = meeting.createdBy === actorUid
+    const isManager = Array.isArray(meeting.managers) ? meeting.managers.includes(actorUid) : false
+    if (!isCreator && !isManager) {
+        throw new Error("No tienes permisos para reabrir esta reunión")
+    }
+
+    const now = Date.now()
+
+    const updates: Record<string, unknown> = {}
+    updates[`/meetings/${meetingId}/status`] = "scheduled"
+    updates[`/meetings/${meetingId}/closedAt`] = null
+    updates[`/meetings/${meetingId}/closedBy`] = null
+    updates[`/meetings/${meetingId}/cancelledAt`] = null
+    updates[`/meetings/${meetingId}/cancelledBy`] = null
+    updates[`/meetings/${meetingId}/cancellationReason`] = null
+    updates[`/meetings/${meetingId}/updatedAt`] = now
+
+    const participantsRef = ref(database, `meetingParticipants/${meetingId}`)
+    const participantsSnap = await get(participantsRef)
+    if (participantsSnap.exists()) {
+        const participants = participantsSnap.val() as Record<string, MeetingParticipant>
+        Object.keys(participants).forEach((uid) => {
+            updates[`/userMeetings/${uid}/${meetingId}/status`] = "scheduled"
+        })
+    }
+
+    await update(ref(database), updates)
+
+    const updatedSnap = await get(meetingRef)
+    return updatedSnap.val() as Meeting
+}
