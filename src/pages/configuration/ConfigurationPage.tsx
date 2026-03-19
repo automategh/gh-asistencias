@@ -1,6 +1,6 @@
 import { useAuth } from '@/context/AuthContext';
 import { get, ref } from 'firebase/database';
-import { Building2, Eye, EyeOff, Lock, Mail, Shield, User, Save, IdCardIcon, Briefcase } from 'lucide-react';
+import { Building2, Eye, EyeOff, Lock, Mail, Shield, User, Save, IdCardIcon, Briefcase, Loader2 } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import type { UserProfile } from '@/types/user'
 import { useEffect, useState } from 'react'
@@ -13,6 +13,7 @@ import { useDatabase } from '@/context/DatabaseContext';
 import { DEFAULT_DATABASE_URL } from '@/services/firebase';
 import { SignaturePadCanvas } from '@/components/profile/signature-pad';
 import { persistUserSignature } from '@/services/user-signature.service';
+import { Button } from '@/components/ui/button';
 
 
 function ConfigurationProfilePage() {
@@ -33,6 +34,7 @@ function ConfigurationProfilePage() {
     const [leaders, setLeaders] = useState<string[]>([]);
     const [passwordForm, setPasswordForm] = useState<{ current: string; next: string; confirm: string }>({ current: '', next: '', confirm: '' });
     const [showPwd, setShowPwd] = useState<{ current: boolean; next: boolean; confirm: boolean }>({ current: false, next: false, confirm: false });
+    const [savingProfile, setSavingProfile] = useState<boolean>(false);
     const isEmailPasswordUser = Boolean(firebaseUser?.providerData?.some(p => p?.providerId === 'password'));
 
     const [isMyDatabase, setIsMyDatabase] = useState<boolean | null>(null);
@@ -112,6 +114,7 @@ function ConfigurationProfilePage() {
             return;
         }
         try {
+            setSavingProfile(true);
             const signatureUrlToSave = await persistUserSignature({
                 uid: firebaseUser.uid,
                 signature,
@@ -127,6 +130,8 @@ function ConfigurationProfilePage() {
             setIsEditing(false);
         } catch (error) {
             console.error("Error al actualizar el perfil:", error);
+        } finally {
+            setSavingProfile(false);
         }
     }
 
@@ -384,7 +389,8 @@ function ConfigurationProfilePage() {
                                             Dibuja tu firma y pulsa "Confirmar" para asociarla a tu perfil. Los cambios se guardan al pulsar
                                             "Guardar Cambios".
                                         </p>
-                                        {!signature && (
+
+                                        {!signature ? (
                                             <SignaturePadCanvas
                                                 height={160}
                                                 disabled={false}
@@ -392,7 +398,16 @@ function ConfigurationProfilePage() {
                                                     setSignature(sig)
                                                 }}
                                             />
-                                            
+                                        ) : (
+                                            <Button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSignature(null)
+                                                }}
+                                                className="text-xs"
+                                            >
+                                                Cambiar firma
+                                            </Button>
                                         )}
                                     </div>
                                 )}
@@ -405,12 +420,21 @@ function ConfigurationProfilePage() {
                                 <div className="flex gap-4 pt-6">
                                     <button
                                         onClick={handleSave}
-                                        disabled={isLocked}
+                                        disabled={isLocked || savingProfile}
                                         title={isLocked ? 'No puedes guardar cambios en esta base' : undefined}
                                         className={`flex-1 px-6 py-3 font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-2 ${isLocked ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary text-primary-foreground hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5'}`}
                                     >
-                                        <Save className="w-5 h-5" />
-                                        Guardar Cambios
+                                        {savingProfile ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                Guardando cambios...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Save className="w-5 h-5" />
+                                                Guardar Cambios
+                                            </>
+                                        )}
                                     </button>
                                     <button
                                         onClick={() => {
