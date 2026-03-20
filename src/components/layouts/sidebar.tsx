@@ -2,7 +2,7 @@ import { useAuth } from "@/context/AuthContext"
 import { useDatabase } from "@/context/DatabaseContext"
 import { cn } from "@/lib/utils"
 import { Calendar, ChevronLeft, ChevronRight, Home, LogOut, Menu, Plus, UserCircle, UserCog, UserPen, X, FolderTree } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 
 interface SidebarProps {
@@ -15,7 +15,7 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
 
     const location = useLocation()
 
-    // Estado móvil (se cierra automáticamente al cambiar de ruta)
+    // Estado móvil del sidebar
     const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false)
 
     const [showDbModal, setShowDbModal] = useState<boolean>(false)
@@ -32,13 +32,6 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
         const saved = window.localStorage.getItem("sidebar:collapsed")
         return saved === "1"
     })
-
-    // Cierra el sidebar móvil al cambiar de ruta de forma asíncrona y solo si está abierto
-    useEffect(() => {
-        if (!isMobileOpen) return
-        const id = window.setTimeout(() => setIsMobileOpen(false), 0)
-        return () => window.clearTimeout(id)
-    }, [location.pathname, isMobileOpen])
 
     const pathname = location.pathname
 

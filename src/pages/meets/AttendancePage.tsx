@@ -1,8 +1,8 @@
 import Layout from '@/components/layouts/layout'
 import { useDatabase } from '@/context/DatabaseContext'
-import { Check, Users, X } from 'lucide-react'
+import { Check, X } from 'lucide-react'
 import { useParams } from 'react-router-dom'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { get, ref } from 'firebase/database'
 import type { MeetingParticipant, Meeting, ParticipantRole } from '@/types/meeting'
 import { getMeetingById } from '@/services/meetings.service'
@@ -58,12 +58,6 @@ function AttendancePage() {
         return () => { cancelled = true }
     }, [database, id])
 
-    /**
-     * Métricas derivadas de la lista de asistencia.
-     */
-    const presentCount = useMemo<number>(() => attendance.filter(a => a.attendance === 'present').length, [attendance])
-    const absentCount = useMemo<number>(() => attendance.filter(a => a.attendance === 'absent').length, [attendance])
-    const lateCount = useMemo<number>(() => attendance.filter(a => a.attendance === 'late').length, [attendance])
 
     const switchRoles = (role: ParticipantRole) => {
         switch (role) {
@@ -86,7 +80,7 @@ function AttendancePage() {
                         <h1 className="text-3xl font-bold mt-4 text-foreground">Asistencia: {meeting?.title ?? '—'}</h1>
                     </nav>
                 </header>
-                <div className="max-w-6xl mx-auto p-6 mt-8">
+                <div className="max-w-7xl mx-auto p-6 mt-8 overflow-x-auto">
                     {/* Estados de carga/errores */}
                     {loading && (
                         <div className="p-3 text-sm text-muted-foreground">Cargando…</div>
@@ -94,32 +88,24 @@ function AttendancePage() {
                     {error && (
                         <div className="p-3 text-sm text-red-600 border border-red-300 rounded">{error}</div>
                     )}
-                    {/* Estadísticas */}
-                    <div className="grid md:grid-cols-4 gap-6 mb-8">
-                        <div className="bg-card rounded-2xl border border-border p-6 transition-all duration-300 hover:shadow-lg">
-                            <p className="text-sm text-muted-foreground mb-2 uppercase tracking-wider font-semibold">Total</p>
-                            <p className="text-4xl font-bold text-primary">{attendance.length}</p>
-                        </div>
-                        <div className="bg-card rounded-2xl border border-border p-6 transition-all duration-300 hover:shadow-lg">
-                            <p className="text-sm text-muted-foreground mb-2 uppercase tracking-wider font-semibold">Presentes</p>
-                            <p className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">{presentCount}</p>
-                        </div>
-                        <div className="bg-card rounded-2xl border border-border p-6 transition-all duration-300 hover:shadow-lg">
-                            <p className="text-sm text-muted-foreground mb-2 uppercase tracking-wider font-semibold">Ausentes</p>
-                            <p className="text-4xl font-bold text-red-600 dark:text-red-400">{absentCount}</p>
-                        </div>
-                        <div className="bg-card rounded-2xl border border-border p-6 transition-all duration-300 hover:shadow-lg">
-                            <p className="text-sm text-muted-foreground mb-2 uppercase tracking-wider font-semibold">Tarde</p>
-                            <p className="text-4xl font-bold text-amber-600 dark:text-amber-400">{lateCount}</p>
-                        </div>
-                    </div>
 
                     {/* Tabla de asistencia */}
                     <div className="bg-card rounded-2xl border border-border p-6 overflow-x-auto">
-                        <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
-                            <Users className="w-5 h-5" />
-                            Registro de Asistencia
-                        </h2>
+                        <div className='flex items-center justify-between'>
+                            <div className='py-16 px-14 flex items-center justify-between gap-x-52'>
+                                <div className="w-1/4 max-w-56 aspect-video">
+                                    <img
+                                        src="/Logo-heroica-green.png"
+                                        alt="grupo_heroica_logo"
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
+                                <h2 className="text-xl  font-bold text-foreground mb-4 flex items-center gap-2">
+                                    Registro de Asistencia
+                                </h2>
+                            </div>
+                        </div>
+
                         <table className="w-full">
                             <thead>
                                 <tr className="border-b border-border">
@@ -135,7 +121,7 @@ function AttendancePage() {
                             <tbody>
                                 {attendance.length === 0 ? (
                                     <tr>
-                                        <td className="py-3 px-4 text-muted-foreground" colSpan={6}>Sin registros</td>
+                                        <td className="py-3 px-4 text-muted-foreground" colSpan={7}>Sin registros</td>
                                     </tr>
                                 ) : (
                                     attendance.map(a => (
