@@ -63,19 +63,20 @@ body {
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
   --radius: 12px;
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Colores convertidos a formato hex para evitar errores con funciones oklab/oklch en html2canvas/jsPDF */
+  --chart-1: #f97316; /* naranja */
+  --chart-2: #22c55e; /* verde */
+  --chart-3: #3b82f6; /* azul */
+  --chart-4: #eab308; /* amarillo */
+  --chart-5: #ec4899; /* rosa */
+  --sidebar: #f9fafb;
+  --sidebar-foreground: #111827;
+  --sidebar-primary: #111827;
+  --sidebar-primary-foreground: #f9fafb;
+  --sidebar-accent: #e5e7eb;
+  --sidebar-accent-foreground: #111827;
+  --sidebar-border: #e5e7eb;
+  --sidebar-ring: #9ca3af;
 }
 
 .dark {
@@ -95,19 +96,20 @@ body {
   --border: #2a3f47;
   --input: #1a2332;
   --ring: #f2b05f;
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.269 0 0);
-  --sidebar-ring: oklch(0.439 0 0);
+  /* Variante dark usando también colores en formato hex */
+  --chart-1: #6366f1;
+  --chart-2: #22c55e;
+  --chart-3: #eab308;
+  --chart-4: #ec4899;
+  --chart-5: #f97316;
+  --sidebar: #020617;
+  --sidebar-foreground: #f9fafb;
+  --sidebar-primary: #6366f1;
+  --sidebar-primary-foreground: #f9fafb;
+  --sidebar-accent: #111827;
+  --sidebar-accent-foreground: #f9fafb;
+  --sidebar-border: #111827;
+  --sidebar-ring: #4b5563;
 }
 
 @theme inline {
