@@ -3,7 +3,7 @@ import { getDatabaseByRecinto, type RecintoKey } from "@/lib/firebase/databaseRe
 import { getDepartmentNamesAllDatabases } from "@/services/departaments/departments.service";
 import { getLeaderNames } from "@/services/user.service";
 import type { RegisterFormData } from "@/types/user";
-import { Building2, ChevronDown, IdCard, Landmark, Lock, Mail, User } from "lucide-react"
+import { Briefcase, Building2, ChevronDown, IdCard, Landmark, Lock, Mail, User } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom";
 
@@ -18,6 +18,7 @@ function RegisterPage() {
         email: "",
         identify: "",
         department: "",
+        cargo: "",
         password: "",
         confirmPassword: "",
         recint: "",
@@ -98,6 +99,7 @@ function RegisterPage() {
         if (!emailRegex.test(data.email)) return "El correo no es válido."
         if (!data.identify.trim()) return "La identificación es obligatoria.";
         if (!data.department.trim()) return "El departamento es obligatorio.";
+        if (!data.cargo.trim()) return "El cargo es obligatorio.";
         if (!data.recint.trim()) return "El recinto es obligatorio.";
         if (!data.worksAtHeroica && !data.companyName.trim()) return "La empresa es obligatoria si no trabajas en Grupo Heroica.";
         if (!data.password) return "La contraseña es obligatoria.";
@@ -203,6 +205,22 @@ function RegisterPage() {
                                     ))}
                                 </select>
                                 <ChevronDown className="absolute right-3 top-3.5 w-5 h-5 text-muted-foreground pointer-events-none" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-foreground mb-2">Cargo *</label>
+                            <div className="relative">
+                                <Briefcase className="absolute left-3 top-3.5 w-5 h-5 text-muted-foreground pointer-events-none" />
+                                <input
+                                    type="text"
+                                    name="cargo"
+                                    value={formData.cargo}
+                                    onChange={handleChange}
+                                    placeholder="Ej: Analista, Coordinador, Gerente"
+                                    className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 focus:border-transparent hover:bg-white dark:hover:bg-slate-800 pl-10"
+                                    required
+                                />
                             </div>
                         </div>
 

@@ -14,6 +14,7 @@ interface AttendanceRow extends MeetingParticipant {
     readonly identify?: string | null
     readonly companyName?: string | null
     readonly department?: string | null
+    readonly cargo?: string | null
     readonly signatureUrl?: string | null
     readonly signatureDataUrl?: string | null
 }
@@ -111,6 +112,7 @@ function AttendancePage() {
                             identify: user?.identify ?? null,
                             companyName: user?.companyName ?? null,
                             department: user?.department ?? null,
+                            cargo: user?.cargo ?? null,
                             signatureUrl,
                             signatureDataUrl,
                         }
@@ -283,7 +285,7 @@ function AttendancePage() {
                                                 <td className="px-3 py-3 text-foreground align-top wrap-break-word">{item.name}</td>
                                                 <td className="px-3 py-3 text-foreground align-top wrap-break-word">{item.identify ?? '—'}</td>
                                                 <td className="px-3 py-3 text-foreground align-top wrap-break-word">{item.companyName ?? 'Grupo Heroica'}</td>
-                                                <td className="px-3 py-3 text-foreground align-top wrap-break-word">{item.department ?? '—'}</td>
+                                                <td className="px-3 py-3 text-foreground align-top wrap-break-word">{item.cargo ?? '—'}</td>
                                                 <td className="px-3 py-4 align-middle">
                                                     <div className="h-12 w-full flex items-center justify-center">
                                                         {item.signatureUrl ? (

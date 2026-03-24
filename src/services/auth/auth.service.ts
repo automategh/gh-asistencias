@@ -12,6 +12,7 @@ interface UserRecord {
     immediateBoss?: string | null;
     identify?: string | null;
     department?: string | null;
+    cargo?: string | null;
     active: boolean;
     recint?: string | null;
     companyName?: string | null;
@@ -179,6 +180,7 @@ export const registerWithEmailPassword = async (data: RegisterFormData) => {
             lastLogin: new Date().toISOString(),
             identify: data.identify,
             department: data.department,
+            cargo: data.cargo,
             recint: data.recint,
             immediateBoss: data.leader,
             companyName: data.worksAtHeroica ? null : (data.companyName || null),

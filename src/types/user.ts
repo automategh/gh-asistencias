@@ -27,6 +27,7 @@ export interface UserProfile {
   readonly identify?: string | null
   readonly immediateBoss?: string | null
   readonly companyName?: string | null
+    readonly cargo?: string | null
   readonly signatureUrl?: string | null
 }
 
@@ -51,6 +52,7 @@ export interface RegisterFormData {
   email: string
   identify: string
   department: string
+  cargo: string
   password: string
   confirmPassword: string
   recint: string

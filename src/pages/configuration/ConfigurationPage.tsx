@@ -24,12 +24,13 @@ function ConfigurationProfilePage() {
     const [isEditing, setIsEditing] = useState<boolean>(false);
     const [departaments, setDepartaments] = useState<Departament[]>([]);
     const [signature, setSignature] = useState<string | null>(null);
-    type EditableProfile = Partial<Pick<UserProfile, 'name' | 'department' | 'identify' | 'immediateBoss'>>
+    type EditableProfile = Partial<Pick<UserProfile, 'name' | 'department' | 'identify' | 'immediateBoss' | 'cargo'>>
     const [formData, setFormData] = useState<EditableProfile>({
         name: '',
         department: '',
         identify: '',
         immediateBoss: '',
+        cargo: '',
     })
     const [leaders, setLeaders] = useState<string[]>([]);
     const [passwordForm, setPasswordForm] = useState<{ current: string; next: string; confirm: string }>({ current: '', next: '', confirm: '' });
@@ -221,6 +222,7 @@ function ConfigurationProfilePage() {
                                             department: user?.department || '',
                                             identify: user?.identify || '',
                                             immediateBoss: user?.immediateBoss || '',
+                                            cargo: user?.cargo || '',
                                         })
                                         setIsEditing(true)
                                     }}
@@ -344,6 +346,29 @@ function ConfigurationProfilePage() {
                                 )}
                             </div>
 
+                            {/* Cargo */}
+                            <div>
+                                <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+                                    <Briefcase className="w-4 h-4 text-primary" />
+                                    Cargo
+                                </label>
+                                {isEditing ? (
+                                    <input
+                                        disabled={isLocked}
+                                        type="text"
+                                        name="cargo"
+                                        value={formData.cargo || ""}
+                                        onChange={handleInputChange}
+                                        placeholder="Ej: Analista, Coordinador, Gerente"
+                                        className={`w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 ${isLocked ? 'bg-muted/30 text-muted-foreground' : 'focus:ring-primary text-foreground'}`}
+                                    />
+                                ) : (
+                                    <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
+                                        {user?.cargo || "No especificado"}
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Empresa */}
                             <div>
                                 <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
@@ -440,6 +465,7 @@ function ConfigurationProfilePage() {
                                                 department: user?.department || "",
                                                 identify: user?.identify || "",
                                                 immediateBoss: user?.immediateBoss || "",
+                                                cargo: user?.cargo || "",
                                             })
                                         }}
                                         className="flex-1 px-6 py-3 bg-transparent border-2 border-border text-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-muted"
