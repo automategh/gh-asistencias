@@ -87,8 +87,10 @@ function AttendancePage() {
                 if (cancelled) return
 
                 const participantsVal = participantsSnap.val() as Record<string, MeetingParticipant> | null
-                const participants = participantsVal ? Object.values(participantsVal) : []
-                participants.sort((a, b) => a.name.localeCompare(b.name))
+                const allParticipants = participantsVal ? Object.values(participantsVal) : []
+                const participants = allParticipants
+                    .filter((participant) => participant.attendance === 'present' || participant.attendance === 'late')
+                    .sort((a, b) => a.name.localeCompare(b.name))
 
                 const usersSnap = await get(ref(database, 'users'))
                 const usersVal = usersSnap.val() as Record<string, UserProfile> | null
