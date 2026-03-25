@@ -8,7 +8,7 @@ import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas-pro'
 import type { MeetingParticipant, Meeting } from '@/types/meeting'
 import type { UserProfile } from '@/types/user'
-import { getMeetingById } from '@/services/meetings.service'
+import { getMeetingById, updateParticipantStatus } from '@/services/meetings.service'
 import { ArrowLeft } from 'lucide-react'
 
 /**
@@ -240,6 +240,31 @@ function AttendancePage() {
     }
 
     /**
+     * Marca o desmarca manualmente que un asistente no asistió realmente,
+     * aun cuando el sistema lo tenga como presente/tarde.
+     *
+     * Actualiza estado local y persiste el flag `noShow` en RTDB.
+     */
+    const handleToggleNoShow = async (row: AttendanceRow, checked: boolean): Promise<void> => {
+        if (!database || !id) return
+
+        // Actualización optimista en UI
+        setAttendance((prev) =>
+            prev.map((participant) => (participant.uid === row.uid ? { ...participant, noShow: checked } : participant)),
+        )
+
+        try {
+            await updateParticipantStatus(database, id, row.uid, { noShow: checked })
+        } catch (updateError) {
+            console.error('No fue posible actualizar la marca de asistencia manual:', updateError)
+            // Revertir en caso de error para mantener consistencia visual
+            setAttendance((prev) =>
+                prev.map((participant) => (participant.uid === row.uid ? { ...participant, noShow: !checked } : participant)),
+            )
+        }
+    }
+
+    /**
      * Navega a la pantalla anterior en el historial del navegador.
      *
      * Se usa en el botón de la cabecera para volver rápidamente
@@ -342,12 +367,19 @@ function AttendancePage() {
                                         <th className="border-b border-border px-3 py-2 text-left font-semibold">Empresa</th>
                                         <th className="border-b border-border px-3 py-2 text-left font-semibold">Cargo</th>
                                         <th className="border-b border-border px-3 py-2 text-center font-semibold">Firma</th>
+                                        {/* Esta columna se ignora en el PDF mediante html2canvas */}
+                                        <th
+                                            className="border-b border-border px-3 py-2 text-center font-semibold"
+                                            data-html2canvas-ignore="true"
+                                        >
+                                            No asistió
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {attendance.length === 0 ? (
                                         <tr>
-                                            <td colSpan={5} className="text-center py-4 text-muted-foreground">
+                                            <td colSpan={6} className="text-center py-4 text-muted-foreground">
                                                 Sin registros
                                             </td>
                                         </tr>
@@ -370,6 +402,19 @@ function AttendancePage() {
                                                             <span className="text-muted-foreground text-xs">Sin firma</span>
                                                         )}
                                                     </div>
+                                                </td>
+                                                <td
+                                                    className="px-3 py-4 text-center align-middle"
+                                                    data-html2canvas-ignore="true"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Boolean(item.noShow)}
+                                                        onChange={(event) => {
+                                                            void handleToggleNoShow(item, event.target.checked)
+                                                        }}
+                                                        aria-label={`Marcar que ${item.name} no asistió`}
+                                                    />
                                                 </td>
                                             </tr>
                                         ))

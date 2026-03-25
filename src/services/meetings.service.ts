@@ -117,7 +117,7 @@ export async function updateParticipantStatus(
     database: Database | null,
     meetingId: string,
     uid: string,
-    changes: Partial<Pick<MeetingParticipant, "inviteStatus" | "attendance" | "checkedInAt" | "checkinMethod">>,
+    changes: Partial<Pick<MeetingParticipant, "inviteStatus" | "attendance" | "checkedInAt" | "checkinMethod" | "noShow">>,
 ): Promise<void> {
     assertDatabase(database)
     const participantRef = ref(database, `meetingParticipants/${meetingId}/${uid}`)
@@ -138,6 +138,9 @@ export async function updateParticipantStatus(
     }
     if (typeof changes.checkinMethod !== "undefined") {
         updates["checkinMethod"] = changes.checkinMethod
+    }
+    if (typeof changes.noShow !== "undefined") {
+        updates["noShow"] = changes.noShow
     }
 
     await update(participantRef, updates)

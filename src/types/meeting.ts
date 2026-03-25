@@ -82,6 +82,11 @@ export interface MeetingParticipant {
   readonly inviteStatus: InviteStatus
   /** Estado de asistencia (opcional) */
   readonly attendance?: AttendanceStatus | null
+  /**
+   * Marca manual para indicar que la persona confirmó asistencia
+   * pero finalmente no asistió (validación posterior de TH/líder).
+   */
+  readonly noShow?: boolean | null
   /** Marca temporal del check-in (epoch ms) */
   readonly checkedInAt?: number
   /** Método utilizado para el check-in (opcional) */
