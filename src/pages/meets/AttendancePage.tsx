@@ -55,6 +55,7 @@ function AttendancePage() {
 
     const [meeting, setMeeting] = useState<Meeting | null>(null)
     const [attendance, setAttendance] = useState<AttendanceRow[]>([])
+    const [directors, setDirectors] = useState<string | null>(null)
     const [loading, setLoading] = useState<boolean>(true)
     const [error, setError] = useState<string | null>(null)
     const [isExporting, setIsExporting] = useState<boolean>(false)
@@ -88,6 +89,15 @@ function AttendancePage() {
 
                 const participantsVal = participantsSnap.val() as Record<string, MeetingParticipant> | null
                 const allParticipants = participantsVal ? Object.values(participantsVal) : []
+
+                const directorParticipants = allParticipants.filter(
+                    (participant) => participant.role === 'host' || participant.role === 'speaker',
+                )
+                const directorNames = directorParticipants.map((participant) => participant.name).filter((name) => name.trim().length > 0)
+                if (!cancelled) {
+                    setDirectors(directorNames.length > 0 ? directorNames.join(', ') : null)
+                }
+
                 const participants = allParticipants
                     .filter((participant) => participant.attendance === 'present' || participant.attendance === 'late')
                     .sort((a, b) => a.name.localeCompare(b.name))
@@ -258,7 +268,7 @@ function AttendancePage() {
                                 </p>
                                 <p>
                                     <span className="font-semibold">Dirige:</span>{' '}
-                                    {'__________'}
+                                    {directors ?? '__________'}
                                 </p>
                             </div>
 
