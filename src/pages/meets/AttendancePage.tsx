@@ -11,6 +11,12 @@ import type { UserProfile } from '@/types/user'
 import { getMeetingById } from '@/services/meetings.service'
 import { ArrowLeft } from 'lucide-react'
 
+/**
+ * Fila de asistencia enriquecida para la vista/impresión.
+ *
+ * Extiende `MeetingParticipant` con metadatos provenientes del perfil
+ * de usuario (identificación, empresa, cargo y firma digital).
+ */
 interface AttendanceRow extends MeetingParticipant {
     readonly identify?: string | null
     readonly companyName?: string | null
@@ -20,6 +26,15 @@ interface AttendanceRow extends MeetingParticipant {
     readonly signatureDataUrl?: string | null
 }
 
+/**
+ * Carga una imagen remota y la convierte a Data URL (base64 PNG).
+ *
+ * Se usa para evitar problemas de CORS al exportar la firma en el PDF,
+ * dibujando primero la imagen en un canvas y serializándola.
+ *
+ * @param url URL pública de la imagen a convertir.
+ * @returns Promesa que resuelve con el data URL en formato PNG.
+ */
 function loadImageAsDataUrl(url: string): Promise<string> {
     return new Promise((resolve, reject) => {
         const image = new Image()
@@ -48,6 +63,14 @@ function loadImageAsDataUrl(url: string): Promise<string> {
     })
 }
 
+/**
+ * Página de registro de asistencia de una reunión.
+ *
+ * - Carga los datos de la reunión y los participantes desde RTDB.
+ * - Enriquece cada asistente con información de perfil (cédula, empresa, cargo, firma).
+ * - Muestra solo quienes registraron asistencia (present o late).
+ * - Permite exportar la hoja tal como se ve en pantalla a un PDF (jsPDF + html2canvas).
+ */
 function AttendancePage() {
     const { id } = useParams<{ id: string }>()
     const { database } = useDatabase()
@@ -64,6 +87,10 @@ function AttendancePage() {
     useEffect(() => {
         let cancelled = false
 
+        /**
+         * Carga reunión, participantes y usuarios relacionados desde RTDB,
+         * filtrando solo los asistentes efectivos y resolviendo quién dirige.
+         */
         async function load(): Promise<void> {
             try {
                 setLoading(true)
@@ -90,6 +117,7 @@ function AttendancePage() {
                 const participantsVal = participantsSnap.val() as Record<string, MeetingParticipant> | null
                 const allParticipants = participantsVal ? Object.values(participantsVal) : []
 
+                // Determinar quién dirige la reunión según el rol asignado
                 const directorParticipants = allParticipants.filter(
                     (participant) => participant.role === 'host' || participant.role === 'speaker',
                 )
@@ -98,6 +126,8 @@ function AttendancePage() {
                     setDirectors(directorNames.length > 0 ? directorNames.join(', ') : null)
                 }
 
+                // Solo consideramos como filas de asistencia a quienes se marcaron
+                // como presentes o tarde.
                 const participants = allParticipants
                     .filter((participant) => participant.attendance === 'present' || participant.attendance === 'late')
                     .sort((a, b) => a.name.localeCompare(b.name))
@@ -155,6 +185,13 @@ function AttendancePage() {
         }
     }, [database, id])
 
+    /**
+     * Genera un PDF a partir de la vista actual de la hoja de asistencia.
+     *
+     * Captura el contenedor `attendanceRef` como imagen usando html2canvas
+     * y lo inserta en un documento A4, manejando el salto de página cuando
+     * el contenido excede la primera hoja.
+     */
     const handleExportPdf = async (): Promise<void> => {
         if (!attendanceRef.current || !meeting) return
 
@@ -202,6 +239,12 @@ function AttendancePage() {
         }
     }
 
+    /**
+     * Navega a la pantalla anterior en el historial del navegador.
+     *
+     * Se usa en el botón de la cabecera para volver rápidamente
+     * al listado o pantalla desde donde se llegó a la reunión.
+     */
     const handleGoBack = (): void => {
         navigate(-1)
     }
