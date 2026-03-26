@@ -1,7 +1,7 @@
 import { useAuth } from "@/context/AuthContext"
 import { useDatabase } from "@/context/DatabaseContext"
 import { cn } from "@/lib/utils"
-import { Calendar, ChevronLeft, ChevronRight, LogOut, Menu,  UserCircle, UserCog,  X, LayoutDashboard, User, PlusCircleIcon, ChartColumnBig, Building2Icon } from "lucide-react"
+import { Calendar, ChevronLeft, ChevronRight, LogOut, Menu, UserCircle, UserCog, X, LayoutDashboard, User, PlusCircleIcon, ChartColumnBig, Building2Icon } from "lucide-react"
 import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 
@@ -69,7 +69,7 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
             )}
             {/* Sidebar */}
             <aside
-                className={`fixed top-0 left-0 h-full bg-card border-r border-border z-40 transition-all duration-300 flex flex-col ${isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+                className={`fixed top-0 left-0 h-full bg-card shadow-[20px_0_20px_rgba(25,28,28,0.04)] z-40 transition-all duration-300 flex flex-col ${isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
                     } ${isCollapsed ? "lg:w-20" : "lg:w-64"} w-64`}
             >
 
@@ -81,7 +81,7 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                 </button>
 
                 {/* Logo Section */}
-                <div className="p-6 border-b border-border">
+                <div className="p-6">
                     <div className={`flex items-center gap-3 ${isCollapsed ? "lg:justify-center lg:flex-col lg:gap-2" : ""}`}>
                         <div className="w-10 h-10 bg-linear-to-br from-primary to-primary-light rounded-xl flex items-center justify-center shrink-0">
                             <Calendar className="w-5 h-5 text-primary-foreground" />
@@ -89,24 +89,6 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                         <div className={`transition-all duration-300 overflow-hidden ${isCollapsed ? "lg:hidden" : "lg:block"}`}>
                             <h1 className="font-bold text-lg text-foreground whitespace-nowrap">Asistencia</h1>
                             <p className="text-xs text-muted-foreground capitalize whitespace-nowrap">{role}</p>
-                        </div>
-                    </div>
-                </div>
-
-                {/* User Info */}
-                <div className="p-4 border-b border-border">
-                    <div
-                        className={`flex items-center gap-3 p-3 bg-muted/30 rounded-lg ${isCollapsed ? "lg:justify-center lg:p-3" : ""} cursor-pointer`}
-                        onClick={() => setShowDbModal(true)}
-                    >
-                        <div className="w-10 h-10 bg-linear-to-br from-secondary to-accent rounded-full flex items-center justify-center shrink-0">
-                            <UserCircle className="w-5 h-5 text-secondary-foreground" />
-                        </div>
-                        <div
-                            className={`flex-1 min-w-0 transition-all duration-300 overflow-hidden ${isCollapsed ? "lg:hidden" : "lg:block"}`}
-                        >
-                            <p className="font-semibold text-sm text-foreground truncate whitespace-nowrap">{user?.displayName || "Usuario"}</p>
-                            <p className="text-xs text-muted-foreground whitespace-nowrap">En línea</p>
                         </div>
                     </div>
                 </div>
@@ -148,13 +130,29 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                     </ul>
                 </nav>
 
-                
+                {/* User Info */}
+                <div className="p-4">
+                    <div
+                        className={`flex items-center gap-3 p-3 bg-muted/30 rounded-lg ${isCollapsed ? "lg:justify-center lg:p-3" : ""} cursor-pointer`}
+                        onClick={() => setShowDbModal(true)}
+                    >
+                        <div className="w-10 h-10 bg-linear-to-br from-secondary to-accent rounded-full flex items-center justify-center shrink-0">
+                            <UserCircle className="w-5 h-5 text-secondary-foreground" />
+                        </div>
+                        <div
+                            className={`flex-1 min-w-0 transition-all duration-300 overflow-hidden ${isCollapsed ? "lg:hidden" : "lg:block"}`}
+                        >
+                            <p className="font-semibold text-sm text-foreground truncate whitespace-nowrap">{user?.displayName || "Usuario"}</p>
+                            <p className="text-xs text-muted-foreground whitespace-nowrap">En línea</p>
+                        </div>
+                    </div>
+                </div>
 
                 {/* Logout Button */}
-                <div className="p-4 border-t border-border">
+                <div className="p-4">
                     <button
                         onClick={logout}
-                        className={`w-full flex items-center gap-2 px-4 py-3 bg-transparent border-2 border-primary text-primary font-semibold rounded-lg transition-all duration-300 hover:bg-primary hover:text-primary-foreground hover:shadow-lg ${isCollapsed ? "lg:justify-center lg:px-0" : "justify-center"
+                        className={`flex items-center gap-2 px-4 py-3 text-red-500 hover:bg-red-200 font-semibold rounded-lg transition-all duration-300 hover:cursor-pointer ${isCollapsed ? "lg:justify-center lg:px-0 w-full" : "justify-center"
                             }`}
                         title={isCollapsed ? "Cerrar Sesión" : undefined}
                     >
@@ -169,44 +167,44 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
             </aside>
 
             {/* Modal de selección de base de datos para usuarios corporativos  */}
-                {isCorporateUser && showDbModal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-100">
-                        <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl">
-                            <div className="flex items-center justify-between mb-4">
-                                <h2 className="text-xl font-bold text-[#273c2a]">Cambiar de recinto</h2>
+            {isCorporateUser && showDbModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-100">
+                    <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold text-[#273c2a]">Cambiar de recinto</h2>
+                            <button
+                                onClick={() => setShowDbModal(false)}
+                                className="text-gray-400 hover:text-gray-600"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-6">
+                            Selecciona el recinto que deseas visualizar:
+                        </p>
+                        <div className="space-y-3">
+                            {availableDatabases.map((db) => (
                                 <button
-                                    onClick={() => setShowDbModal(false)}
-                                    className="text-gray-400 hover:text-gray-600"
+                                    key={db.key}
+                                    onClick={() => handleDbChange(db.url, db.key)}
+                                    className={cn(
+                                        "w-full px-4 py-3 text-left border rounded-lg transition-colors",
+                                        db.key === recinto
+                                            ? "border-[#F2B05F] bg-[#F2B05F]/10 font-semibold"
+                                            : "border-[#B0B3B2] hover:bg-[#F2B05F]/10 hover:border-[#F2B05F]"
+                                    )}
                                 >
-                                    ✕
+                                    <span className="text-[#273c2a]">{db.name}</span>
+                                    {db.key === recinto && (
+                                        <span className="ml-2 text-xs text-[#F2B05F]">(Actual)</span>
+                                    )}
                                 </button>
-                            </div>
-                            <p className="text-sm text-gray-600 mb-6">
-                                Selecciona el recinto que deseas visualizar:
-                            </p>
-                            <div className="space-y-3">
-                                {availableDatabases.map((db) => (
-                                    <button
-                                        key={db.key}
-                                        onClick={() => handleDbChange(db.url, db.key)}
-                                        className={cn(
-                                            "w-full px-4 py-3 text-left border rounded-lg transition-colors",
-                                            db.key === recinto
-                                                ? "border-[#F2B05F] bg-[#F2B05F]/10 font-semibold"
-                                                : "border-[#B0B3B2] hover:bg-[#F2B05F]/10 hover:border-[#F2B05F]"
-                                        )}
-                                    >
-                                        <span className="text-[#273c2a]">{db.name}</span>
-                                        {db.key === recinto && (
-                                            <span className="ml-2 text-xs text-[#F2B05F]">(Actual)</span>
-                                        )}
-                                    </button>
-                                ))}
-                            </div>
+                            ))}
                         </div>
                     </div>
+                </div>
 
-                )}
+            )}
         </>
     )
 }
