@@ -83,14 +83,15 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                 {/* Logo Section */}
                 <div className="p-6">
                     <div className={`flex items-center gap-3 ${isCollapsed ? "lg:justify-center lg:flex-col lg:gap-2" : ""}`}>
-                        <div className="w-10 h-10 bg-linear-to-br from-primary to-primary-light rounded-xl flex items-center justify-center shrink-0">
-                            <Calendar className="w-5 h-5 text-primary-foreground" />
-                        </div>
+
+                        <Calendar className="w-6 h-6 text-primary" />
+
                         <div className={`transition-all duration-300 overflow-hidden ${isCollapsed ? "lg:hidden" : "lg:block"}`}>
-                            <h1 className="font-bold text-lg text-foreground whitespace-nowrap">Asistencia</h1>
-                            <p className="text-xs text-muted-foreground capitalize whitespace-nowrap">{role}</p>
+                            <h1 className="font-bold text-lg text-foreground whitespace-nowrap">Asistencias</h1>
                         </div>
+                        
                     </div>
+                    <p className="text-xs text-muted-foreground uppercase whitespace-nowrap mt-1">{role}</p>
                 </div>
 
                 {/* Nav Links */}
