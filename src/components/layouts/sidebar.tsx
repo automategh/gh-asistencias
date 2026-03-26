@@ -1,7 +1,7 @@
 import { useAuth } from "@/context/AuthContext"
 import { useDatabase } from "@/context/DatabaseContext"
 import { cn } from "@/lib/utils"
-import { Calendar, ChevronLeft, ChevronRight, Home, LogOut, Menu, Plus, UserCircle, UserCog, UserPen, X, FolderTree } from "lucide-react"
+import { Calendar, ChevronLeft, ChevronRight, LogOut, Menu,  UserCircle, UserCog,  X, LayoutDashboard, User, PlusCircleIcon, ChartColumnBig, Building2Icon } from "lucide-react"
 import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 
@@ -43,14 +43,13 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
     }
 
     const links = [
-        { icon: Home, name: "Dashboard", path: "/", roles: ["Admin", "Lider", "User"] },
-        { icon: Plus, name: "Nueva Reunion", path: "/new-meeting", roles: ["Admin", "Lider"] },
+        { icon: LayoutDashboard, name: "Dashboard", path: "/", roles: ["Admin", "Lider", "User"] },
+        { icon: PlusCircleIcon, name: "Nueva Reunion", path: "/new-meeting", roles: ["Admin", "Lider"] },
         { icon: Calendar, name: "Reuniones", path: "/meets", roles: ["Admin", "Lider", "User"] },
-        { icon: UserPen, name: "Perfil", path: "/configure-profile", roles: ["Admin", "Lider", "User"] },
-        { icon: FolderTree, name: "Departamentos", path: "/departments", roles: ["Admin", "HR"] },
-        { icon: UserCog, name: "Permisos", path: "/permissions", roles: ["Admin"] }
-
-
+        { icon: User, name: "Perfil", path: "/configure-profile", roles: ["Admin", "Lider", "User"] },
+        { icon: ChartColumnBig, name: "Reportes", path: "/reports", roles: ["Admin", "HR", "Lider"] },
+        { icon: Building2Icon, name: "Departamentos", path: "/departments", roles: ["Admin", "HR"] },
+        { icon: UserCog, name: "Permisos", path: "/permissions", roles: ["Admin"] },
     ]
 
 

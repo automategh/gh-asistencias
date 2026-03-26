@@ -14,6 +14,7 @@ import AttendancePage from './pages/meets/AttendancePage'
 import ChekinPage from './pages/meets/ChekinPage'
 import RegisterPage from './pages/auth/RegisterPage'
 import RoleRoute from './components/auth/role-route'
+import ReportsPage from './pages/reports/ReportsPage'
 
 
 function App() {
@@ -48,6 +49,14 @@ function App() {
                         element={(
                             <RoleRoute allowed={["Admin", "HR"]}>
                                 <PermissionsPage />
+                            </RoleRoute>
+                        )}
+                    />
+                    <Route
+                        path="/reports"
+                        element={(
+                            <RoleRoute allowed={["Admin", "HR", "Lider"]}>
+                                <ReportsPage />
                             </RoleRoute>
                         )}
                     />
