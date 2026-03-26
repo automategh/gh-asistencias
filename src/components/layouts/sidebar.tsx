@@ -91,7 +91,6 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                         </div>
                         
                     </div>
-                    <p className="text-xs text-muted-foreground uppercase whitespace-nowrap mt-1">{role}</p>
                 </div>
 
                 {/* Nav Links */}
@@ -153,7 +152,7 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                 <div className="p-4">
                     <button
                         onClick={logout}
-                        className={`flex items-center gap-2 px-4 py-3 text-red-500 hover:bg-red-200 font-semibold rounded-lg transition-all duration-300 hover:cursor-pointer ${isCollapsed ? "lg:justify-center lg:px-0 w-full" : "justify-center"
+                        className={`w-full flex items-center gap-2 px-4 py-3 text-red-500 hover:bg-red-200 font-semibold rounded-lg transition-all duration-300 hover:cursor-pointer ${isCollapsed ? "lg:justify-center lg:px-0" : "justify-center"
                             }`}
                         title={isCollapsed ? "Cerrar Sesión" : undefined}
                     >
