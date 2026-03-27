@@ -1,5 +1,5 @@
 import Layout from '@/components/layouts/layout'
-import { ArrowRightIcon, GraduationCap, User, Users } from 'lucide-react'
+import { ArrowRightIcon, GraduationCap, Plus, User, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useDatabase } from '@/context/DatabaseContext'
 import { getTrainingCountForYear } from '@/services/meetings.analytics.service'
@@ -35,15 +35,15 @@ function ReportsPage() {
 
     return (
         <Layout>
-            <header className="flex justify-between items-center w-full pl-12 pr-12 py-8 sticky top-0 z-20 bg-zinc-50/85 backdrop-blur-md">
-                <div>
+            <header className="flex justify-between items-center w-full px-4 md:px-12 py-4 md:py-8 sticky top-0 z-20 bg-zinc-50/85 backdrop-blur-xs">
+                <div className=''>
                     <h1 className="font-headline text-3xl font-bold tracking-tight">Panel de Reportes</h1>
                     <p className="font-body text-on-surface-variant text-sm mt-1">Resumen y análisis centralizado de la asistencia en toda la organización.</p>
                 </div>
             </header>
 
-            <div className='px-12 py-16 space-y-10 mx-auto'>
-                <section className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-7xl">
+            <div className='px-4 md:px-12 py-10 md:py-16 space-y-10'>
+                <section className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-7xl md:mx-auto">
 
                     {/* primer grid */}
                     <div
@@ -76,7 +76,7 @@ function ReportsPage() {
                     </div>
 
                     {/* segundo grid */}
-                    <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
+                    <div className='grid grid-cols-1 md:grid-cols-2 gap-8 mt-32 md:mt-0'>
 
                         {/* primer grid */}
                         <div
@@ -114,8 +114,18 @@ function ReportsPage() {
                             </div>
                         </div>
                     </div>
+
+                    <div className="md:col-span-2 mt-10">
+                        <div className="border-2 border-dashed border-zinc-200 rounded-4xl p-12 flex flex-col items-center justify-center text-center opacity-40 hover:opacity-60 transition-opacity">
+                            <div className="w-12 h-12 rounded-full bg-zinc-100 flex items-center justify-center mb-4">
+                                <Plus className="w-6 h-6 text-zinc-400" />
+                            </div>
+                            <p className="font-body text-sm font-medium text-zinc-500">Módulos adicionales de reporte próximamente disponibles</p>
+                        </div>
+                    </div>
                 </section>
             </div>
+
 
 
 
