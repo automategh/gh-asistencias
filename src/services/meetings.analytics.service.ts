@@ -205,3 +205,24 @@ export async function getAttendanceSummaryAcrossDatabases(
 export function getEmptyAttendanceSummary(): AttendanceSummary {
   return createEmptySummary()
 }
+
+/**
+ * Calcula la cantidad de capacitaciones (reuniones de tipo `training`)
+ * programadas en un año concreto para una base de datos.
+ *
+ * @param database Instancia de Realtime Database sobre la que se hará la consulta
+ * @param year Año calendario para el que se desean obtener las capacitaciones
+ * @returns Promesa que resuelve con el número de capacitaciones encontradas
+ */
+export async function getTrainingCountForYear(database: Database, year: number): Promise<number> {
+  const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
+  const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
+
+  const summary = await getAttendanceSummaryForDatabase(database, {
+    startTime: startOfYear,
+    endTime: endOfYear,
+    type: "training",
+  })
+
+  return summary.byType.training.meetings
+}
