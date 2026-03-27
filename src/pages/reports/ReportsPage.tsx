@@ -56,7 +56,7 @@ function ReportsPage() {
                             <h4 className="text-3xl font-headline font-bold mb-4">Plan de Formación</h4>
                             <p className="font-body text-lg text-on-surface-variant leading-relaxed max-w-md">Visualiza y analiza reportes de asistencia por reuniones, áreas y periodos de tiempo para apoyar la toma de decisiones y el desarrollo del talento.</p>
                         </div>
-                        <div className="mt-8 bg-[#f3f4f3] hover:shadow-[0_30px_60px_rgba(0,0,0,0.06)] hover:border-b-emerald-900 hover:border-b-2 rounded-3xl p-6 border border-zinc-100/50 transition-all duration-400 ease-in-out">
+                        <div className="mt-8 bg-[#f3f4f3] hover:shadow-[0_30px_60px_rgba(0,0,0,0.06)] hover:border-b-2 hover:border-b-emerald-900 rounded-3xl p-6 border border-zinc-100/50 transition-all duration-400 ease-in-out">
                             <div className="flex items-center justify-between mb-4">
                                 <span className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Capacitaciones programadas</span>
                                 <span className="text-sm font-bold text-emerald-900">
