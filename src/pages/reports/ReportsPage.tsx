@@ -35,11 +35,14 @@ function ReportsPage() {
 
     return (
         <Layout>
-            <header className="flex justify-between items-center w-full px-4 md:px-12 py-4 md:py-8 sticky top-0 z-20 bg-zinc-50/85 backdrop-blur-xs">
-                <div className=''>
-                    <h1 className="font-headline text-3xl font-bold tracking-tight">Panel de Reportes</h1>
+            <div className='bg-linear-to-br from-background via-muted/5 to-background'>
+
+            </div>
+            <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs">
+                <nav className='px-4 md:px-6 py-4 md:py-8 max-w-7xl mx-auto'>
+                    <h1 className="text-3xl font-bold tracking-tight">Panel de Reportes</h1>
                     <p className="font-body text-on-surface-variant text-sm mt-1">Resumen y análisis centralizado de la asistencia en toda la organización.</p>
-                </div>
+                </nav>
             </header>
 
             <div className='px-4 md:px-12 py-10 md:py-16 space-y-10'>
@@ -54,7 +57,7 @@ function ReportsPage() {
                                 <GraduationCap className='w-8 h-8' />
                             </div>
                             <h4 className="text-3xl font-headline font-bold mb-4">Plan de Formación</h4>
-                            <p className="font-body text-lg text-on-surface-variant leading-relaxed max-w-md">Visualiza y analiza reportes de asistencia por reuniones, áreas y periodos de tiempo para apoyar la toma de decisiones y el desarrollo del talento.</p>
+                            <p className="font-body text-lg text-on-surface-variant leading-relaxed max-w-md">Visualiza y analiza reportes de asistencia por capacitaciones, áreas y periodos de tiempo para apoyar la toma de decisiones y el desarrollo del talento.</p>
                         </div>
                         <div className="mt-8 bg-[#f3f4f3] hover:shadow-[0_30px_60px_rgba(0,0,0,0.06)] hover:border-b-2 hover:border-b-emerald-900 rounded-3xl p-6 border border-zinc-100/50 transition-all duration-400 ease-in-out">
                             <div className="flex items-center justify-between mb-4">
