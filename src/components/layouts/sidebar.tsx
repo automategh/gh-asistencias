@@ -87,7 +87,7 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                         <Calendar className="w-6 h-6 text-primary" />
 
                         <div className={`transition-all duration-300 overflow-hidden ${isCollapsed ? "lg:hidden" : "lg:block"}`}>
-                            <h1 className="font-bold text-lg text-foreground whitespace-nowrap">Asistencias</h1>
+                            <h1 className="font-bold text-xl text-foreground whitespace-nowrap">Asistencias</h1>
                         </div>
                         
                     </div>
