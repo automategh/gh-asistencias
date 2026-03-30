@@ -6,7 +6,7 @@ export interface TrainingWithParticipants {
     meeting: Meeting
     participants: MeetingParticipant[]
     trainer: string | null
-    department: string | null
+    areas: string[]
 }
 
 export async function getTrainingsWithParticipants(
@@ -53,18 +53,18 @@ export async function getTrainingsWithParticipants(
             if (relevantParticipants.length === 0) continue
         }
 
-        // Buscar el departamento principal: el primero que tenga departamento
-        let mainDepartment: string | null = null
+        // Áreas involucradas: todos los departamentos únicos de los participantes
+        const areaSet = new Set<string>()
         for (const p of relevantParticipants) {
             const user = usersByUid[p.uid]
             if (user && typeof user.department === "string" && user.department.trim().length > 0) {
-                mainDepartment = user.department.trim()
-                break
+                areaSet.add(user.department.trim())
             }
         }
+        const areas = Array.from(areaSet)
 
         const trainer = getTrainerNameFromParticipants(relevantParticipants)
-        result.push({ meeting, participants: relevantParticipants, trainer, department: mainDepartment })
+        result.push({ meeting, participants: relevantParticipants, trainer, areas })
     }
 
     // Ordenar por fecha descendente

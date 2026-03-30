@@ -173,7 +173,7 @@ function ReportTrainingPlanPage() {
                                 <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Periodo Anual</label>
                                 <div className="relative">
                                     <select
-                                        className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-on-surface appearance-none focus:ring-2 focus:ring-primary-container"
+                                        className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-[#191c1c] appearance-none focus:ring-2 focus:ring-primary-container"
                                         value={selectedYear ?? ""}
                                         onChange={(event) => {
                                             const value = event.target.value
@@ -199,7 +199,7 @@ function ReportTrainingPlanPage() {
                                 <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Área / Departamento</label>
                                 <div className="relative">
                                     <select
-                                        className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-on-surface appearance-none focus:ring-2 focus:ring-primary-container"
+                                        className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-[#191c1c] appearance-none focus:ring-2 focus:ring-primary-container"
                                         value={selectedDepartment}
                                         onChange={(event) => {
                                             setSelectedDepartment(event.target.value)
@@ -245,7 +245,7 @@ function ReportTrainingPlanPage() {
                                             : "Sin datos previos"}
                                 </span>
                             </div>
-                            <p className="text-3xl font-extrabold text-on-surface">
+                            <p className="text-3xl font-extrabold text-[#191c1c]">
                                 {isGenerating ? (
                                     <span className="inline-block h-7 w-20 bg-zinc-200 rounded-md animate-pulse" />
                                 ) : (
@@ -269,7 +269,7 @@ function ReportTrainingPlanPage() {
                                             : "Sin datos previos"}
                                 </span>
                             </div>
-                            <p className="text-3xl font-extrabold text-on-surface">
+                            <p className="text-3xl font-extrabold text-[#191c1c]">
                                 {isGenerating ? (
                                     <span className="inline-block h-7 w-24 bg-zinc-200 rounded-md animate-pulse" />
                                 ) : (
@@ -293,7 +293,7 @@ function ReportTrainingPlanPage() {
                                             : "Sin datos previos"}
                                 </span>
                             </div>
-                            <p className="text-3xl font-extrabold text-on-surface">
+                            <p className="text-3xl font-extrabold text-[#191c1c]">
                                 {isGenerating ? (
                                     <span className="inline-block h-7 w-20 bg-zinc-200 rounded-md animate-pulse" />
                                 ) : (
@@ -311,7 +311,7 @@ function ReportTrainingPlanPage() {
                                 </div>
                                 <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">+12% vs 2023</span>
                             </div>
-                            <p className="text-3xl font-extrabold text-on-surface">
+                            <p className="text-3xl font-extrabold text-[#191c1c]">
                                 {isGenerating ? (
                                     <span className="inline-block h-7 w-24 bg-zinc-200 rounded-md animate-pulse" />
                                 ) : (
@@ -349,7 +349,7 @@ function ReportTrainingPlanPage() {
                                         ))}
                                     </div>
                                 ) : departmentTrainingCounts.length === 0 ? (
-                                    <p className="text-xs text-on-surface-variant">
+                                    <p className="text-xs text-[#434843]">
                                         Genera el plan para visualizar la distribución de capacitaciones por área en el
                                         periodo seleccionado.
                                     </p>
@@ -491,23 +491,23 @@ function ReportTrainingPlanPage() {
                                         <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Área</th>
                                         <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Fecha</th>
                                         <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Horas</th>
-                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Asistentes</th>
-                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Acciones</th>
+                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black text-center">Asistentes</th>
+                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black text-center">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#edeeed]">
                                     {isGenerating ? (
                                         <tr>
-                                            <td colSpan={6} className="py-8 text-center text-on-surface-variant">Cargando capacitaciones...</td>
+                                            <td colSpan={6} className="py-8 text-center text-[#434843]">Cargando capacitaciones...</td>
                                         </tr>
                                     ) : trainings.length === 0 ? (
                                         <tr>
-                                            <td colSpan={6} className="py-8 text-center text-on-surface-variant">No hay capacitaciones registradas para el periodo y filtros seleccionados.</td>
+                                            <td colSpan={6} className="py-8 text-center text-[#434843]">No hay capacitaciones registradas para el periodo y filtros seleccionados.</td>
                                         </tr>
                                     ) : (
-                                        trainings.map(({ meeting, trainer, participants, department }) => {
-                                                // Área principal: se toma del helper
-                                                const area = department ?? "-"
+                                        trainings.map(({ meeting, trainer, participants, areas }) => {
+                                                // Áreas involucradas: mostrar todas las áreas únicas
+                                                const area = areas.length > 0 ? areas.join(", ") : "-"
                                                 // Fecha formateada
                                                 const date = new Date(meeting.startTime)
                                                 const dateStr = date.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })
@@ -519,17 +519,17 @@ function ReportTrainingPlanPage() {
                                                     <tr key={meeting.id} className="hover:bg-slate-50 transition-colors group">
                                                         <td className="px-8 py-5">
                                                             <div>
-                                                                <p className="text-sm font-bold text-on-surface">{meeting.title}</p>
+                                                                <p className="text-sm font-bold text-[#191c1c]">{meeting.title}</p>
                                                                 <p className="text-[10px] text-slate-500 font-medium">Capacitador: {trainer ?? "-"}</p>
                                                             </div>
                                                         </td>
                                                         <td className="px-8 py-5">
                                                             <span className="text-xs font-semibold text-[#5a665a] bg-[#d6e3d5] px-3 py-1 rounded-full">{area}</span>
                                                         </td>
-                                                        <td className="px-8 py-5 text-sm font-medium text-on-surface">{dateStr}</td>
+                                                        <td className="px-8 py-5 text-sm font-medium text-[#191c1c]">{dateStr}</td>
                                                         <td className="px-8 py-5 text-sm font-bold text-emerald-900">{hours} hrs</td>
-                                                        <td className="px-8 py-5 text-sm font-medium text-on-surface">{attendees}</td>
-                                                        <td className="px-8 py-5">
+                                                        <td className="px-8 py-5 text-sm font-medium text-[#191c1c] text-center">{attendees}</td>
+                                                        <td className="px-8 py-5 text-center">
                                                             <button className="px-3 py-1 rounded-lg bg-[#edeeed] text-outline hover:text-primary-container transition-colors">
                                                                 <Eye className="w-4 h-4" />
                                                             </button>
@@ -541,33 +541,6 @@ function ReportTrainingPlanPage() {
                                 </tbody>
                             </table>
                         </div>
-                    </section>
-
-                    {/* bloque de detalle del plan (placeholder) */}
-                    <section className="max-w-7xl mx-auto bg-white rounded-xl shadow-[0_20px_20px_rgba(25,28,28,0.02)] border border-[#e1e3e2]/40 p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-sm font-bold tracking-widest uppercase text-outline">Detalle del Plan de Formación</h2>
-                            {isGenerating && (
-                                <span className="text-xs font-medium text-on-surface-variant">Calculando resultados...</span>
-                            )}
-                        </div>
-
-                        {isGenerating ? (
-                            <div className="space-y-3">
-                                {[1, 2, 3].map((row) => (
-                                    <div key={row} className="flex items-center justify-between gap-4">
-                                        <span className="h-4 w-40 bg-zinc-200 rounded-md animate-pulse" />
-                                        <span className="h-4 w-24 bg-zinc-200 rounded-md animate-pulse" />
-                                        <span className="h-4 w-16 bg-zinc-200 rounded-md animate-pulse" />
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <p className="text-sm text-on-surface-variant">
-                                Configura los filtros y genera el plan para visualizar aquí el detalle (listado de
-                                capacitaciones, asistentes, horas, etc.).
-                            </p>
-                        )}
                     </section>
                 </div>
             </div>
