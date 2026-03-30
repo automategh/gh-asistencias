@@ -1,3 +1,4 @@
+
 import { get, query, ref, orderByChild, startAt, endAt, type Database } from "firebase/database"
 import type { Meeting, MeetingKind, MeetingParticipant } from "@/types/meeting"
 import type { UserProfile } from "@/types/user"
@@ -136,6 +137,24 @@ function accumulateMeeting(
 }
 
 /**
+ * Obtiene el nombre del capacitador de una capacitación.
+ * El capacitador es el participante con rol "speaker" o el primero con rol distinto de "attendee".
+ * Si no se encuentra, retorna null.
+ * @param participants Participantes de la capacitación
+ * @returns Nombre del capacitador o null
+ */
+export function getTrainerNameFromParticipants(participants: readonly MeetingParticipant[]): string | null {
+  if (!participants || participants.length === 0) return null;
+  // Buscar speaker
+  const speaker = participants.find((p) => p.role === "speaker");
+  if (speaker) return speaker.name;
+  // Buscar otro rol distinto de attendee
+  const nonAttendee = participants.find((p) => p.role !== "attendee");
+  if (nonAttendee) return nonAttendee.name;
+  return null;
+}
+
+/**
  * Calcula el resumen de asistencias para una sola base de datos
  * en un rango de fechas y, opcionalmente, filtrando por tipo.
  *
@@ -216,15 +235,15 @@ export async function getAttendanceSummaryAcrossDatabases(
     merged.totalLate += s.totalLate
     merged.totalAbsent += s.totalAbsent
 
-    ;(Object.keys(merged.byType) as MeetingKind[]).forEach((kind) => {
-      const target = merged.byType[kind]
-      const source = s.byType[kind]
-      target.meetings += source.meetings
-      target.invited += source.invited
-      target.present += source.present
-      target.late += source.late
-      target.absent += source.absent
-    })
+      ; (Object.keys(merged.byType) as MeetingKind[]).forEach((kind) => {
+        const target = merged.byType[kind]
+        const source = s.byType[kind]
+        target.meetings += source.meetings
+        target.invited += source.invited
+        target.present += source.present
+        target.late += source.late
+        target.absent += source.absent
+      })
   }
 
   return merged

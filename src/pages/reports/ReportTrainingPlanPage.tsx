@@ -1,5 +1,5 @@
 import Layout from "@/components/layouts/layout"
-import { ChevronDown, Clock, Download, IterationCw, Smile, TrendingUp, Users } from "lucide-react"
+import { ChevronDown, Clock, Download, Eye, IterationCw, ListFilterIcon, LucideBarChart, Smile, TrendingUp, Users } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useDatabase } from "@/context/DatabaseContext"
 import { getDepartmentNames } from "@/services/departaments/departments.service"
@@ -12,6 +12,7 @@ import {
     type TrainingHoursByRole,
     type TrainingKpiSummary,
 } from "@/services/meetings.analytics.service"
+import { getTrainingsWithParticipants, type TrainingWithParticipants } from "@/services/meetings.training.listing"
 
 /**
  * Página de reporte para el plan de formación.
@@ -35,6 +36,7 @@ function ReportTrainingPlanPage() {
     const [hoursDeltaPct, setHoursDeltaPct] = useState<number | null>(null)
     const [attendedDeltaPct, setAttendedDeltaPct] = useState<number | null>(null)
     const [isGenerating, setIsGenerating] = useState<boolean>(false)
+    const [trainings, setTrainings] = useState<TrainingWithParticipants[]>([])
 
     useEffect(() => {
         let cancelled = false
@@ -85,6 +87,7 @@ function ReportTrainingPlanPage() {
             setDepartmentTrainingCounts([])
             setSelectedAreaForChart(null)
             setHoursByRole([])
+            setTrainings([])
             return
         }
 
@@ -92,16 +95,18 @@ function ReportTrainingPlanPage() {
             setIsGenerating(true)
             const previousYear = selectedYear - 1
 
-            const [currentKpi, previousKpi, rawDepartmentCounts, hoursByRoleForYear] = await Promise.all([
+            const [currentKpi, previousKpi, rawDepartmentCounts, hoursByRoleForYear, trainingsList] = await Promise.all([
                 getTrainingKpiForYear(database, selectedYear, selectedDepartment || null),
                 getTrainingKpiForYear(database, previousYear, selectedDepartment || null),
                 getTrainingCountsByDepartmentForYear(database, selectedYear),
                 getTrainingHoursByRoleForYear(database, selectedYear, selectedDepartment || null),
+                getTrainingsWithParticipants(database, selectedYear, selectedDepartment || null),
             ]) as [
                 TrainingKpiSummary,
                 TrainingKpiSummary,
                 DepartmentTrainingCount[],
                 TrainingHoursByRole[],
+                TrainingWithParticipants[],
             ]
 
             setTotalTrainings(currentKpi.totalTrainings)
@@ -114,6 +119,7 @@ function ReportTrainingPlanPage() {
 
             setDepartmentTrainingCounts(filteredDepartmentCounts)
             setHoursByRole(hoursByRoleForYear)
+            setTrainings(trainingsList)
 
             const calculateDelta = (current: number, previous: number): number | null => {
                 if (previous <= 0) {
@@ -461,6 +467,79 @@ function ReportTrainingPlanPage() {
                                     })()
                                 )}
                             </div>
+                        </div>
+                    </section>
+
+                    <section className="bg-white rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] overflow-hidden max-w-7xl mx-auto">
+                        <div className="p-8 flex justify-between items-center border-b border-[#edeeed]">
+                            <h3 className="text-xl font-bold text-emerald-950">Listado de Capacitaciones</h3>
+                            <div className="flex gap-2">
+                                <button className="p-2 rounded-lg bg-[#edeeed] text-outline hover:text-primary-container transition-colors">
+                                    <ListFilterIcon className="w-4 h-4" />
+
+                                </button>
+                                <button className="p-2 rounded-lg bg-[#edeeed] text-outline hover:text-primary-container transition-colors">
+                                    <LucideBarChart className="w-4 h-4 -rotate-90" />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-[#f3f4f3]">
+                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Capacitación</th>
+                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Área</th>
+                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Fecha</th>
+                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Horas</th>
+                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Asistentes</th>
+                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#edeeed]">
+                                    {isGenerating ? (
+                                        <tr>
+                                            <td colSpan={6} className="py-8 text-center text-on-surface-variant">Cargando capacitaciones...</td>
+                                        </tr>
+                                    ) : trainings.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={6} className="py-8 text-center text-on-surface-variant">No hay capacitaciones registradas para el periodo y filtros seleccionados.</td>
+                                        </tr>
+                                    ) : (
+                                        trainings.map(({ meeting, trainer, participants, department }) => {
+                                                // Área principal: se toma del helper
+                                                const area = department ?? "-"
+                                                // Fecha formateada
+                                                const date = new Date(meeting.startTime)
+                                                const dateStr = date.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })
+                                                // Horas
+                                                const hours = Math.round((meeting.endTime - meeting.startTime) / (1000 * 60 * 60))
+                                                // Asistentes: solo los presentes o tarde
+                                                const attendees = participants.filter(p => p.attendance === "present" || p.attendance === "late").length
+                                                return (
+                                                    <tr key={meeting.id} className="hover:bg-slate-50 transition-colors group">
+                                                        <td className="px-8 py-5">
+                                                            <div>
+                                                                <p className="text-sm font-bold text-on-surface">{meeting.title}</p>
+                                                                <p className="text-[10px] text-slate-500 font-medium">Capacitador: {trainer ?? "-"}</p>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-8 py-5">
+                                                            <span className="text-xs font-semibold text-[#5a665a] bg-[#d6e3d5] px-3 py-1 rounded-full">{area}</span>
+                                                        </td>
+                                                        <td className="px-8 py-5 text-sm font-medium text-on-surface">{dateStr}</td>
+                                                        <td className="px-8 py-5 text-sm font-bold text-emerald-900">{hours} hrs</td>
+                                                        <td className="px-8 py-5 text-sm font-medium text-on-surface">{attendees}</td>
+                                                        <td className="px-8 py-5">
+                                                            <button className="px-3 py-1 rounded-lg bg-[#edeeed] text-outline hover:text-primary-container transition-colors">
+                                                                <Eye className="w-4 h-4" />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                )
+                                            })
+                                    )}
+                                </tbody>
+                            </table>
                         </div>
                     </section>
 
