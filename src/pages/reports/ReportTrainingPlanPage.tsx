@@ -300,7 +300,6 @@ function ReportTrainingPlanPage() {
                     {/* section de los graficos de capacitaciones por area y horas por cargo 
                         - para este bloque vamos a mostrar una card donde se distribuya por area y en la otra card se muestre por cargo dependiendo de la seccion que el usuario le de click en la card anterior, para esto se puede usar un estado que guarde la seccion seleccionada y dependiendo de eso mostrar un grafico u otro, para los graficos se pueden usar componentes de librerias como recharts o chart.js, y para los datos se pueden generar datos de ejemplo o usar datos reales si es que ya existen en la base de datos
                     */}
-
                     <section className="grid md:grid-cols-2 gap-6 max-w-7xl mx-auto">
                         <div className="bg-white rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] p-8">
                             <div className="flex justify-between items-center mb-8">
@@ -329,11 +328,20 @@ function ReportTrainingPlanPage() {
                                     </p>
                                 ) : (
                                     (() => {
+                                        /**
+                                         * Determina el número máximo de capacitaciones entre todos los departamentos
+                                         * para poder escalar las barras de distribución de forma proporcional.
+                                         */
                                         const maxTrainings = departmentTrainingCounts.reduce<number>((max, item) => {
                                             return item.trainings > max ? item.trainings : max
                                         }, 0)
 
                                         return departmentTrainingCounts.map((item) => {
+                                            /**
+                                             * Calcula el ancho de la barra para el departamento actual en función
+                                             * de sus capacitaciones respecto al máximo del conjunto. Se garantiza un
+                                             * ancho mínimo del 6% para que las barras con pocos registros sigan siendo visibles.
+                                             */
                                             const widthPercentage = maxTrainings > 0
                                                 ? Math.max(6, (item.trainings / maxTrainings) * 100)
                                                 : 0
