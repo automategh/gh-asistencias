@@ -98,7 +98,9 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                     <ul className="space-y-2">
                         {links.map((link) => {
                             if (!link.roles.includes(role || "")) return null
-                            const isActive = pathname === link.path
+                            const isActive = link.path === "/"
+                                ? pathname === "/"
+                                : pathname === link.path || pathname.startsWith(`${link.path}/`)
                             const Icon = link.icon
                             return (
                                 <li key={link.path}>

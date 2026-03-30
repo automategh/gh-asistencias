@@ -15,6 +15,7 @@ import ChekinPage from './pages/meets/ChekinPage'
 import RegisterPage from './pages/auth/RegisterPage'
 import RoleRoute from './components/auth/role-route'
 import ReportsPage from './pages/reports/ReportsPage'
+import ReportTrainingPlanPage from './pages/reports/ReportTrainingPlanPage'
 
 
 function App() {
@@ -60,6 +61,15 @@ function App() {
                             </RoleRoute>
                         )}
                     />
+                    <Route
+                        path="/reports/training-plan"
+                        element={(
+                            <RoleRoute allowed={["Admin", "HR", "Lider"]}>
+                                <ReportTrainingPlanPage />
+                            </RoleRoute>
+                        )}
+                    />
+
                     <Route path="/checkin/:id" element={<ChekinPage />} />
                 </Route>
                 <Route element={<PublicOnlyRoute />}>
