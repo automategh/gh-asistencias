@@ -51,6 +51,16 @@ export interface DepartmentTrainingCount {
 }
 
 /**
+ * Horas totales de capacitación agrupadas por cargo
+ * (perfil de usuario) para un año y, opcionalmente,
+ * filtrando por departamento.
+ */
+export interface TrainingHoursByRole {
+  role: string
+  hours: number
+}
+
+/**
  * Opciones de consulta para calcular métricas de asistencia.
  * `startTime` y `endTime` se expresan en epoch ms.
  */
@@ -448,5 +458,99 @@ export async function getTrainingCountsByDepartmentForYear(
   }))
 
   result.sort((a, b) => b.trainings - a.trainings || a.department.localeCompare(b.department))
+  return result
+}
+
+/**
+ * Calcula las horas totales de capacitación por cargo (role)
+ * para un año concreto. Opcionalmente se puede limitar el
+ * cálculo a un solo departamento.
+ *
+ * Un registro de horas se contabiliza para un cargo cuando
+ * el usuario pertenece al departamento indicado (si se pasa)
+ * y figura como participante en la capacitación.
+ */
+export async function getTrainingHoursByRoleForYear(
+  database: Database,
+  year: number,
+  department?: string | null,
+): Promise<TrainingHoursByRole[]> {
+  const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
+  const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
+
+  const meetingsRef = ref(database, "meetings")
+  const q = query(
+    meetingsRef,
+    orderByChild("startTime"),
+    startAt(startOfYear),
+    endAt(endOfYear),
+  )
+
+  const snapshot = await get(q)
+  const meetingsMap = snapshot.val() as Record<string, Meeting> | null
+
+  if (!meetingsMap) {
+    return []
+  }
+
+  const usersSnap = await get(ref(database, "users"))
+  const usersValue = usersSnap.val() as Record<string, Partial<UserProfile>> | null
+  const usersByUid: Record<string, Partial<UserProfile>> = usersValue ?? {}
+
+  const normalizedDept = typeof department === "string" && department.trim().length > 0
+    ? department.trim().toLowerCase()
+    : null
+
+  const hoursByRole: Record<string, number> = {}
+
+  for (const meeting of Object.values(meetingsMap)) {
+    if (meeting.type !== "training") {
+      continue
+    }
+
+    const durationMs = Math.max(0, meeting.endTime - meeting.startTime)
+    const durationHours = durationMs / (1000 * 60 * 60)
+    if (durationHours <= 0) {
+      continue
+    }
+
+    const participantsSnap = await get(ref(database, `meetingParticipants/${meeting.id}`))
+    const participantsValue = participantsSnap.val() as Record<string, MeetingParticipant> | null
+    const participants: MeetingParticipant[] = participantsValue ? Object.values(participantsValue) : []
+
+    for (const participant of participants) {
+      const user = usersByUid[participant.uid]
+      if (!user) {
+        continue
+      }
+
+      const deptRaw = typeof user.department === "string" ? user.department : null
+      const roleRaw = typeof user.cargo === "string" ? user.cargo : null
+
+      if (!roleRaw) {
+        continue
+      }
+
+      if (normalizedDept) {
+        if (!deptRaw || deptRaw.trim().toLowerCase() !== normalizedDept) {
+          continue
+        }
+      }
+
+      const role = roleRaw.trim()
+      if (!role) {
+        continue
+      }
+
+      hoursByRole[role] = (hoursByRole[role] ?? 0) + durationHours
+    }
+  }
+
+  const result: TrainingHoursByRole[] = Object.entries(hoursByRole).map(([role, hours]) => ({
+    role,
+    hours,
+  }))
+
+  result.sort((a, b) => b.hours - a.hours || a.role.localeCompare(b.role))
   return result
 }

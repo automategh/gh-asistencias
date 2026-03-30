@@ -7,7 +7,9 @@ import {
     getTrainingCountsByDepartmentForYear,
     getTrainingKpiForYear,
     getTrainingYearsForDatabase,
+    getTrainingHoursByRoleForYear,
     type DepartmentTrainingCount,
+    type TrainingHoursByRole,
     type TrainingKpiSummary,
 } from "@/services/meetings.analytics.service"
 
@@ -27,6 +29,8 @@ function ReportTrainingPlanPage() {
     const [totalHours, setTotalHours] = useState<number>(0)
     const [totalAttended, setTotalAttended] = useState<number>(0)
     const [departmentTrainingCounts, setDepartmentTrainingCounts] = useState<DepartmentTrainingCount[]>([])
+    const [hoursByRole, setHoursByRole] = useState<TrainingHoursByRole[]>([])
+    const [selectedAreaForChart, setSelectedAreaForChart] = useState<string | null>(null)
     const [trainingsDeltaPct, setTrainingsDeltaPct] = useState<number | null>(null)
     const [hoursDeltaPct, setHoursDeltaPct] = useState<number | null>(null)
     const [attendedDeltaPct, setAttendedDeltaPct] = useState<number | null>(null)
@@ -79,6 +83,8 @@ function ReportTrainingPlanPage() {
             setHoursDeltaPct(null)
             setAttendedDeltaPct(null)
             setDepartmentTrainingCounts([])
+            setSelectedAreaForChart(null)
+            setHoursByRole([])
             return
         }
 
@@ -86,11 +92,17 @@ function ReportTrainingPlanPage() {
             setIsGenerating(true)
             const previousYear = selectedYear - 1
 
-            const [currentKpi, previousKpi, rawDepartmentCounts] = await Promise.all([
+            const [currentKpi, previousKpi, rawDepartmentCounts, hoursByRoleForYear] = await Promise.all([
                 getTrainingKpiForYear(database, selectedYear, selectedDepartment || null),
                 getTrainingKpiForYear(database, previousYear, selectedDepartment || null),
                 getTrainingCountsByDepartmentForYear(database, selectedYear),
-            ]) as [TrainingKpiSummary, TrainingKpiSummary, DepartmentTrainingCount[]]
+                getTrainingHoursByRoleForYear(database, selectedYear, selectedDepartment || null),
+            ]) as [
+                TrainingKpiSummary,
+                TrainingKpiSummary,
+                DepartmentTrainingCount[],
+                TrainingHoursByRole[],
+            ]
 
             setTotalTrainings(currentKpi.totalTrainings)
             setTotalHours(currentKpi.totalHours)
@@ -101,6 +113,7 @@ function ReportTrainingPlanPage() {
                 : rawDepartmentCounts
 
             setDepartmentTrainingCounts(filteredDepartmentCounts)
+            setHoursByRole(hoursByRoleForYear)
 
             const calculateDelta = (current: number, previous: number): number | null => {
                 if (previous <= 0) {
@@ -117,6 +130,14 @@ function ReportTrainingPlanPage() {
         } finally {
             setIsGenerating(false)
         }
+    }
+
+    /**
+     * Maneja la selección de un área/departamento desde la tarjeta
+     * "Capacitaciones por Área" para actualizar el gráfico dependiente.
+     */
+    const handleAreaClick = (departmentName: string): void => {
+        setSelectedAreaForChart(departmentName)
     }
 
     return (
@@ -346,8 +367,14 @@ function ReportTrainingPlanPage() {
                                                 ? Math.max(6, (item.trainings / maxTrainings) * 100)
                                                 : 0
 
+                                            const isSelected = selectedAreaForChart === item.department
+
                                             return (
-                                                <div key={item.department} className="space-y-2">
+                                                <div
+                                                    key={item.department}
+                                                    className={`space-y-2 rounded-lg px-2 py-1 transition-colors cursor-pointer ${isSelected ? "bg-emerald-50" : "hover:bg-emerald-50/70"}`}
+                                                    onClick={() => handleAreaClick(item.department)}
+                                                >
                                                     <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-slate-500">
                                                         <span>{item.department}</span>
                                                         <span>{item.trainings} capacitaciones</span>
@@ -361,6 +388,76 @@ function ReportTrainingPlanPage() {
                                                 </div>
                                             )
                                         })
+                                    })()
+                                )}
+                            </div>
+                        </div>
+                        <div className="bg-[#1b3022] rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] p-8">
+                            <div className="flex justify-between items-center mb-8">
+                                <div>
+                                    <h3 className="text-xl font-bold text-white">Horas por cargo</h3>
+                                    <p className="text-xs text-outline font-medium text-[#819986]">Intensidad formativa por cargo</p>
+                                </div>
+                            </div>
+                            <div className="space-y-6">
+                                {selectedAreaForChart === null ? (
+                                    <p className="text-xs text-[#dbe7dd]">
+                                        Selecciona un área en la tarjeta "Capacitaciones por Área" para visualizar el
+                                        detalle de horas por cargo.
+                                    </p>
+                                ) : (
+                                    (() => {
+                                        const filteredHoursByRole = hoursByRole
+
+                                        if (filteredHoursByRole.length === 0) {
+                                            return (
+                                                <p className="text-xs text-[#dbe7dd]">
+                                                    No se encontraron horas de capacitación registradas por cargo para el
+                                                    periodo seleccionado.
+                                                </p>
+                                            )
+                                        }
+
+                                        const maxHours = filteredHoursByRole.reduce<number>((max, item) => {
+                                            return item.hours > max ? item.hours : max
+                                        }, 0)
+
+                                        return (
+                                            <>
+                                                <p className="text-xs text-[#dbe7dd]">
+                                                    Horas totales de capacitación por cargo para el año
+                                                    <span className="font-semibold"> {selectedYear}</span>
+                                                    {selectedDepartment && (
+                                                        <>
+                                                            <span> · Área </span>
+                                                            <span className="font-semibold">{selectedDepartment}</span>
+                                                        </>
+                                                    )}
+                                                </p>
+                                                <div className="space-y-3">
+                                                    {filteredHoursByRole.map((item) => {
+                                                        const widthPercentage = maxHours > 0
+                                                            ? Math.max(6, (item.hours / maxHours) * 100)
+                                                            : 0
+
+                                                        return (
+                                                            <div key={item.role} className="space-y-1">
+                                                                <div className="flex justify-between text-[11px] font-medium text-[#e2efe4]">
+                                                                    <span>{item.role}</span>
+                                                                    <span>{item.hours.toFixed(0)} h</span>
+                                                                </div>
+                                                                <div className="h-2.5 w-full bg-[#243a2c] rounded-full overflow-hidden">
+                                                                    <div
+                                                                        className="h-full bg-[#9ee6b3] rounded-full"
+                                                                        style={{ width: `${widthPercentage}%` }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            </>
+                                        )
                                     })()
                                 )}
                             </div>
