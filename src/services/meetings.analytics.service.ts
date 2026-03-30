@@ -1,5 +1,6 @@
 import { get, query, ref, orderByChild, startAt, endAt, type Database } from "firebase/database"
 import type { Meeting, MeetingKind, MeetingParticipant } from "@/types/meeting"
+import type { UserProfile } from "@/types/user"
 import type { RecintoKey } from "@/lib/firebase/databaseResolver"
 import { getDatabaseForUrl } from "@/services/firebase"
 
@@ -26,6 +27,19 @@ export interface AttendanceSummary {
   totalLate: number
   totalAbsent: number
   byType: Record<MeetingKind, MeetingKindStats>
+}
+
+/**
+ * Métricas agregadas específicas para capacitaciones (type: "training")
+ * en un rango anual.
+ */
+export interface TrainingKpiSummary {
+  /** Número total de capacitaciones realizadas en el año */
+  totalTrainings: number
+  /** Total de horas sumadas de todas las capacitaciones (endTime - startTime) */
+  totalHours: number
+  /** Cantidad total de asistencias (presentes + tarde) en todas las capacitaciones del año */
+  totalAttended: number
 }
 
 /**
@@ -225,4 +239,132 @@ export async function getTrainingCountForYear(database: Database, year: number):
   })
 
   return summary.byType.training.meetings
+}
+
+/**
+ * Calcula KPIs clave del plan de formación para un año concreto:
+ * - total de capacitaciones
+ * - total de horas dictadas
+ * - porcentaje promedio de asistencia
+ *
+ * Se apoya en el resumen de asistencia y en los metadatos de las reuniones
+ * para evitar duplicar lógica en los consumidores.
+ */
+export async function getTrainingKpiForYear(
+  database: Database,
+  year: number,
+  department?: string | null,
+): Promise<TrainingKpiSummary> {
+  const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
+  const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
+
+  const meetingsRef = ref(database, "meetings")
+  const q = query(
+    meetingsRef,
+    orderByChild("startTime"),
+    startAt(startOfYear),
+    endAt(endOfYear),
+  )
+
+  const snapshot = await get(q)
+  const meetingsMap = snapshot.val() as Record<string, Meeting> | null
+
+  if (!meetingsMap) {
+    return {
+      totalTrainings: 0,
+      totalHours: 0,
+      totalAttended: 0,
+    }
+  }
+
+  const normalizedDept = typeof department === "string" && department.trim().length > 0
+    ? department.trim().toLowerCase()
+    : null
+
+  // Cargamos usuarios una sola vez para poder filtrar por departamento
+  const usersSnap = await get(ref(database, "users"))
+  const usersValue = usersSnap.val() as Record<string, Partial<UserProfile>> | null
+  const usersByUid: Record<string, Partial<UserProfile>> = usersValue ?? {}
+
+  let totalTrainings = 0
+  let totalHours = 0
+  let totalAttended = 0
+
+  for (const meeting of Object.values(meetingsMap)) {
+    if (meeting.type !== "training") {
+      continue
+    }
+
+    const participantsSnap = await get(ref(database, `meetingParticipants/${meeting.id}`))
+    const participantsValue = participantsSnap.val() as Record<string, MeetingParticipant> | null
+    const participants: MeetingParticipant[] = participantsValue ? Object.values(participantsValue) : []
+
+    let relevantParticipants: MeetingParticipant[] = participants
+
+    if (normalizedDept) {
+      relevantParticipants = participants.filter((participant) => {
+        const user = usersByUid[participant.uid]
+        const deptRaw = typeof user?.department === "string" ? user.department : null
+        if (!deptRaw) return false
+        return deptRaw.trim().toLowerCase() === normalizedDept
+      })
+
+      if (relevantParticipants.length === 0) {
+        continue
+      }
+    }
+
+    totalTrainings += 1
+
+    const durationMs = Math.max(0, meeting.endTime - meeting.startTime)
+    totalHours += durationMs / (1000 * 60 * 60)
+
+    for (const participant of relevantParticipants) {
+      const attendance = participant.attendance ?? null
+      if (attendance === "present" || attendance === "late") {
+        totalAttended += 1
+      }
+    }
+  }
+
+  return {
+    totalTrainings,
+    totalHours,
+    totalAttended,
+  }
+}
+
+/**
+ * Obtiene el listado de años calendario en los que existen
+ * capacitaciones (reuniones de tipo `training`) registradas
+ * en la base de datos indicada.
+ *
+ * @param database Instancia de Realtime Database
+ * @returns Años únicos ordenados de más reciente a más antiguo
+ */
+export async function getTrainingYearsForDatabase(database: Database): Promise<number[]> {
+  const meetingsRef = ref(database, "meetings")
+  const snapshot = await get(meetingsRef)
+  const values = snapshot.val() as Record<string, Meeting> | null
+
+  if (!values) {
+    return []
+  }
+
+  const yearsSet = new Set<number>()
+
+  Object.values(values).forEach((meeting) => {
+    if (meeting.type !== "training") {
+      return
+    }
+    if (typeof meeting.startTime !== "number") {
+      return
+    }
+    const year = new Date(meeting.startTime).getFullYear()
+    yearsSet.add(year)
+  })
+
+  const years = Array.from(yearsSet)
+  years.sort((a, b) => b - a)
+  return years
 }
