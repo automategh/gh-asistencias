@@ -3,7 +3,13 @@ import { ChevronDown, Clock, Download, IterationCw, Smile, TrendingUp, Users } f
 import { useEffect, useState } from "react"
 import { useDatabase } from "@/context/DatabaseContext"
 import { getDepartmentNames } from "@/services/departaments/departments.service"
-import { getTrainingKpiForYear, getTrainingYearsForDatabase, type TrainingKpiSummary } from "@/services/meetings.analytics.service"
+import {
+    getTrainingCountsByDepartmentForYear,
+    getTrainingKpiForYear,
+    getTrainingYearsForDatabase,
+    type DepartmentTrainingCount,
+    type TrainingKpiSummary,
+} from "@/services/meetings.analytics.service"
 
 /**
  * Página de reporte para el plan de formación.
@@ -20,6 +26,7 @@ function ReportTrainingPlanPage() {
     const [totalTrainings, setTotalTrainings] = useState<number>(0)
     const [totalHours, setTotalHours] = useState<number>(0)
     const [totalAttended, setTotalAttended] = useState<number>(0)
+    const [departmentTrainingCounts, setDepartmentTrainingCounts] = useState<DepartmentTrainingCount[]>([])
     const [trainingsDeltaPct, setTrainingsDeltaPct] = useState<number | null>(null)
     const [hoursDeltaPct, setHoursDeltaPct] = useState<number | null>(null)
     const [attendedDeltaPct, setAttendedDeltaPct] = useState<number | null>(null)
@@ -71,6 +78,7 @@ function ReportTrainingPlanPage() {
             setTrainingsDeltaPct(null)
             setHoursDeltaPct(null)
             setAttendedDeltaPct(null)
+            setDepartmentTrainingCounts([])
             return
         }
 
@@ -78,14 +86,21 @@ function ReportTrainingPlanPage() {
             setIsGenerating(true)
             const previousYear = selectedYear - 1
 
-            const [currentKpi, previousKpi]: TrainingKpiSummary[] = await Promise.all([
+            const [currentKpi, previousKpi, rawDepartmentCounts] = await Promise.all([
                 getTrainingKpiForYear(database, selectedYear, selectedDepartment || null),
                 getTrainingKpiForYear(database, previousYear, selectedDepartment || null),
-            ])
+                getTrainingCountsByDepartmentForYear(database, selectedYear),
+            ]) as [TrainingKpiSummary, TrainingKpiSummary, DepartmentTrainingCount[]]
 
             setTotalTrainings(currentKpi.totalTrainings)
             setTotalHours(currentKpi.totalHours)
             setTotalAttended(currentKpi.totalAttended)
+
+            const filteredDepartmentCounts = selectedDepartment
+                ? rawDepartmentCounts.filter((item) => item.department === selectedDepartment)
+                : rawDepartmentCounts
+
+            setDepartmentTrainingCounts(filteredDepartmentCounts)
 
             const calculateDelta = (current: number, previous: number): number | null => {
                 if (previous <= 0) {
@@ -199,7 +214,7 @@ function ReportTrainingPlanPage() {
                                     {isGenerating
                                         ? "Calculando..."
                                         : selectedYear && trainingsDeltaPct !== null
-                                            ? `${trainingsDeltaPct >= 0 ? "+" : ""}${trainingsDeltaPct.toFixed(1)}% vs ${selectedYear - 1}`
+                                            ? `${trainingsDeltaPct >= 0 ? "+" : ""}${trainingsDeltaPct.toFixed(0)}% vs ${selectedYear - 1}`
                                             : "Sin datos previos"}
                                 </span>
                             </div>
@@ -223,7 +238,7 @@ function ReportTrainingPlanPage() {
                                     {isGenerating
                                         ? "Calculando..."
                                         : selectedYear && hoursDeltaPct !== null
-                                            ? `${hoursDeltaPct >= 0 ? "+" : ""}${hoursDeltaPct.toFixed(1)}% vs ${selectedYear - 1}`
+                                            ? `${hoursDeltaPct >= 0 ? "+" : ""}${hoursDeltaPct.toFixed(0)}% vs ${selectedYear - 1}`
                                             : "Sin datos previos"}
                                 </span>
                             </div>
@@ -247,7 +262,7 @@ function ReportTrainingPlanPage() {
                                     {isGenerating
                                         ? "Calculando..."
                                         : selectedYear && attendedDeltaPct !== null
-                                            ? `${attendedDeltaPct >= 0 ? "+" : ""}${attendedDeltaPct.toFixed(1)}% vs ${selectedYear - 1}`
+                                            ? `${attendedDeltaPct >= 0 ? "+" : ""}${attendedDeltaPct.toFixed(0)}% vs ${selectedYear - 1}`
                                             : "Sin datos previos"}
                                 </span>
                             </div>
@@ -277,6 +292,70 @@ function ReportTrainingPlanPage() {
                                 )}
                             </p>
                             <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Promedio de Satisfacción</p>
+                        </div>
+                    </section>
+
+
+
+                    {/* section de los graficos de capacitaciones por area y horas por cargo 
+                        - para este bloque vamos a mostrar una card donde se distribuya por area y en la otra card se muestre por cargo dependiendo de la seccion que el usuario le de click en la card anterior, para esto se puede usar un estado que guarde la seccion seleccionada y dependiendo de eso mostrar un grafico u otro, para los graficos se pueden usar componentes de librerias como recharts o chart.js, y para los datos se pueden generar datos de ejemplo o usar datos reales si es que ya existen en la base de datos
+                    */}
+
+                    <section className="grid md:grid-cols-2 gap-6 max-w-7xl mx-auto">
+                        <div className="bg-white rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] p-8">
+                            <div className="flex justify-between items-center mb-8">
+                                <div>
+                                    <h3 className="text-xl font-bold text-emerald-950">Capacitaciones por Área</h3>
+                                    <p className="text-xs text-outline font-medium">Distribución departamental del plan actual</p>
+                                </div>
+                            </div>
+                            <div className="space-y-6">
+                                {isGenerating ? (
+                                    <div className="space-y-3">
+                                        {[1, 2, 3].map((row) => (
+                                            <div key={row} className="space-y-2">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="h-3 w-32 bg-zinc-200 rounded-md animate-pulse" />
+                                                    <span className="h-3 w-16 bg-zinc-200 rounded-md animate-pulse" />
+                                                </div>
+                                                <div className="h-3 w-full bg-zinc-200 rounded-full animate-pulse" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : departmentTrainingCounts.length === 0 ? (
+                                    <p className="text-xs text-on-surface-variant">
+                                        Genera el plan para visualizar la distribución de capacitaciones por área en el
+                                        periodo seleccionado.
+                                    </p>
+                                ) : (
+                                    (() => {
+                                        const maxTrainings = departmentTrainingCounts.reduce<number>((max, item) => {
+                                            return item.trainings > max ? item.trainings : max
+                                        }, 0)
+
+                                        return departmentTrainingCounts.map((item) => {
+                                            const widthPercentage = maxTrainings > 0
+                                                ? Math.max(6, (item.trainings / maxTrainings) * 100)
+                                                : 0
+
+                                            return (
+                                                <div key={item.department} className="space-y-2">
+                                                    <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-slate-500">
+                                                        <span>{item.department}</span>
+                                                        <span>{item.trainings} capacitaciones</span>
+                                                    </div>
+                                                    <div className="h-3 w-full bg-[#edeeed] rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-[#1b3022] rounded-full"
+                                                            style={{ width: `${widthPercentage}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )
+                                        })
+                                    })()
+                                )}
+                            </div>
                         </div>
                     </section>
 

@@ -43,6 +43,14 @@ export interface TrainingKpiSummary {
 }
 
 /**
+ * Conteo de capacitaciones por departamento para un año dado.
+ */
+export interface DepartmentTrainingCount {
+  department: string
+  trainings: number
+}
+
+/**
  * Opciones de consulta para calcular métricas de asistencia.
  * `startTime` y `endTime` se expresan en epoch ms.
  */
@@ -367,4 +375,78 @@ export async function getTrainingYearsForDatabase(database: Database): Promise<n
   const years = Array.from(yearsSet)
   years.sort((a, b) => b - a)
   return years
+}
+
+/**
+ * Obtiene, para un año específico, cuántas capacitaciones
+ * (reuniones de tipo `training`) ha tenido cada departamento.
+ *
+ * Un departamento se considera participante de una capacitación
+ * si al menos uno de sus usuarios aparece como participante
+ * en esa reunión.
+ */
+export async function getTrainingCountsByDepartmentForYear(
+  database: Database,
+  year: number,
+): Promise<DepartmentTrainingCount[]> {
+  const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
+  const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
+
+  const meetingsRef = ref(database, "meetings")
+  const q = query(
+    meetingsRef,
+    orderByChild("startTime"),
+    startAt(startOfYear),
+    endAt(endOfYear),
+  )
+
+  const snapshot = await get(q)
+  const meetingsMap = snapshot.val() as Record<string, Meeting> | null
+
+  if (!meetingsMap) {
+    return []
+  }
+
+  const usersSnap = await get(ref(database, "users"))
+  const usersValue = usersSnap.val() as Record<string, Partial<UserProfile>> | null
+  const usersByUid: Record<string, Partial<UserProfile>> = usersValue ?? {}
+
+  const counts: Record<string, number> = {}
+
+  for (const meeting of Object.values(meetingsMap)) {
+    if (meeting.type !== "training") {
+      continue
+    }
+
+    const participantsSnap = await get(ref(database, `meetingParticipants/${meeting.id}`))
+    const participantsValue = participantsSnap.val() as Record<string, MeetingParticipant> | null
+    const participants: MeetingParticipant[] = participantsValue ? Object.values(participantsValue) : []
+
+    const departmentsInMeeting = new Set<string>()
+
+    for (const participant of participants) {
+      const user = usersByUid[participant.uid]
+      const deptRaw = typeof user?.department === "string" ? user.department : null
+      if (!deptRaw) {
+        continue
+      }
+      const clean = deptRaw.trim()
+      if (!clean) {
+        continue
+      }
+      departmentsInMeeting.add(clean)
+    }
+
+    for (const dept of departmentsInMeeting) {
+      counts[dept] = (counts[dept] ?? 0) + 1
+    }
+  }
+
+  const result: DepartmentTrainingCount[] = Object.entries(counts).map(([department, trainings]) => ({
+    department,
+    trainings,
+  }))
+
+  result.sort((a, b) => b.trainings - a.trainings || a.department.localeCompare(b.department))
+  return result
 }
