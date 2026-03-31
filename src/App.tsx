@@ -16,6 +16,7 @@ import RegisterPage from './pages/auth/RegisterPage'
 import RoleRoute from './components/auth/role-route'
 import ReportsPage from './pages/reports/ReportsPage'
 import ReportTrainingPlanPage from './pages/reports/ReportTrainingPlanPage'
+import SurveyAdminPage from './pages/survey/SurveyAdminPage'
 
 
 function App() {
@@ -66,6 +67,13 @@ function App() {
                         element={(
                             <RoleRoute allowed={["Admin", "HR", "Lider"]}>
                                 <ReportTrainingPlanPage />
+                            </RoleRoute>
+                        )}
+                    />
+                    <Route path="/survey"
+                        element={(
+                            <RoleRoute allowed={["Admin", "HR"]}>
+                                <SurveyAdminPage />
                             </RoleRoute>
                         )}
                     />
