@@ -27,7 +27,7 @@ export interface UserProfile {
   readonly identify?: string | null
   readonly immediateBoss?: string | null
   readonly companyName?: string | null
-    readonly cargo?: string | null
+  readonly cargo?: string | null
   readonly signatureUrl?: string | null
 }
 

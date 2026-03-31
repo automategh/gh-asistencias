@@ -43,6 +43,24 @@ export async function getLeaderNames(database: Database) {
     return leaders.map((u) => u.name);
 }
 
+/**
+ * Obtiene el perfil de usuario desde la base de datos por UID.
+ * @param uid UID del usuario
+ * @returns UserProfile o null si no existe
+ */
+export async function getUserProfile(uid: string, database: Database): Promise<UserProfile | null> {
+    try {
+        
+        const userRef = ref(database, `users/${uid}`)
+        const snapshot = await get(userRef)
+        if (!snapshot.exists()) return null
+        return snapshot.val() as UserProfile
+    } catch (error) {
+        console.error("Error al obtener perfil de usuario:", error)
+        return null
+    }
+}
+
 export async function updateUserProfile(database: Database, uid: string, profileData: Partial<UserProfile>) {
     if (!database) {
         throw new Error("La base de datos no está disponible");

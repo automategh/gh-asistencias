@@ -1,6 +1,10 @@
 import Layout from "@/components/layouts/layout"
 import { ChevronDown, Clock, Download, Eye, IterationCw, ListFilterIcon, LucideBarChart, Smile, TrendingUp, Users } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
+import jsPDF from "jspdf"
+import html2canvas from "html2canvas-pro"
+import * as XLSX from "xlsx"
+import { getUserProfile } from "@/services/user.service"    
 import { useDatabase } from "@/context/DatabaseContext"
 import { getDepartmentNames } from "@/services/departaments/departments.service"
 import {
@@ -29,6 +33,8 @@ function ReportTrainingPlanPage() {
     const [totalTrainings, setTotalTrainings] = useState<number>(0)
     const [totalHours, setTotalHours] = useState<number>(0)
     const [totalAttended, setTotalAttended] = useState<number>(0)
+    const [showExportMenu, setShowExportMenu] = useState(false)
+    const exportRef = useRef<HTMLDivElement>(null)
     const [departmentTrainingCounts, setDepartmentTrainingCounts] = useState<DepartmentTrainingCount[]>([])
     const [hoursByRole, setHoursByRole] = useState<TrainingHoursByRole[]>([])
     const [selectedAreaForChart, setSelectedAreaForChart] = useState<string | null>(null)
@@ -76,6 +82,97 @@ function ReportTrainingPlanPage() {
         }
     }, [database])
 
+    // Exportar a PDF: captura el contenedor principal
+    const handleExportPDF = async () => {
+        setShowExportMenu(false)
+        const element = exportRef.current || document.getElementById("training-report-container")
+        if (!element) return
+        try {
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                useCORS: true,
+                scrollX: 0,
+                scrollY: -window.scrollY,
+            })
+
+            const imgData = canvas.toDataURL('image/png')
+            const pdf = new jsPDF('p', 'mm', 'a4')
+
+            const pageWidth = pdf.internal.pageSize.getWidth()
+            const pageHeight = pdf.internal.pageSize.getHeight()
+
+            const imgWidth = pageWidth
+            const imgHeight = (canvas.height * imgWidth) / canvas.width
+
+            let position = 0
+            let heightLeft = imgHeight
+
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+            heightLeft -= pageHeight
+
+            while (heightLeft > 0) {
+                position = heightLeft - imgHeight
+                pdf.addPage()
+                pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
+                heightLeft -= pageHeight
+            }
+
+            const exportTitle = `Plan de Formación ${selectedYear}${selectedDepartment ? ` - ${selectedDepartment}` : ""}`
+            const fileName = `${exportTitle.toLowerCase().replace(/\s+/g, '-')}.pdf`
+
+            pdf.save(fileName)
+        } catch (exportError) {
+            console.error('Error al exportar PDF:', exportError)
+        }
+    }
+
+    // Exportar a Excel: descarga filas detalladas por asistente/capacitación
+    const handleExportExcel = async () => {
+        if (!database) return
+
+        setShowExportMenu(false)
+        // Solo asistentes presentes o tarde
+        const rows: Array<Array<string | number>> = []
+        // Cache para evitar múltiples lecturas de usuario
+        const userCache: Record<string, string> = {}
+        for (const { meeting, trainer, participants, areas } of trainings) {
+            const areaStr = areas.length > 0 ? areas.join(", ") : "-"
+            const hours = Math.round((meeting.endTime - meeting.startTime) / (1000 * 60 * 60))
+            const dateStr = new Date(meeting.startTime).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })
+            const asistentes = participants.filter(p => p.attendance === "present" || p.attendance === "late")
+            for (const p of asistentes) {
+                let cargo = userCache[p.uid]
+                if (cargo === undefined) {
+                    try {
+                        const user = await getUserProfile(p.uid, database)
+                        cargo = user?.cargo ?? ""
+                        userCache[p.uid] = cargo
+                    } catch {
+                        cargo = ""
+                    }
+                }
+                rows.push([
+                    meeting.title,
+                    dateStr,
+                    areaStr,
+                    hours,
+                    p.name,
+                    cargo,
+                    p.attendance ?? "-",
+                    trainer ?? "-"
+                ])
+            }
+        }
+        // Crear archivo Excel real
+        const ws = XLSX.utils.aoa_to_sheet([
+            ["Capacitación", "Fecha", "Área(s)", "Horas", "Asistente", "Cargo", "Asistencia", "Capacitador"],
+            ...rows
+        ])
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, ws, "Plan de Formación")
+        XLSX.writeFile(wb, "plan-formacion.xlsx")
+    }
+
     const handleGeneratePlan = async (): Promise<void> => {
         if (!database || selectedYear === null) {
             setTotalTrainings(0)
@@ -102,12 +199,12 @@ function ReportTrainingPlanPage() {
                 getTrainingHoursByRoleForYear(database, selectedYear, selectedDepartment || null),
                 getTrainingsWithParticipants(database, selectedYear, selectedDepartment || null),
             ]) as [
-                TrainingKpiSummary,
-                TrainingKpiSummary,
-                DepartmentTrainingCount[],
-                TrainingHoursByRole[],
-                TrainingWithParticipants[],
-            ]
+                    TrainingKpiSummary,
+                    TrainingKpiSummary,
+                    DepartmentTrainingCount[],
+                    TrainingHoursByRole[],
+                    TrainingWithParticipants[],
+                ]
 
             setTotalTrainings(currentKpi.totalTrainings)
             setTotalHours(currentKpi.totalHours)
@@ -155,357 +252,374 @@ function ReportTrainingPlanPage() {
                             <span className="inline-flex items-center rounded-md bg-secondary px-2 py-1 text-xs font-medium text-[#664d2d] ">Modulo Reportes</span>
                             <h1 className="text-3xl font-bold tracking-tight">Plan de formación</h1>
                         </div>
-
-                        <div>
-                            <button className="flex items-center gap-x-4 px-4 py-2.5 bg-zinc-300 rounded-2xl cursor-pointer">
+                        <div className="relative">
+                            <button
+                                className="flex items-center gap-x-4 px-4 py-2.5 bg-zinc-300 rounded-2xl cursor-pointer"
+                                onClick={() => setShowExportMenu((v) => !v)}
+                            >
                                 <Download className="w-4 h-4" />
                                 <span className="text-sm font-medium text-foreground">Exportar</span>
                             </button>
+                            {showExportMenu && (
+                                <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                                    <button
+                                        className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                                        onClick={handleExportPDF}
+                                    >
+                                        Exportar a PDF
+                                    </button>
+                                    <button
+                                        className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                                        onClick={handleExportExcel}
+                                    >
+                                        Exportar a Excel
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </nav>
                 </header>
-
-
-                <div className='px-4 md:px-12 py-10 md:py-10 space-y-10'>
-                    <section className="bg-[#f3f4f3] p-6 rounded-xl space-y-4 max-w-7xl mx-auto">
-                        <div className="flex flex-wrap items-end gap-6">
-                            <div className="flex-1 min-w-50">
-                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Periodo Anual</label>
-                                <div className="relative">
-                                    <select
-                                        className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-[#191c1c] appearance-none focus:ring-2 focus:ring-primary-container"
-                                        value={selectedYear ?? ""}
-                                        onChange={(event) => {
-                                            const value = event.target.value
-                                            setSelectedYear(value ? Number(value) : null)
-                                        }}
-                                    >
-                                        {years.length === 0 ? (
-                                            <option value="" disabled>
-                                                No hay capacitaciones registradas
-                                            </option>
-                                        ) : (
-                                            years.map((year) => (
-                                                <option key={year} value={year}>
-                                                    {year} {year === new Date().getFullYear() ? "- Ciclo Actual" : "- Histórico"}
+                <div className='bg-linear-to-br from-background via-muted/5 to-background' id="training-report-container" ref={exportRef}>
+                    <div className='px-4 md:px-12 py-10 md:py-10 space-y-10'>
+                        <section className="bg-[#f3f4f3] p-6 rounded-xl space-y-4 max-w-7xl mx-auto">
+                            <div className="flex flex-wrap items-end gap-6">
+                                <div className="flex-1 min-w-50">
+                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Periodo Anual</label>
+                                    <div className="relative">
+                                        <select
+                                            className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-[#191c1c] appearance-none focus:ring-2 focus:ring-primary-container"
+                                            value={selectedYear ?? ""}
+                                            onChange={(event) => {
+                                                const value = event.target.value
+                                                setSelectedYear(value ? Number(value) : null)
+                                            }}
+                                        >
+                                            {years.length === 0 ? (
+                                                <option value="" disabled>
+                                                    No hay capacitaciones registradas
                                                 </option>
-                                            ))
-                                        )}
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-3 text-outline pointer-events-none" />
+                                            ) : (
+                                                years.map((year) => (
+                                                    <option key={year} value={year}>
+                                                        {year} {year === new Date().getFullYear() ? "- Ciclo Actual" : "- Histórico"}
+                                                    </option>
+                                                ))
+                                            )}
+                                        </select>
+                                        <ChevronDown className="absolute right-3 top-3 text-outline pointer-events-none" />
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="flex-1 min-w-50">
-                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Área / Departamento</label>
-                                <div className="relative">
-                                    <select
-                                        className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-[#191c1c] appearance-none focus:ring-2 focus:ring-primary-container"
-                                        value={selectedDepartment}
-                                        onChange={(event) => {
-                                            setSelectedDepartment(event.target.value)
-                                        }}
+                                <div className="flex-1 min-w-50">
+                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Área / Departamento</label>
+                                    <div className="relative">
+                                        <select
+                                            className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-[#191c1c] appearance-none focus:ring-2 focus:ring-primary-container"
+                                            value={selectedDepartment}
+                                            onChange={(event) => {
+                                                setSelectedDepartment(event.target.value)
+                                            }}
+                                        >
+                                            <option value="">Todas las Áreas</option>
+                                            {departments.map((name) => (
+                                                <option key={name} value={name}>
+                                                    {name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <ChevronDown className="absolute right-3 top-3 text-outline pointer-events-none" />
+                                    </div>
+                                </div>
+                                <div className="flex-none">
+                                    <button
+                                        className="bg-[#1b3022] text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-primary transition-all shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
+                                        onClick={() => { void handleGeneratePlan() }}
+                                        disabled={isGenerating || !database || selectedYear === null}
                                     >
-                                        <option value="">Todas las Áreas</option>
-                                        {departments.map((name) => (
-                                            <option key={name} value={name}>
-                                                {name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <ChevronDown className="absolute right-3 top-3 text-outline pointer-events-none" />
+                                        <IterationCw className={`w-4 h-4 ${isGenerating ? "animate-spin" : ""}`} />
+                                        {isGenerating ? "Generando..." : "Generar Plan"}
+                                    </button>
                                 </div>
                             </div>
-                            <div className="flex-none">
-                                <button
-                                    className="bg-[#1b3022] text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-primary transition-all shadow-md disabled:opacity-60 disabled:cursor-not-allowed"
-                                    onClick={() => { void handleGeneratePlan() }}
-                                    disabled={isGenerating || !database || selectedYear === null}
-                                >
-                                    <IterationCw className={`w-4 h-4 ${isGenerating ? "animate-spin" : ""}`} />
-                                    {isGenerating ? "Generando..." : "Generar Plan"}
-                                </button>
-                            </div>
-                        </div>
-                    </section>
+                        </section>
 
-                    {/* kpi section */}
-                    <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+                        {/* kpi section */}
+                        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
 
-                        {/* kpi total de capacitaciones */}
-                        <div className="bg-white p-6 rounded-xl shadow-[0_20px_20px_rgba(25,28,28,0.02)] border border-[#e1e3e2]/20 group hover:border-emerald-900/30 transition-all">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="p-3 rounded-xl bg-[#d0e9d4] text-emerald-900">
-                                    <TrendingUp className="w-5 h-5" />
+                            {/* kpi total de capacitaciones */}
+                            <div className="bg-white p-6 rounded-xl shadow-[0_20px_20px_rgba(25,28,28,0.02)] border border-[#e1e3e2]/20 group hover:border-emerald-900/30 transition-all">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="p-3 rounded-xl bg-[#d0e9d4] text-emerald-900">
+                                        <TrendingUp className="w-5 h-5" />
+                                    </div>
+                                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+                                        {isGenerating
+                                            ? "Calculando..."
+                                            : selectedYear && trainingsDeltaPct !== null
+                                                ? `${trainingsDeltaPct >= 0 ? "+" : ""}${trainingsDeltaPct.toFixed(0)}% vs ${selectedYear - 1}`
+                                                : "Sin datos previos"}
+                                    </span>
                                 </div>
-                                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
-                                    {isGenerating
-                                        ? "Calculando..."
-                                        : selectedYear && trainingsDeltaPct !== null
-                                            ? `${trainingsDeltaPct >= 0 ? "+" : ""}${trainingsDeltaPct.toFixed(0)}% vs ${selectedYear - 1}`
-                                            : "Sin datos previos"}
-                                </span>
+                                <p className="text-3xl font-extrabold text-[#191c1c]">
+                                    {isGenerating ? (
+                                        <span className="inline-block h-7 w-20 bg-zinc-200 rounded-md animate-pulse" />
+                                    ) : (
+                                        totalTrainings
+                                    )}
+                                </p>
+                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Total de Capacitaciones</p>
                             </div>
-                            <p className="text-3xl font-extrabold text-[#191c1c]">
-                                {isGenerating ? (
-                                    <span className="inline-block h-7 w-20 bg-zinc-200 rounded-md animate-pulse" />
-                                ) : (
-                                    totalTrainings
-                                )}
-                            </p>
-                            <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Total de Capacitaciones</p>
-                        </div>
 
-                        {/* kpi de total de horas */}
-                        <div className="bg-white p-6 rounded-xl shadow-[0_20px_20px_rgba(25,28,28,0.02)] border border-[#e1e3e2]/20 group hover:border-emerald-900/30 transition-all">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="p-3 rounded-xl bg-[#D9E6D8] text-emerald-900">
-                                    <Clock className="w-5 h-5" />
+                            {/* kpi de total de horas */}
+                            <div className="bg-white p-6 rounded-xl shadow-[0_20px_20px_rgba(25,28,28,0.02)] border border-[#e1e3e2]/20 group hover:border-emerald-900/30 transition-all">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="p-3 rounded-xl bg-[#D9E6D8] text-emerald-900">
+                                        <Clock className="w-5 h-5" />
+                                    </div>
+                                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+                                        {isGenerating
+                                            ? "Calculando..."
+                                            : selectedYear && hoursDeltaPct !== null
+                                                ? `${hoursDeltaPct >= 0 ? "+" : ""}${hoursDeltaPct.toFixed(0)}% vs ${selectedYear - 1}`
+                                                : "Sin datos previos"}
+                                    </span>
                                 </div>
-                                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
-                                    {isGenerating
-                                        ? "Calculando..."
-                                        : selectedYear && hoursDeltaPct !== null
-                                            ? `${hoursDeltaPct >= 0 ? "+" : ""}${hoursDeltaPct.toFixed(0)}% vs ${selectedYear - 1}`
-                                            : "Sin datos previos"}
-                                </span>
+                                <p className="text-3xl font-extrabold text-[#191c1c]">
+                                    {isGenerating ? (
+                                        <span className="inline-block h-7 w-24 bg-zinc-200 rounded-md animate-pulse" />
+                                    ) : (
+                                        Math.round(totalHours)
+                                    )}
+                                </p>
+                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Total de Horas</p>
                             </div>
-                            <p className="text-3xl font-extrabold text-[#191c1c]">
-                                {isGenerating ? (
-                                    <span className="inline-block h-7 w-24 bg-zinc-200 rounded-md animate-pulse" />
-                                ) : (
-                                    Math.round(totalHours)
-                                )}
-                            </p>
-                            <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Total de Horas</p>
-                        </div>
 
-                        {/* kpi de promedio de asistencias */}
-                        <div className="bg-white p-6 rounded-xl shadow-[0_20px_20px_rgba(25,28,28,0.02)] border border-[#e1e3e2]/20 group hover:border-emerald-900/30 transition-all">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="p-3 rounded-xl bg-[#FFDD86] text-[#2a1800]">
-                                    <Users className="w-5 h-5" />
+                            {/* kpi de promedio de asistencias */}
+                            <div className="bg-white p-6 rounded-xl shadow-[0_20px_20px_rgba(25,28,28,0.02)] border border-[#e1e3e2]/20 group hover:border-emerald-900/30 transition-all">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="p-3 rounded-xl bg-[#FFDD86] text-[#2a1800]">
+                                        <Users className="w-5 h-5" />
+                                    </div>
+                                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+                                        {isGenerating
+                                            ? "Calculando..."
+                                            : selectedYear && attendedDeltaPct !== null
+                                                ? `${attendedDeltaPct >= 0 ? "+" : ""}${attendedDeltaPct.toFixed(0)}% vs ${selectedYear - 1}`
+                                                : "Sin datos previos"}
+                                    </span>
                                 </div>
-                                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
-                                    {isGenerating
-                                        ? "Calculando..."
-                                        : selectedYear && attendedDeltaPct !== null
-                                            ? `${attendedDeltaPct >= 0 ? "+" : ""}${attendedDeltaPct.toFixed(0)}% vs ${selectedYear - 1}`
-                                            : "Sin datos previos"}
-                                </span>
+                                <p className="text-3xl font-extrabold text-[#191c1c]">
+                                    {isGenerating ? (
+                                        <span className="inline-block h-7 w-20 bg-zinc-200 rounded-md animate-pulse" />
+                                    ) : (
+                                        totalAttended
+                                    )}
+                                </p>
+                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Total de Asistencias</p>
                             </div>
-                            <p className="text-3xl font-extrabold text-[#191c1c]">
-                                {isGenerating ? (
-                                    <span className="inline-block h-7 w-20 bg-zinc-200 rounded-md animate-pulse" />
-                                ) : (
-                                    totalAttended
-                                )}
-                            </p>
-                            <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Total de Asistencias</p>
-                        </div>
 
-                        {/* kpi de promedio de satisfacción */}
-                        <div className="bg-white p-6 rounded-xl shadow-[0_20px_20px_rgba(25,28,28,0.02)] border border-[#e1e3e2]/20 group hover:border-emerald-900/30 transition-all">
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="p-3 rounded-xl bg-[#ffdad6] text-[#93000a]">
-                                    <Smile className="w-5 h-5" />
+                            {/* kpi de promedio de satisfacción */}
+                            <div className="bg-white p-6 rounded-xl shadow-[0_20px_20px_rgba(25,28,28,0.02)] border border-[#e1e3e2]/20 group hover:border-emerald-900/30 transition-all">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="p-3 rounded-xl bg-[#ffdad6] text-[#93000a]">
+                                        <Smile className="w-5 h-5" />
+                                    </div>
+                                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">+12% vs 2023</span>
                                 </div>
-                                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">+12% vs 2023</span>
+                                <p className="text-3xl font-extrabold text-[#191c1c]">
+                                    {isGenerating ? (
+                                        <span className="inline-block h-7 w-24 bg-zinc-200 rounded-md animate-pulse" />
+                                    ) : (
+                                        148
+                                    )}
+                                </p>
+                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Promedio de Satisfacción</p>
                             </div>
-                            <p className="text-3xl font-extrabold text-[#191c1c]">
-                                {isGenerating ? (
-                                    <span className="inline-block h-7 w-24 bg-zinc-200 rounded-md animate-pulse" />
-                                ) : (
-                                    148
-                                )}
-                            </p>
-                            <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Promedio de Satisfacción</p>
-                        </div>
-                    </section>
+                        </section>
 
 
 
-                    {/* section de los graficos de capacitaciones por area y horas por cargo 
+                        {/* section de los graficos de capacitaciones por area y horas por cargo 
                         - para este bloque vamos a mostrar una card donde se distribuya por area y en la otra card se muestre por cargo dependiendo de la seccion que el usuario le de click en la card anterior, para esto se puede usar un estado que guarde la seccion seleccionada y dependiendo de eso mostrar un grafico u otro, para los graficos se pueden usar componentes de librerias como recharts o chart.js, y para los datos se pueden generar datos de ejemplo o usar datos reales si es que ya existen en la base de datos
                     */}
-                    <section className="grid md:grid-cols-2 gap-6 max-w-7xl mx-auto">
-                        <div className="bg-white rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] p-8">
-                            <div className="flex justify-between items-center mb-8">
-                                <div>
-                                    <h3 className="text-xl font-bold text-emerald-950">Capacitaciones por Área</h3>
-                                    <p className="text-xs text-outline font-medium">Distribución departamental del plan actual</p>
-                                </div>
-                            </div>
-                            <div className="space-y-6">
-                                {isGenerating ? (
-                                    <div className="space-y-3">
-                                        {[1, 2, 3].map((row) => (
-                                            <div key={row} className="space-y-2">
-                                                <div className="flex justify-between items-center">
-                                                    <span className="h-3 w-32 bg-zinc-200 rounded-md animate-pulse" />
-                                                    <span className="h-3 w-16 bg-zinc-200 rounded-md animate-pulse" />
-                                                </div>
-                                                <div className="h-3 w-full bg-zinc-200 rounded-full animate-pulse" />
-                                            </div>
-                                        ))}
+                        <section className="grid md:grid-cols-2 gap-6 max-w-7xl mx-auto">
+                            <div className="bg-white rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] p-8">
+                                <div className="flex justify-between items-center mb-8">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-emerald-950">Capacitaciones por Área</h3>
+                                        <p className="text-xs text-outline font-medium">Distribución departamental del plan actual</p>
                                     </div>
-                                ) : departmentTrainingCounts.length === 0 ? (
-                                    <p className="text-xs text-[#434843]">
-                                        Genera el plan para visualizar la distribución de capacitaciones por área en el
-                                        periodo seleccionado.
-                                    </p>
-                                ) : (
-                                    (() => {
-                                        /**
-                                         * Determina el número máximo de capacitaciones entre todos los departamentos
-                                         * para poder escalar las barras de distribución de forma proporcional.
-                                         */
-                                        const maxTrainings = departmentTrainingCounts.reduce<number>((max, item) => {
-                                            return item.trainings > max ? item.trainings : max
-                                        }, 0)
-
-                                        return departmentTrainingCounts.map((item) => {
-                                            /**
-                                             * Calcula el ancho de la barra para el departamento actual en función
-                                             * de sus capacitaciones respecto al máximo del conjunto. Se garantiza un
-                                             * ancho mínimo del 6% para que las barras con pocos registros sigan siendo visibles.
-                                             */
-                                            const widthPercentage = maxTrainings > 0
-                                                ? Math.max(6, (item.trainings / maxTrainings) * 100)
-                                                : 0
-
-                                            const isSelected = selectedAreaForChart === item.department
-
-                                            return (
-                                                <div
-                                                    key={item.department}
-                                                    className={`space-y-2 rounded-lg px-2 py-1 transition-colors cursor-pointer ${isSelected ? "bg-emerald-50" : "hover:bg-emerald-50/70"}`}
-                                                    onClick={() => handleAreaClick(item.department)}
-                                                >
-                                                    <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-slate-500">
-                                                        <span>{item.department}</span>
-                                                        <span>{item.trainings} capacitaciones</span>
+                                </div>
+                                <div className="space-y-6">
+                                    {isGenerating ? (
+                                        <div className="space-y-3">
+                                            {[1, 2, 3].map((row) => (
+                                                <div key={row} className="space-y-2">
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="h-3 w-32 bg-zinc-200 rounded-md animate-pulse" />
+                                                        <span className="h-3 w-16 bg-zinc-200 rounded-md animate-pulse" />
                                                     </div>
-                                                    <div className="h-3 w-full bg-[#edeeed] rounded-full overflow-hidden">
-                                                        <div
-                                                            className="h-full bg-[#1b3022] rounded-full"
-                                                            style={{ width: `${widthPercentage}%` }}
-                                                        />
-                                                    </div>
+                                                    <div className="h-3 w-full bg-zinc-200 rounded-full animate-pulse" />
                                                 </div>
-                                            )
-                                        })
-                                    })()
-                                )}
-                            </div>
-                        </div>
-                        <div className="bg-[#1b3022] rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] p-8">
-                            <div className="flex justify-between items-center mb-8">
-                                <div>
-                                    <h3 className="text-xl font-bold text-white">Horas por cargo</h3>
-                                    <p className="text-xs text-outline font-medium text-[#819986]">Intensidad formativa por cargo</p>
+                                            ))}
+                                        </div>
+                                    ) : departmentTrainingCounts.length === 0 ? (
+                                        <p className="text-xs text-[#434843]">
+                                            Genera el plan para visualizar la distribución de capacitaciones por área en el
+                                            periodo seleccionado.
+                                        </p>
+                                    ) : (
+                                        (() => {
+                                            /**
+                                             * Determina el número máximo de capacitaciones entre todos los departamentos
+                                             * para poder escalar las barras de distribución de forma proporcional.
+                                             */
+                                            const maxTrainings = departmentTrainingCounts.reduce<number>((max, item) => {
+                                                return item.trainings > max ? item.trainings : max
+                                            }, 0)
+
+                                            return departmentTrainingCounts.map((item) => {
+                                                /**
+                                                 * Calcula el ancho de la barra para el departamento actual en función
+                                                 * de sus capacitaciones respecto al máximo del conjunto. Se garantiza un
+                                                 * ancho mínimo del 6% para que las barras con pocos registros sigan siendo visibles.
+                                                 */
+                                                const widthPercentage = maxTrainings > 0
+                                                    ? Math.max(6, (item.trainings / maxTrainings) * 100)
+                                                    : 0
+
+                                                const isSelected = selectedAreaForChart === item.department
+
+                                                return (
+                                                    <div
+                                                        key={item.department}
+                                                        className={`space-y-2 rounded-lg px-2 py-1 transition-colors cursor-pointer ${isSelected ? "bg-emerald-50" : "hover:bg-emerald-50/70"}`}
+                                                        onClick={() => handleAreaClick(item.department)}
+                                                    >
+                                                        <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-slate-500">
+                                                            <span>{item.department}</span>
+                                                            <span>{item.trainings} capacitaciones</span>
+                                                        </div>
+                                                        <div className="h-3 w-full bg-[#edeeed] rounded-full overflow-hidden">
+                                                            <div
+                                                                className="h-full bg-[#1b3022] rounded-full"
+                                                                style={{ width: `${widthPercentage}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })
+                                        })()
+                                    )}
                                 </div>
                             </div>
-                            <div className="space-y-6">
-                                {selectedAreaForChart === null ? (
-                                    <p className="text-xs text-[#dbe7dd]">
-                                        Selecciona un área en la tarjeta "Capacitaciones por Área" para visualizar el
-                                        detalle de horas por cargo.
-                                    </p>
-                                ) : (
-                                    (() => {
-                                        const filteredHoursByRole = hoursByRole
-
-                                        if (filteredHoursByRole.length === 0) {
-                                            return (
-                                                <p className="text-xs text-[#dbe7dd]">
-                                                    No se encontraron horas de capacitación registradas por cargo para el
-                                                    periodo seleccionado.
-                                                </p>
-                                            )
-                                        }
-
-                                        const maxHours = filteredHoursByRole.reduce<number>((max, item) => {
-                                            return item.hours > max ? item.hours : max
-                                        }, 0)
-
-                                        return (
-                                            <>
-                                                <p className="text-xs text-[#dbe7dd]">
-                                                    Horas totales de capacitación por cargo para el año
-                                                    <span className="font-semibold"> {selectedYear}</span>
-                                                    {selectedDepartment && (
-                                                        <>
-                                                            <span> · Área </span>
-                                                            <span className="font-semibold">{selectedDepartment}</span>
-                                                        </>
-                                                    )}
-                                                </p>
-                                                <div className="space-y-3">
-                                                    {filteredHoursByRole.map((item) => {
-                                                        const widthPercentage = maxHours > 0
-                                                            ? Math.max(6, (item.hours / maxHours) * 100)
-                                                            : 0
-
-                                                        return (
-                                                            <div key={item.role} className="space-y-1">
-                                                                <div className="flex justify-between text-[11px] font-medium text-[#e2efe4]">
-                                                                    <span>{item.role}</span>
-                                                                    <span>{item.hours.toFixed(0)} h</span>
-                                                                </div>
-                                                                <div className="h-2.5 w-full bg-[#243a2c] rounded-full overflow-hidden">
-                                                                    <div
-                                                                        className="h-full bg-[#9ee6b3] rounded-full"
-                                                                        style={{ width: `${widthPercentage}%` }}
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        )
-                                                    })}
-                                                </div>
-                                            </>
-                                        )
-                                    })()
-                                )}
-                            </div>
-                        </div>
-                    </section>
-
-                    <section className="bg-white rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] overflow-hidden max-w-7xl mx-auto">
-                        <div className="p-8 flex justify-between items-center border-b border-[#edeeed]">
-                            <h3 className="text-xl font-bold text-emerald-950">Listado de Capacitaciones</h3>
-                            <div className="flex gap-2">
-                                <button className="p-2 rounded-lg bg-[#edeeed] text-outline hover:text-primary-container transition-colors">
-                                    <ListFilterIcon className="w-4 h-4" />
-
-                                </button>
-                                <button className="p-2 rounded-lg bg-[#edeeed] text-outline hover:text-primary-container transition-colors">
-                                    <LucideBarChart className="w-4 h-4 -rotate-90" />
-                                </button>
-                            </div>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-[#f3f4f3]">
-                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Capacitación</th>
-                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Área</th>
-                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Fecha</th>
-                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Horas</th>
-                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black text-center">Asistentes</th>
-                                        <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black text-center">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-[#edeeed]">
-                                    {isGenerating ? (
-                                        <tr>
-                                            <td colSpan={6} className="py-8 text-center text-[#434843]">Cargando capacitaciones...</td>
-                                        </tr>
-                                    ) : trainings.length === 0 ? (
-                                        <tr>
-                                            <td colSpan={6} className="py-8 text-center text-[#434843]">No hay capacitaciones registradas para el periodo y filtros seleccionados.</td>
-                                        </tr>
+                            <div className="bg-[#1b3022] rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] p-8">
+                                <div className="flex justify-between items-center mb-8">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-white">Horas por cargo</h3>
+                                        <p className="text-xs text-outline font-medium text-[#819986]">Intensidad formativa por cargo</p>
+                                    </div>
+                                </div>
+                                <div className="space-y-6">
+                                    {selectedAreaForChart === null ? (
+                                        <p className="text-xs text-[#dbe7dd]">
+                                            Selecciona un área en la tarjeta "Capacitaciones por Área" para visualizar el
+                                            detalle de horas por cargo.
+                                        </p>
                                     ) : (
-                                        trainings.map(({ meeting, trainer, participants, areas }) => {
+                                        (() => {
+                                            const filteredHoursByRole = hoursByRole
+
+                                            if (filteredHoursByRole.length === 0) {
+                                                return (
+                                                    <p className="text-xs text-[#dbe7dd]">
+                                                        No se encontraron horas de capacitación registradas por cargo para el
+                                                        periodo seleccionado.
+                                                    </p>
+                                                )
+                                            }
+
+                                            const maxHours = filteredHoursByRole.reduce<number>((max, item) => {
+                                                return item.hours > max ? item.hours : max
+                                            }, 0)
+
+                                            return (
+                                                <>
+                                                    <p className="text-xs text-[#dbe7dd]">
+                                                        Horas totales de capacitación por cargo para el año
+                                                        <span className="font-semibold"> {selectedYear}</span>
+                                                        {selectedDepartment && (
+                                                            <>
+                                                                <span> · Área </span>
+                                                                <span className="font-semibold">{selectedDepartment}</span>
+                                                            </>
+                                                        )}
+                                                    </p>
+                                                    <div className="space-y-3">
+                                                        {filteredHoursByRole.map((item) => {
+                                                            const widthPercentage = maxHours > 0
+                                                                ? Math.max(6, (item.hours / maxHours) * 100)
+                                                                : 0
+
+                                                            return (
+                                                                <div key={item.role} className="space-y-1">
+                                                                    <div className="flex justify-between text-[11px] font-medium text-[#e2efe4]">
+                                                                        <span>{item.role}</span>
+                                                                        <span>{item.hours.toFixed(0)} h</span>
+                                                                    </div>
+                                                                    <div className="h-2.5 w-full bg-[#243a2c] rounded-full overflow-hidden">
+                                                                        <div
+                                                                            className="h-full bg-[#9ee6b3] rounded-full"
+                                                                            style={{ width: `${widthPercentage}%` }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </>
+                                            )
+                                        })()
+                                    )}
+                                </div>
+                            </div>
+                        </section>
+
+                        <section className="bg-white rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] overflow-hidden max-w-7xl mx-auto">
+                            <div className="p-8 flex justify-between items-center border-b border-[#edeeed]">
+                                <h3 className="text-xl font-bold text-emerald-950">Listado de Capacitaciones</h3>
+                                <div className="flex gap-2">
+                                    <button className="p-2 rounded-lg bg-[#edeeed] text-outline hover:text-primary-container transition-colors">
+                                        <ListFilterIcon className="w-4 h-4" />
+
+                                    </button>
+                                    <button className="p-2 rounded-lg bg-[#edeeed] text-outline hover:text-primary-container transition-colors">
+                                        <LucideBarChart className="w-4 h-4 -rotate-90" />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-[#f3f4f3]">
+                                            <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Capacitación</th>
+                                            <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Área</th>
+                                            <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Fecha</th>
+                                            <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black">Horas</th>
+                                            <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black text-center">Asistentes</th>
+                                            <th className="px-8 py-4 text-[10px] uppercase tracking-widest text-outline font-black text-center">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-[#edeeed]">
+                                        {isGenerating ? (
+                                            <tr>
+                                                <td colSpan={6} className="py-8 text-center text-[#434843]">Cargando capacitaciones...</td>
+                                            </tr>
+                                        ) : trainings.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={6} className="py-8 text-center text-[#434843]">No hay capacitaciones registradas para el periodo y filtros seleccionados.</td>
+                                            </tr>
+                                        ) : (
+                                            trainings.map(({ meeting, trainer, participants, areas }) => {
                                                 // Áreas involucradas: mostrar todas las áreas únicas
                                                 const area = areas.length > 0 ? areas.join(", ") : "-"
                                                 // Fecha formateada
@@ -537,11 +651,12 @@ function ReportTrainingPlanPage() {
                                                     </tr>
                                                 )
                                             })
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
                 </div>
             </div>
         </Layout>
