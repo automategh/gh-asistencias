@@ -1,7 +1,10 @@
 import Layout from "@/components/layouts/layout"
 import { Clock, Edit, Plus, Search, Users } from "lucide-react"
+import { useNavigate } from "react-router-dom"
 
 function SurveyAdminPage() {
+
+    const navigate = useNavigate()
     return (
         <Layout>
             <div className='bg-linear-to-br from-background via-muted/5 to-background'>
@@ -14,6 +17,7 @@ function SurveyAdminPage() {
                         </div>
                         <div className="relative">
                             <button
+                                onClick={() => navigate('/survey/create')}
                                 className="flex items-center gap-x-4 px-4 py-2.5 bg-primary rounded-2xl cursor-pointer text-primary-foreground text-sm font-medium hover:bg-primary-light transition-colors"
                             >
                                 <Plus className="w-4 h-4" />

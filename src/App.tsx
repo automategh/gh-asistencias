@@ -17,6 +17,7 @@ import RoleRoute from './components/auth/role-route'
 import ReportsPage from './pages/reports/ReportsPage'
 import ReportTrainingPlanPage from './pages/reports/ReportTrainingPlanPage'
 import SurveyAdminPage from './pages/survey/SurveyAdminPage'
+import NewSurveyPage from './pages/survey/NewSurveyPage'
 
 
 function App() {
@@ -77,6 +78,12 @@ function App() {
                             </RoleRoute>
                         )}
                     />
+
+                    <Route path='/survey/create' element={(
+                        <RoleRoute allowed={["Admin", "HR"]}>
+                            <NewSurveyPage/>
+                        </RoleRoute>
+                    )} />
 
                     <Route path="/checkin/:id" element={<ChekinPage />} />
                 </Route>
