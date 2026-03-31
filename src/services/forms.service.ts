@@ -41,7 +41,12 @@ export type SurveyOption = {
 export async function createSurvey(data: Omit<Survey, "id">, database: Database) {
     const newRef = push(ref(database, "surveys"))
 
-    await set(newRef, data)
+    const newSurvey = {
+        ...data,
+        id: newRef.key
+    }
+
+    await set(newRef, newSurvey)
 
     return newRef.key as string
 }
