@@ -13,7 +13,7 @@ function SurveyAdminPage() {
                     <nav className='px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto flex justify-between items-center'>
                         <div>
                             <h1 className="text-3xl font-bold tracking-tight">Panel de Encuestas</h1>
-                            <p className="font-body text-on-surface-variant text-sm mt-1">Administra, crea y analiza las encuestas de la organización desde un solo lugar.</p>
+                            <p className="font-body text-[#434843] text-sm mt-1">Administra, crea y analiza las encuestas de la organización desde un solo lugar.</p>
                         </div>
                         <div className="relative">
                             <button

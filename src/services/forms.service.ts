@@ -4,6 +4,8 @@ export type Survey = {
     id: string
     name: string
     description?: string
+    category: string
+    predetermined?: boolean
     isActive: boolean
     createdAt: string
     updatedAt: string
