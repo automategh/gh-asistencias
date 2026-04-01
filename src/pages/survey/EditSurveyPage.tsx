@@ -509,8 +509,40 @@ function EditSurveyPage() {
                         )}
 
                         {isLoading ? (
-                            <section className="bg-white rounded-xl shadow-[0_20px_24px_-4px_rgba(25,28,28,0.04)] overflow-hidden p-8 text-sm text-[#434843]">
-                                Cargando encuesta...
+                            <section className="bg-white rounded-xl shadow-[0_20px_24px_-4px_rgba(25,28,28,0.04)] overflow-hidden p-8">
+                                <div className="animate-pulse space-y-6">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-4">
+                                            <span className="w-8 h-8 rounded-full bg-[#e1e3e2]" />
+                                            <div className="space-y-2">
+                                                <div className="h-4 bg-[#edeeed] rounded w-40" />
+                                                <div className="h-3 bg-[#edeeed] rounded w-64" />
+                                            </div>
+                                        </div>
+                                        <span className="h-6 w-24 bg-[#edeeed] rounded-full" />
+                                    </div>
+
+                                    <div className="space-y-4 pt-4">
+                                        <div className="space-y-2">
+                                            <div className="h-3 bg-[#edeeed] rounded w-48" />
+                                            <div className="h-11 bg-[#edeeed] rounded-xl" />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <div className="h-3 bg-[#edeeed] rounded w-36" />
+                                                <div className="h-11 bg-[#edeeed] rounded-xl" />
+                                            </div>
+                                            <div className="flex items-center gap-3 mt-6">
+                                                <span className="w-5 h-5 rounded bg-[#edeeed]" />
+                                                <div className="h-3 bg-[#edeeed] rounded w-40" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="h-3 bg-[#edeeed] rounded w-32" />
+                                            <div className="h-24 bg-[#edeeed] rounded-xl" />
+                                        </div>
+                                    </div>
+                                </div>
                             </section>
                         ) : (
                             <section className="bg-white rounded-xl shadow-[0_20px_24px_-4px_rgba(25,28,28,0.04)] overflow-hidden">
