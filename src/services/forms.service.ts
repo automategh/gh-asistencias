@@ -1,5 +1,9 @@
-import { push, ref, set, type Database } from "firebase/database"
+import { get, push, ref, set, type Database } from "firebase/database"
 
+/**
+ * Estructura principal de una encuesta almacenada en Realtime Database.
+ * Representa la configuración general de una encuesta sin incluir sus preguntas.
+ */
 export type Survey = {
     id: string
     name: string
@@ -11,8 +15,19 @@ export type Survey = {
     updatedAt: string
 }
 
+/**
+ * Tipos disponibles de pregunta dentro de una encuesta.
+ * - "single": selección única.
+ * - "multiple": selección múltiple.
+ * - "text": respuesta abierta.
+ * - "rating": escala numérica (por ejemplo 1-10).
+ */
 export type QuestionType = "single" | "multiple" | "text" | "rating"
 
+/**
+ * Pregunta asociada a una encuesta específica.
+ * Cada pregunta pertenece a una encuesta a través de "surveyId".
+ */
 export type SurveyQuestion = {
     id: string
     surveyId: string
@@ -22,6 +37,10 @@ export type SurveyQuestion = {
     required: boolean
 }
 
+/**
+ * Opción de respuesta para una pregunta de tipo selección o escala.
+ * Se almacena por separado para permitir reutilización y ordenamiento.
+ */
 export type SurveyOption = {
     id: string
     questionId: string
@@ -51,7 +70,29 @@ export async function createSurvey(data: Omit<Survey, "id">, database: Database)
     return newRef.key as string
 }
 
-/** * Crea una nueva pregunta para una encuesta específica.
+/**
+ * Obtiene todas las encuestas almacenadas en la base de datos.
+ * @param database Instancia de Realtime Database desde la que se leerán las encuestas.
+ * @returns Arreglo de encuestas tipadas, ordenadas por fecha de creación descendente.
+ */
+export async function getSurveys(database: Database): Promise<Survey[]> {
+    const surveysRef = ref(database, "surveys")
+    const snapshot = await get(surveysRef)
+
+    const rawValue = snapshot.val() as Record<string, Survey> | null
+    if (!rawValue) {
+        return []
+    }
+
+    const items = Object.values(rawValue)
+
+    return items.sort((first, second) => {
+        return second.createdAt.localeCompare(first.createdAt)
+    })
+}
+
+/**
+ * Crea una nueva pregunta para una encuesta específica.
  * @param data Datos de la pregunta a crear (sin el campo "id")
  * @param database Instancia de Realtime Database donde se almacenará la pregunta
  * @return El ID generado para la nueva pregunta

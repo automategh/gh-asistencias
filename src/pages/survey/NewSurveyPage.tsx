@@ -6,9 +6,17 @@ import { ArrowRight, ChevronDown, ChevronRight, Copy, PlusCircle, Trash } from "
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 
+/**
+ * Tipos de pregunta soportados por el constructor visual de encuestas.
+ * Se utilizan para controlar el renderizado y la validación en el formulario.
+ */
 type QuestionType = "nps" | "scale" | "text"
 
-
+/**
+ * Pantalla de creación de nuevas encuestas.
+ * Permite definir la información básica y construir dinámicamente el listado de preguntas
+ * antes de persistir la configuración en Realtime Database.
+ */
 function NewSurveyPage() {
     const navigate = useNavigate()
     const { database } = useDatabase()
@@ -20,15 +28,21 @@ function NewSurveyPage() {
         predetermined: false
     })
 
+    // Listado de preguntas que componen la encuesta.
+    // No se manejan los campos "id" ni "surveyId" aquí, ya que los asigna Firebase.
     const [questions, setQuestions] = useState<Omit<SurveyQuestion, 'id' | 'surveyId'>[]>([])
+    // Estado de error contextualizado por campo para mostrar mensajes de validación en UI.
     const [error, setError] = useState({
         label: '',
         message: ''
     })
 
+    // Bandera de éxito para mostrar modal de confirmación cuando la encuesta se crea correctamente.
     const [success, setSuccess] = useState(false)
 
-    // Añadir nueva pregunta
+    /**
+     * Añade una nueva pregunta vacía al final del formulario, con valores por defecto.
+     */
     const handleAddQuestion = () => {
         setQuestions(prev => ([
             ...prev,
@@ -41,14 +55,20 @@ function NewSurveyPage() {
         ]))
     }
 
-    // Editar campo de pregunta
+    /**
+     * Actualiza un campo concreto de una pregunta identificada por su índice en el arreglo.
+     * Permite modificar texto, tipo y si es obligatoria sin mutar el estado original.
+     */
     const handleEditQuestion = (index: number, field: keyof Omit<SurveyQuestion, 'id' | 'surveyId'>, value: string | boolean) => {
         setQuestions(prev => prev.map((q, i) =>
             i === index ? { ...q, [field]: value } : q
         ))
     }
 
-    // Duplicar pregunta
+    /**
+     * Duplica una pregunta existente tomando sus campos relevantes y añadiéndola al final.
+     * Se recalcula el orden para mantener la numeración consistente.
+     */
     const handleDuplicateQuestion = (index: number) => {
         setQuestions(prev => {
             const q = prev[index]
@@ -62,20 +82,26 @@ function NewSurveyPage() {
         })
     }
 
-    // Eliminar pregunta
+    /**
+     * Elimina una pregunta según su índice dentro del listado actual.
+     */
     const handleDeleteQuestion = (index: number) => {
         setQuestions(prev => prev.filter((_, i) => i !== index))
     }
 
-    // Opciones de categoría basadas en MeetingKind
+    // Opciones de categoría basadas en los tipos de reuniones configurados en la aplicación.
     const meetingKindOptions = [
         { value: "meeting", label: "Reunión" },
         { value: "training", label: "Capacitación" },
         { value: "custom", label: "Personalizada" },
     ];
 
+    /**
+     * Valida los datos del formulario, crea la encuesta en Realtime Database y
+     * posteriormente persiste cada una de las preguntas asociadas.
+     */
     const handleSubmit = async () => {
-        // Validación básica
+        // Validación básica de campos obligatorios
         if (!data.name.trim()) {
             setError({ label: "Nombre", message: "El nombre es obligatorio." });
             return;
