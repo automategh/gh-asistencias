@@ -3,7 +3,7 @@ import { useDatabase } from "@/context/DatabaseContext"
 import { createOption, createQuestion, createSurvey, type QuestionType, type Survey, type SurveyQuestion } from "@/services/forms.service"
 import type { MeetingKind } from "@/types/meeting"
 
-import { ArrowRight, ChevronDown, ChevronRight, Copy, PlusCircle, Trash } from "lucide-react"
+import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, ChevronRight, Copy, PlusCircle, Trash } from "lucide-react"
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 
@@ -97,9 +97,12 @@ function NewSurveyPage() {
                 let nextOptions: QuestionOptionDraft[] | undefined
 
                 // Para preguntas de selección (única o múltiple) se inicializa
-                // un mínimo de 2 opciones si aún no existen.
+                // un mínimo de 2 opciones. Si venimos de una escala de rating,
+                // siempre se reinician para evitar arrastrar las 10 opciones numéricas.
                 if (nextType === "single" || nextType === "multiple") {
-                    nextOptions = q.options && q.options.length > 0
+                    const isComingFromRating = q.type === "rating"
+
+                    nextOptions = !isComingFromRating && q.options && q.options.length > 0
                         ? q.options
                         : [
                             { text: "Opción 1" },
@@ -159,7 +162,12 @@ function NewSurveyPage() {
      */
     const handleDeleteQuestion = (index: number) => {
         clearErrorForLabel('Preguntas')
-        setQuestions(prev => prev.filter((_, i) => i !== index))
+        setQuestions(prev => prev
+            .filter((_, i) => i !== index)
+            .map((question, currentIndex) => ({
+                ...question,
+                order: currentIndex + 1,
+            })))
     }
 
     /**
@@ -233,6 +241,45 @@ function NewSurveyPage() {
                 options: filteredOptions,
             }
         }))
+    }
+
+    /**
+     * Reordena el arreglo de preguntas moviendo un elemento de una posición a otra
+     * y recalcula el campo `order` para mantener la numeración consistente.
+     */
+    const reorderQuestions = (items: QuestionDraft[], fromIndex: number, toIndex: number): QuestionDraft[] => {
+        const nextItems = [...items]
+        const [moved] = nextItems.splice(fromIndex, 1)
+        nextItems.splice(toIndex, 0, moved)
+
+        return nextItems.map((question, currentIndex) => ({
+            ...question,
+            order: currentIndex + 1,
+        }))
+    }
+
+    /**
+     * Mueve una pregunta una posición hacia arriba en el listado visual.
+     */
+    const handleMoveQuestionUp = (index: number): void => {
+        if (index === 0) {
+            return
+        }
+
+        setQuestions(prev => reorderQuestions(prev, index, index - 1))
+    }
+
+    /**
+     * Mueve una pregunta una posición hacia abajo en el listado visual.
+     */
+    const handleMoveQuestionDown = (index: number): void => {
+        setQuestions(prev => {
+            if (index >= prev.length - 1) {
+                return prev
+            }
+
+            return reorderQuestions(prev, index, index + 1)
+        })
     }
 
     // Opciones de categoría basadas en los tipos de reuniones configurados en la aplicación.
@@ -310,8 +357,6 @@ function NewSurveyPage() {
             }
 
             const surveyId = await createSurvey(surveyData, database)
-            // Aquí podríamos crear las preguntas asociadas a la encuesta usando createQuestion y luego redirigir a la página de detalles de la encuesta recién creada
-
             for (let i = 0; i < questions.length; i++) {
                 const q = questions[i]
                 const questionId = await createQuestion({
@@ -319,7 +364,7 @@ function NewSurveyPage() {
                     text: q.text,
                     type: q.type,
                     required: q.required,
-                    order: q.order,
+                    order: i + 1,
                 }, database)
 
                 if (q.type === "single" || q.type === "multiple") {
@@ -561,7 +606,25 @@ function NewSurveyPage() {
                                                             )}
 
                                                         </div>
-                                                        <div className="flex justify-end space-x-3">
+                                                        <div className="flex justify-end space-x-3 self-end">
+                                                            <button
+                                                                type="button"
+                                                                className="p-2.5 text-outline hover:bg-[#edeeed] rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                title="Mover pregunta hacia arriba"
+                                                                onClick={() => handleMoveQuestionUp(idx)}
+                                                                disabled={idx === 0}
+                                                            >
+                                                                <ArrowUp className="w-5 h-5" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="p-2.5 text-outline hover:bg-[#edeeed] rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                title="Mover pregunta hacia abajo"
+                                                                onClick={() => handleMoveQuestionDown(idx)}
+                                                                disabled={idx === questions.length - 1}
+                                                            >
+                                                                <ArrowDown className="w-5 h-5" />
+                                                            </button>
                                                             <button
                                                                 type="button"
                                                                 className="p-2.5 text-outline hover:bg-[#edeeed] rounded-lg transition-all"

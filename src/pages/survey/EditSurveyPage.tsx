@@ -3,7 +3,7 @@ import { useDatabase } from "@/context/DatabaseContext"
 import { createOption, createQuestion, getSurveyById, getSurveyOptionsByQuestionIds, getSurveyQuestionsBySurveyId, updateSurvey, type QuestionType, type SurveyOption, type SurveyQuestion } from "@/services/forms.service"
 import type { MeetingKind } from "@/types/meeting"
 
-import { ArrowRight, ChevronDown, ChevronRight, Copy, PlusCircle, Trash } from "lucide-react"
+import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, ChevronRight, Copy, PlusCircle, Trash } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { get as getFromDatabase, ref as databaseRef, remove } from "firebase/database"
@@ -82,7 +82,9 @@ function EditSurveyPage() {
                 let nextOptions: QuestionOptionDraft[] | undefined
 
                 if (nextType === "single" || nextType === "multiple") {
-                    nextOptions = question.options && question.options.length > 0
+                    const isComingFromRating = question.type === "rating"
+
+                    nextOptions = !isComingFromRating && question.options && question.options.length > 0
                         ? question.options
                         : [
                             { text: "Opción 1" },
@@ -132,7 +134,12 @@ function EditSurveyPage() {
 
     const handleDeleteQuestion = (index: number) => {
         clearErrorForLabel("Preguntas")
-        setQuestions((previous) => previous.filter((_, currentIndex) => currentIndex !== index))
+        setQuestions((previous) => previous
+            .filter((_, currentIndex) => currentIndex !== index)
+            .map((question, currentIndex) => ({
+                ...question,
+                order: currentIndex + 1,
+            })))
     }
 
     const handleAddOption = (questionIndex: number) => {
@@ -194,6 +201,45 @@ function EditSurveyPage() {
                 options: filteredOptions,
             }
         }))
+    }
+
+    /**
+     * Reordena el arreglo de preguntas moviendo un elemento de una posición a otra
+     * y recalcula el campo `order` para mantener la numeración consistente.
+     */
+    const reorderQuestions = (items: QuestionDraft[], fromIndex: number, toIndex: number): QuestionDraft[] => {
+        const nextItems = [...items]
+        const [moved] = nextItems.splice(fromIndex, 1)
+        nextItems.splice(toIndex, 0, moved)
+
+        return nextItems.map((question, currentIndex) => ({
+            ...question,
+            order: currentIndex + 1,
+        }))
+    }
+
+    /**
+     * Mueve una pregunta una posición hacia arriba en el listado visual.
+     */
+    const handleMoveQuestionUp = (index: number): void => {
+        if (index === 0) {
+            return
+        }
+
+        setQuestions(previous => reorderQuestions(previous, index, index - 1))
+    }
+
+    /**
+     * Mueve una pregunta una posición hacia abajo en el listado visual.
+     */
+    const handleMoveQuestionDown = (index: number): void => {
+        setQuestions(previous => {
+            if (index >= previous.length - 1) {
+                return previous
+            }
+
+            return reorderQuestions(previous, index, index + 1)
+        })
     }
 
     const MEETING_KIND_LABELS: Record<MeetingKind, string> = {
@@ -648,7 +694,25 @@ function EditSurveyPage() {
                                                                 )}
 
                                                             </div>
-                                                            <div className="flex justify-end space-x-3">
+                                                            <div className="flex justify-end space-x-3 self-end">
+                                                                <button
+                                                                    type="button"
+                                                                    className="p-2.5 text-outline hover:bg-[#edeeed] rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                    title="Mover pregunta hacia arriba"
+                                                                    onClick={() => handleMoveQuestionUp(index)}
+                                                                    disabled={index === 0}
+                                                                >
+                                                                    <ArrowUp className="w-5 h-5" />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="p-2.5 text-outline hover:bg-[#edeeed] rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                                                    title="Mover pregunta hacia abajo"
+                                                                    onClick={() => handleMoveQuestionDown(index)}
+                                                                    disabled={index === questions.length - 1}
+                                                                >
+                                                                    <ArrowDown className="w-5 h-5" />
+                                                                </button>
                                                                 <button
                                                                     type="button"
                                                                     className="p-2.5 text-outline hover:bg-[#edeeed] rounded-lg transition-all"
