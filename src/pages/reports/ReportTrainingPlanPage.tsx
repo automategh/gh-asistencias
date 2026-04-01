@@ -18,7 +18,111 @@ import {
     type TrainingKpiSummary,
 } from "@/services/meetings.analytics.service"
 import { getTrainingsWithParticipants, type TrainingWithParticipants } from "@/services/meetings.training.listing"
+import { getSurveys, getSurveyQuestionsBySurveyId, getSurveyResponsesForTraining, type Survey, type SurveyQuestion } from "@/services/forms.service"
+import type { Database } from "firebase/database"
 import { useNavigate } from "react-router-dom"
+
+async function computeAverageSatisfaction(
+    database: Database,
+    trainings: TrainingWithParticipants[],
+): Promise<number | null> {
+    if (trainings.length === 0) {
+        return null
+    }
+
+    const surveys = await getSurveys(database)
+
+    const satisfactionSurveys: Survey[] = surveys.filter((survey) => {
+        if (survey.category !== "training") {
+            return false
+        }
+        if (!survey.isActive) {
+            return false
+        }
+        return Boolean(survey.predetermined)
+    })
+
+    if (satisfactionSurveys.length === 0) {
+        return null
+    }
+
+    const ratingQuestionsBySurveyId: Record<string, string[]> = {}
+
+    for (const survey of satisfactionSurveys) {
+        const questions = await getSurveyQuestionsBySurveyId(database, survey.id)
+        const ratingIds = questions
+            .filter((question: SurveyQuestion) => question.type === "rating")
+            .map((question) => question.id)
+
+        if (ratingIds.length > 0) {
+            ratingQuestionsBySurveyId[survey.id] = ratingIds
+        }
+    }
+
+    if (Object.keys(ratingQuestionsBySurveyId).length === 0) {
+        return null
+    }
+
+    let totalResponseScore = 0
+    let totalResponses = 0
+
+    for (const item of trainings) {
+        const trainingId = item.meeting.id
+        if (!trainingId) {
+            continue
+        }
+
+        const relevantParticipantIds = new Set(item.participants.map((participant) => participant.uid))
+
+        for (const survey of satisfactionSurveys) {
+            const ratingIds = ratingQuestionsBySurveyId[survey.id]
+            if (!ratingIds || ratingIds.length === 0) {
+                continue
+            }
+
+            const responses = await getSurveyResponsesForTraining(database, {
+                surveyId: survey.id,
+                trainingId,
+            })
+
+            if (responses.length === 0) {
+                continue
+            }
+
+            for (const response of responses) {
+                if (!relevantParticipantIds.has(response.userId)) {
+                    continue
+                }
+
+                const answers = response.answers
+                let sum = 0
+                let count = 0
+
+                for (const questionId of ratingIds) {
+                    const value = answers[questionId]
+                    if (typeof value === "number") {
+                        sum += value
+                        count += 1
+                    }
+                }
+
+                if (count === 0) {
+                    continue
+                }
+
+                const score = sum / count
+                totalResponseScore += score
+                totalResponses += 1
+            }
+        }
+    }
+
+    if (totalResponses === 0) {
+        return null
+    }
+
+    return totalResponseScore / totalResponses
+}
 
 /**
  * Página de reporte para el plan de formación.
@@ -47,6 +151,13 @@ function ReportTrainingPlanPage() {
     const [isGenerating, setIsGenerating] = useState<boolean>(false)
     const [trainings, setTrainings] = useState<TrainingWithParticipants[]>([])
     const [leaderName, setLeaderName] = useState<string | null>(null)
+    const [avgSatisfaction, setAvgSatisfaction] = useState<number | null>(null)
+    const [satisfactionDeltaPct, setSatisfactionDeltaPct] = useState<number | null>(null)
+    const [showTableFilters, setShowTableFilters] = useState<boolean>(false)
+    const [tableSearch, setTableSearch] = useState<string>("")
+    const [tableSortField, setTableSortField] = useState<"date" | "hours" | "attendees">("date")
+    const [tableSortDirection, setTableSortDirection] = useState<"asc" | "desc">("desc")
+    const [showSortDropdown, setShowSortDropdown] = useState<boolean>(false)
 
     const navigate = useNavigate()
 
@@ -227,6 +338,9 @@ function ReportTrainingPlanPage() {
             setSelectedAreaForChart(null)
             setHoursByRole([])
             setTrainings([])
+            setAvgSatisfaction(null)
+            setSatisfactionDeltaPct(null)
+            setTableSearch("")
             return
         }
 
@@ -243,6 +357,9 @@ function ReportTrainingPlanPage() {
             setSelectedAreaForChart(null)
             setHoursByRole([])
             setTrainings([])
+            setAvgSatisfaction(null)
+            setSatisfactionDeltaPct(null)
+            setTableSearch("")
             return
         }
 
@@ -252,17 +369,19 @@ function ReportTrainingPlanPage() {
 
             const effectiveLeaderName = role === "Lider" ? leaderName : null
 
-            const [currentKpi, previousKpi, rawDepartmentCounts, hoursByRoleForYear, trainingsList] = await Promise.all([
+            const [currentKpi, previousKpi, rawDepartmentCounts, hoursByRoleForYear, trainingsList, trainingsListPrevious] = await Promise.all([
                 getTrainingKpiForYear(database, selectedYear, selectedDepartment || null, effectiveLeaderName),
                 getTrainingKpiForYear(database, previousYear, selectedDepartment || null, effectiveLeaderName),
                 getTrainingCountsByDepartmentForYear(database, selectedYear, effectiveLeaderName),
                 getTrainingHoursByRoleForYear(database, selectedYear, selectedDepartment || null, effectiveLeaderName),
                 getTrainingsWithParticipants(database, selectedYear, selectedDepartment || null, effectiveLeaderName),
+                getTrainingsWithParticipants(database, previousYear, selectedDepartment || null, effectiveLeaderName),
             ]) as [
                     TrainingKpiSummary,
                     TrainingKpiSummary,
                     DepartmentTrainingCount[],
                     TrainingHoursByRole[],
+                    TrainingWithParticipants[],
                     TrainingWithParticipants[],
                 ]
 
@@ -288,6 +407,17 @@ function ReportTrainingPlanPage() {
             setTrainingsDeltaPct(calculateDelta(currentKpi.totalTrainings, previousKpi.totalTrainings))
             setHoursDeltaPct(calculateDelta(currentKpi.totalHours, previousKpi.totalHours))
             setAttendedDeltaPct(calculateDelta(currentKpi.totalAttended, previousKpi.totalAttended))
+
+            const currentAvg = await computeAverageSatisfaction(database, trainingsList)
+            const previousAvg = await computeAverageSatisfaction(database, trainingsListPrevious)
+
+            setAvgSatisfaction(currentAvg)
+
+            if (currentAvg !== null && previousAvg !== null && previousAvg > 0) {
+                setSatisfactionDeltaPct(((currentAvg - previousAvg) / previousAvg) * 100)
+            } else {
+                setSatisfactionDeltaPct(null)
+            }
         } catch (error) {
             console.error("No fue posible cargar los KPIs del plan de formación:", error)
         } finally {
@@ -302,6 +432,59 @@ function ReportTrainingPlanPage() {
     const handleAreaClick = (departmentName: string): void => {
         setSelectedAreaForChart(departmentName)
     }
+
+    const handleToggleTableFilters = (): void => {
+        setShowTableFilters((previous) => !previous)
+    }
+
+    const handleSelectSortField = (field: "date" | "hours" | "attendees"): void => {
+        setTableSortField(field)
+        setShowSortDropdown(false)
+    }
+
+    const filteredAndSortedTrainings: TrainingWithParticipants[] = (() => {
+        if (trainings.length === 0) {
+            return []
+        }
+
+        const normalizedSearch = tableSearch.trim().toLowerCase()
+
+        const filtered = trainings.filter(({ meeting, trainer, areas }) => {
+            if (!normalizedSearch) {
+                return true
+            }
+
+            const titleText = meeting.title.toLowerCase()
+            const trainerText = (trainer ?? "").toLowerCase()
+            const areasText = areas.join(", ").toLowerCase()
+
+            return (
+                titleText.includes(normalizedSearch)
+                || trainerText.includes(normalizedSearch)
+                || areasText.includes(normalizedSearch)
+            )
+        })
+
+        const sorted = [...filtered].sort((first, second) => {
+            const multiplier = tableSortDirection === "asc" ? 1 : -1
+
+            if (tableSortField === "date") {
+                return (first.meeting.startTime - second.meeting.startTime) * multiplier
+            }
+
+            if (tableSortField === "hours") {
+                const firstHours = Math.round((first.meeting.endTime - first.meeting.startTime) / (1000 * 60 * 60))
+                const secondHours = Math.round((second.meeting.endTime - second.meeting.startTime) / (1000 * 60 * 60))
+                return (firstHours - secondHours) * multiplier
+            }
+
+            const firstAttendees = first.participants.filter((participant) => participant.attendance === "present" || participant.attendance === "late").length
+            const secondAttendees = second.participants.filter((participant) => participant.attendance === "present" || participant.attendance === "late").length
+            return (firstAttendees - secondAttendees) * multiplier
+        })
+
+        return sorted
+    })()
 
     return (
         <Layout>
@@ -489,13 +672,19 @@ function ReportTrainingPlanPage() {
                                     <div className="p-3 rounded-xl bg-[#ffdad6] text-[#93000a]">
                                         <Smile className="w-5 h-5" />
                                     </div>
-                                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">+12% vs 2023</span>
+                                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+                                        {isGenerating
+                                            ? "Calculando..."
+                                            : selectedYear && satisfactionDeltaPct !== null
+                                                ? `${satisfactionDeltaPct >= 0 ? "+" : ""}${satisfactionDeltaPct.toFixed(0)}% vs ${selectedYear - 1}`
+                                                : "Sin datos previos"}
+                                    </span>
                                 </div>
                                 <p className="text-3xl font-extrabold text-[#191c1c]">
                                     {isGenerating ? (
                                         <span className="inline-block h-7 w-24 bg-zinc-200 rounded-md animate-pulse" />
                                     ) : (
-                                        148
+                                        avgSatisfaction !== null ? avgSatisfaction.toFixed(1) : "—"
                                     )}
                                 </p>
                                 <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Promedio de Satisfacción</p>
@@ -653,16 +842,86 @@ function ReportTrainingPlanPage() {
                         <section className="bg-white rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] overflow-hidden max-w-7xl mx-auto">
                             <div className="p-8 flex justify-between items-center border-b border-[#edeeed]">
                                 <h3 className="text-xl font-bold text-emerald-950">Listado de Capacitaciones</h3>
-                                <div className="flex gap-2">
-                                    <button className="p-2 rounded-lg bg-[#edeeed] text-outline hover:text-primary-container transition-colors">
+                                <div className="flex gap-3 items-center text-[10px] text-outline uppercase tracking-widest relative">
+                                    <button
+                                        type="button"
+                                        className="px-3 py-1 rounded-full bg-[#edeeed] text-[10px] font-semibold hover:bg-[#e1e3e2] transition-colors flex items-center gap-1"
+                                        onClick={() => setShowSortDropdown((previous) => !previous)}
+                                    >
+                                        <LucideBarChart className="w-3 h-3 -rotate-90" />
+                                        <span>
+                                            Ordenar por: {tableSortField === "date" ? "Fecha" : tableSortField === "hours" ? "Horas" : "Asistentes"}
+                                        </span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="p-2 rounded-lg bg-[#edeeed] text-outline hover:text-primary-container transition-colors"
+                                        onClick={handleToggleTableFilters}
+                                    >
                                         <ListFilterIcon className="w-4 h-4" />
-
                                     </button>
-                                    <button className="p-2 rounded-lg bg-[#edeeed] text-outline hover:text-primary-container transition-colors">
-                                        <LucideBarChart className="w-4 h-4 -rotate-90" />
-                                    </button>
+                                    {showSortDropdown && (
+                                        <div className="absolute right-0 top-10 w-48 bg-white border border-[#edeeed] rounded-lg shadow-lg z-10 py-2">
+                                            <p className="px-3 pb-1 text-[10px] font-bold text-outline uppercase tracking-widest">
+                                                Selecciona el criterio
+                                            </p>
+                                            <label className="flex items-center gap-2 px-3 py-1 text-xs text-[#191c1c] cursor-pointer hover:bg-[#f3f4f3]">
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-3 h-3 rounded border-[#c4c7c5]"
+                                                    checked={tableSortField === "date"}
+                                                    onChange={() => handleSelectSortField("date")}
+                                                />
+                                                <span>Fecha</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 px-3 py-1 text-xs text-[#191c1c] cursor-pointer hover:bg-[#f3f4f3]">
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-3 h-3 rounded border-[#c4c7c5]"
+                                                    checked={tableSortField === "hours"}
+                                                    onChange={() => handleSelectSortField("hours")}
+                                                />
+                                                <span>Horas</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 px-3 py-1 text-xs text-[#191c1c] cursor-pointer hover:bg-[#f3f4f3]">
+                                                <input
+                                                    type="checkbox"
+                                                    className="w-3 h-3 rounded border-[#c4c7c5]"
+                                                    checked={tableSortField === "attendees"}
+                                                    onChange={() => handleSelectSortField("attendees")}
+                                                />
+                                                <span>Asistentes</span>
+                                            </label>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
+                            {showTableFilters && (
+                                <div className="px-8 pb-4 pt-2 border-b border-[#edeeed] bg-[#f9faf9] flex justify-between gap-4 items-end">
+                                    <div className="flex-1 min-w-50">
+                                        <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-1 ml-1">
+                                            Buscar en listado
+                                        </label>
+                                        <input
+                                            type="text"
+                                            className="w-full bg-white border border-[#edeeed] rounded-lg py-2 px-3 text-sm text-[#191c1c] focus:outline-none focus:ring-2 focus:ring-primary-container"
+                                            placeholder="Título, capacitador o área"
+                                            value={tableSearch}
+                                            onChange={(event) => setTableSearch(event.target.value)}
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[10px] text-outline">
+                                        <span className="uppercase tracking-widest font-bold">Dirección</span>
+                                        <button
+                                            type="button"
+                                            className="px-3 py-1 rounded-full bg-white border border-[#edeeed] text-[10px] font-semibold hover:bg-[#edeeed] transition-colors"
+                                            onClick={() => setTableSortDirection((previous) => (previous === "asc" ? "desc" : "asc"))}
+                                        >
+                                            {tableSortDirection === "asc" ? "Ascendente" : "Descendente"}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
@@ -680,12 +939,12 @@ function ReportTrainingPlanPage() {
                                             <tr>
                                                 <td colSpan={6} className="py-8 text-center text-[#434843]">Cargando capacitaciones...</td>
                                             </tr>
-                                        ) : trainings.length === 0 ? (
+                                        ) : filteredAndSortedTrainings.length === 0 ? (
                                             <tr>
                                                 <td colSpan={6} className="py-8 text-center text-[#434843]">No hay capacitaciones registradas para el periodo y filtros seleccionados.</td>
                                             </tr>
                                         ) : (
-                                            trainings.map(({ meeting, trainer, participants, areas }) => {
+                                            filteredAndSortedTrainings.map(({ meeting, trainer, participants, areas }) => {
                                                 // Áreas involucradas: mostrar todas las áreas únicas
                                                 const area = areas.length > 0 ? areas.join(", ") : "-"
                                                 // Fecha formateada

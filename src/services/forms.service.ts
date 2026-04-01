@@ -327,6 +327,39 @@ export async function getSurveyResponse(
 }
 
 /**
+ * Obtiene todas las respuestas registradas para una combinación
+ * concreta de encuesta y capacitación.
+ *
+ * Se lee el nodo `surveyResponses/{surveyId}/{trainingId}` y se
+ * devuelve un arreglo tipado de respuestas.
+ */
+export async function getSurveyResponsesForTraining(
+    database: Database,
+    params: { surveyId: string; trainingId: string },
+): Promise<SurveyResponse[]> {
+    const trimmedSurveyId = params.surveyId.trim()
+    const trimmedTrainingId = params.trainingId.trim()
+
+    if (!trimmedSurveyId || !trimmedTrainingId) {
+        return []
+    }
+
+    const responsesRef = ref(database, `surveyResponses/${trimmedSurveyId}/${trimmedTrainingId}`)
+    const snapshot = await get(responsesRef)
+
+    if (!snapshot.exists()) {
+        return []
+    }
+
+    const rawValue = snapshot.val() as Record<string, SurveyResponse> | null
+    if (!rawValue) {
+        return []
+    }
+
+    return Object.values(rawValue)
+}
+
+/**
  * Guarda (o sobrescribe) la respuesta de un colaborador para una encuesta dada.
  *
  * La respuesta se normaliza en el nodo:
