@@ -1,5 +1,6 @@
-import { get, query, ref, orderByChild, startAt, endAt, Database } from "firebase/database"
+import { get, query, ref, orderByChild, startAt, endAt, type Database } from "firebase/database"
 import type { Meeting, MeetingParticipant } from "@/types/meeting"
+import type { UserProfile } from "@/types/user"
 import { getTrainerNameFromParticipants } from "@/services/meetings.analytics.service"
 
 export interface TrainingWithParticipants {
@@ -12,7 +13,8 @@ export interface TrainingWithParticipants {
 export async function getTrainingsWithParticipants(
     database: Database,
     year: number,
-    department?: string | null
+    department?: string | null,
+    leaderName?: string | null,
 ): Promise<TrainingWithParticipants[]> {
     const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
     const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
@@ -30,10 +32,18 @@ export async function getTrainingsWithParticipants(
     if (!meetingsMap) return []
 
     const usersSnap = await get(ref(database, "users"))
-    const usersValue = usersSnap.val() as Record<string, { department?: string }> | null
-    const usersByUid = usersValue ?? {}
+    const usersValue = usersSnap.val() as Record<string, Partial<UserProfile>> | null
+    const usersByUid: Record<string, Partial<UserProfile>> = usersValue ?? {}
 
     const result: TrainingWithParticipants[] = []
+
+    const normalizedDept = typeof department === "string" && department.trim().length > 0
+        ? department.trim().toLowerCase()
+        : null
+
+    const normalizedLeader = typeof leaderName === "string" && leaderName.trim().length > 0
+        ? leaderName.trim().toLowerCase()
+        : null
 
     for (const meeting of Object.values(meetingsMap)) {
         if (meeting.type !== "training") continue
@@ -43,13 +53,26 @@ export async function getTrainingsWithParticipants(
         const participants: MeetingParticipant[] = participantsValue ? Object.values(participantsValue) : []
 
         let relevantParticipants = participants
-        if (department && department.trim().length > 0) {
-            const normalizedDept = department.trim().toLowerCase()
-            relevantParticipants = participants.filter((p) => {
-                const user = usersByUid[p.uid]
+
+        if (normalizedDept) {
+            relevantParticipants = relevantParticipants.filter((participant) => {
+                const user = usersByUid[participant.uid]
                 const deptRaw = typeof user?.department === "string" ? user.department : null
-                return deptRaw && deptRaw.trim().toLowerCase() === normalizedDept
+                if (!deptRaw) return false
+                return deptRaw.trim().toLowerCase() === normalizedDept
             })
+
+            if (relevantParticipants.length === 0) continue
+        }
+
+        if (normalizedLeader) {
+            relevantParticipants = relevantParticipants.filter((participant) => {
+                const user = usersByUid[participant.uid]
+                const bossRaw = typeof user?.immediateBoss === "string" ? user.immediateBoss : null
+                if (!bossRaw) return false
+                return bossRaw.trim().toLowerCase() === normalizedLeader
+            })
+
             if (relevantParticipants.length === 0) continue
         }
 

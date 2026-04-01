@@ -6,6 +6,7 @@ import html2canvas from "html2canvas-pro"
 import * as XLSX from "xlsx"
 import { getUserProfile } from "@/services/user.service"    
 import { useDatabase } from "@/context/DatabaseContext"
+import { useAuth } from "@/context/AuthContext"
 import { getDepartmentNames } from "@/services/departaments/departments.service"
 import {
     getTrainingCountsByDepartmentForYear,
@@ -25,6 +26,7 @@ import { getTrainingsWithParticipants, type TrainingWithParticipants } from "@/s
  */
 function ReportTrainingPlanPage() {
     const { database } = useDatabase()
+    const { user, role } = useAuth()
     const [departments, setDepartments] = useState<string[]>([])
     const [years, setYears] = useState<number[]>([])
     const [selectedYear, setSelectedYear] = useState<number | null>(null)
@@ -43,6 +45,7 @@ function ReportTrainingPlanPage() {
     const [attendedDeltaPct, setAttendedDeltaPct] = useState<number | null>(null)
     const [isGenerating, setIsGenerating] = useState<boolean>(false)
     const [trainings, setTrainings] = useState<TrainingWithParticipants[]>([])
+    const [leaderName, setLeaderName] = useState<string | null>(null)
 
     useEffect(() => {
         let cancelled = false
@@ -81,6 +84,40 @@ function ReportTrainingPlanPage() {
             cancelled = true
         }
     }, [database])
+
+    /**
+     * Carga el nombre del líder autenticado (según su perfil en RTDB)
+     * para poder filtrar los reportes solo a sus colaboradores directos.
+     */
+    useEffect(() => {
+        if (!database || !user || role !== "Lider") {
+            setLeaderName(null)
+            return
+        }
+
+        let cancelled = false
+
+        const loadLeaderProfile = async () => {
+            try {
+                const profile = await getUserProfile(user.uid, database)
+                if (cancelled) return
+
+                const cleanName = typeof profile?.name === "string" ? profile.name.trim() : ""
+                setLeaderName(cleanName.length > 0 ? cleanName : null)
+            } catch (error) {
+                console.error("No fue posible cargar el perfil del líder para el reporte de formación:", error)
+                if (!cancelled) {
+                    setLeaderName(null)
+                }
+            }
+        }
+
+        void loadLeaderProfile()
+
+        return () => {
+            cancelled = true
+        }
+    }, [database, user, role])
 
     // Exportar a PDF: captura el contenedor principal
     const handleExportPDF = async () => {
@@ -188,16 +225,34 @@ function ReportTrainingPlanPage() {
             return
         }
 
+        // Para líderes, si no tenemos su nombre, no podemos filtrar colaboradores de forma segura.
+        // En ese caso devolvemos un estado vacío hasta que el perfil esté disponible.
+        if (role === "Lider" && (!leaderName || leaderName.trim().length === 0)) {
+            setTotalTrainings(0)
+            setTotalHours(0)
+            setTotalAttended(0)
+            setTrainingsDeltaPct(null)
+            setHoursDeltaPct(null)
+            setAttendedDeltaPct(null)
+            setDepartmentTrainingCounts([])
+            setSelectedAreaForChart(null)
+            setHoursByRole([])
+            setTrainings([])
+            return
+        }
+
         try {
             setIsGenerating(true)
             const previousYear = selectedYear - 1
 
+            const effectiveLeaderName = role === "Lider" ? leaderName : null
+
             const [currentKpi, previousKpi, rawDepartmentCounts, hoursByRoleForYear, trainingsList] = await Promise.all([
-                getTrainingKpiForYear(database, selectedYear, selectedDepartment || null),
-                getTrainingKpiForYear(database, previousYear, selectedDepartment || null),
-                getTrainingCountsByDepartmentForYear(database, selectedYear),
-                getTrainingHoursByRoleForYear(database, selectedYear, selectedDepartment || null),
-                getTrainingsWithParticipants(database, selectedYear, selectedDepartment || null),
+                getTrainingKpiForYear(database, selectedYear, selectedDepartment || null, effectiveLeaderName),
+                getTrainingKpiForYear(database, previousYear, selectedDepartment || null, effectiveLeaderName),
+                getTrainingCountsByDepartmentForYear(database, selectedYear, effectiveLeaderName),
+                getTrainingHoursByRoleForYear(database, selectedYear, selectedDepartment || null, effectiveLeaderName),
+                getTrainingsWithParticipants(database, selectedYear, selectedDepartment || null, effectiveLeaderName),
             ]) as [
                     TrainingKpiSummary,
                     TrainingKpiSummary,

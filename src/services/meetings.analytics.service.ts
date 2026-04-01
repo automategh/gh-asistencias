@@ -291,6 +291,7 @@ export async function getTrainingKpiForYear(
   database: Database,
   year: number,
   department?: string | null,
+  leaderName?: string | null,
 ): Promise<TrainingKpiSummary> {
   const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
   const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
@@ -318,6 +319,10 @@ export async function getTrainingKpiForYear(
     ? department.trim().toLowerCase()
     : null
 
+  const normalizedLeader = typeof leaderName === "string" && leaderName.trim().length > 0
+    ? leaderName.trim().toLowerCase()
+    : null
+
   // Cargamos usuarios una sola vez para poder filtrar por departamento
   const usersSnap = await get(ref(database, "users"))
   const usersValue = usersSnap.val() as Record<string, Partial<UserProfile>> | null
@@ -339,11 +344,24 @@ export async function getTrainingKpiForYear(
     let relevantParticipants: MeetingParticipant[] = participants
 
     if (normalizedDept) {
-      relevantParticipants = participants.filter((participant) => {
+      relevantParticipants = relevantParticipants.filter((participant) => {
         const user = usersByUid[participant.uid]
         const deptRaw = typeof user?.department === "string" ? user.department : null
         if (!deptRaw) return false
         return deptRaw.trim().toLowerCase() === normalizedDept
+      })
+
+      if (relevantParticipants.length === 0) {
+        continue
+      }
+    }
+
+    if (normalizedLeader) {
+      relevantParticipants = relevantParticipants.filter((participant) => {
+        const user = usersByUid[participant.uid]
+        const bossRaw = typeof user?.immediateBoss === "string" ? user.immediateBoss : null
+        if (!bossRaw) return false
+        return bossRaw.trim().toLowerCase() === normalizedLeader
       })
 
       if (relevantParticipants.length === 0) {
@@ -417,6 +435,7 @@ export async function getTrainingYearsForDatabase(database: Database): Promise<n
 export async function getTrainingCountsByDepartmentForYear(
   database: Database,
   year: number,
+  leaderName?: string | null,
 ): Promise<DepartmentTrainingCount[]> {
   const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
   const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
@@ -440,6 +459,10 @@ export async function getTrainingCountsByDepartmentForYear(
   const usersValue = usersSnap.val() as Record<string, Partial<UserProfile>> | null
   const usersByUid: Record<string, Partial<UserProfile>> = usersValue ?? {}
 
+  const normalizedLeader = typeof leaderName === "string" && leaderName.trim().length > 0
+    ? leaderName.trim().toLowerCase()
+    : null
+
   const counts: Record<string, number> = {}
 
   for (const meeting of Object.values(meetingsMap)) {
@@ -451,9 +474,24 @@ export async function getTrainingCountsByDepartmentForYear(
     const participantsValue = participantsSnap.val() as Record<string, MeetingParticipant> | null
     const participants: MeetingParticipant[] = participantsValue ? Object.values(participantsValue) : []
 
+    let relevantParticipants: MeetingParticipant[] = participants
+
+    if (normalizedLeader) {
+      relevantParticipants = relevantParticipants.filter((participant) => {
+        const user = usersByUid[participant.uid]
+        const bossRaw = typeof user?.immediateBoss === "string" ? user.immediateBoss : null
+        if (!bossRaw) return false
+        return bossRaw.trim().toLowerCase() === normalizedLeader
+      })
+
+      if (relevantParticipants.length === 0) {
+        continue
+      }
+    }
+
     const departmentsInMeeting = new Set<string>()
 
-    for (const participant of participants) {
+    for (const participant of relevantParticipants) {
       const user = usersByUid[participant.uid]
       const deptRaw = typeof user?.department === "string" ? user.department : null
       if (!deptRaw) {
@@ -493,6 +531,7 @@ export async function getTrainingHoursByRoleForYear(
   database: Database,
   year: number,
   department?: string | null,
+  leaderName?: string | null,
 ): Promise<TrainingHoursByRole[]> {
   const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
   const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
@@ -520,6 +559,10 @@ export async function getTrainingHoursByRoleForYear(
     ? department.trim().toLowerCase()
     : null
 
+  const normalizedLeader = typeof leaderName === "string" && leaderName.trim().length > 0
+    ? leaderName.trim().toLowerCase()
+    : null
+
   const hoursByRole: Record<string, number> = {}
 
   for (const meeting of Object.values(meetingsMap)) {
@@ -545,6 +588,7 @@ export async function getTrainingHoursByRoleForYear(
 
       const deptRaw = typeof user.department === "string" ? user.department : null
       const roleRaw = typeof user.cargo === "string" ? user.cargo : null
+      const bossRaw = typeof user.immediateBoss === "string" ? user.immediateBoss : null
 
       if (!roleRaw) {
         continue
@@ -552,6 +596,12 @@ export async function getTrainingHoursByRoleForYear(
 
       if (normalizedDept) {
         if (!deptRaw || deptRaw.trim().toLowerCase() !== normalizedDept) {
+          continue
+        }
+      }
+
+      if (normalizedLeader) {
+        if (!bossRaw || bossRaw.trim().toLowerCase() !== normalizedLeader) {
           continue
         }
       }
