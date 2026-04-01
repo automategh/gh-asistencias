@@ -52,6 +52,15 @@ function SurveyAdminPage() {
 
     const normalizedSearch = searchTerm.trim().toLowerCase()
 
+    /**
+     * Etiquetas legibles en español para las categorías conocidas de encuestas.
+     */
+    const CATEGORY_LABELS: Record<string, string> = {
+        meeting: "Reunión",
+        training: "Capacitación",
+        custom: "Personalizada",
+    }
+
     const categories = Array.from(new Set(surveys.map((survey) => survey.category))).sort()
 
     /**
@@ -101,6 +110,16 @@ function SurveyAdminPage() {
         const baseDate = isJustCreated ? survey.createdAt : survey.updatedAt
         const formatted = formatDate(baseDate)
         return isJustCreated ? `Creado el ${formatted}` : `Actualizada el ${formatted}`
+    }
+
+    /**
+     * Restablece todos los filtros del panel a sus valores por defecto.
+     */
+    const handleClearFilters = (): void => {
+        setSearchTerm("")
+        setStatusFilter("all")
+        setCategoryFilter("all")
+        setOnlyPredetermined(false)
     }
 
     return (
@@ -163,7 +182,7 @@ function SurveyAdminPage() {
                                     <option value="all">Todas las categorías</option>
                                     {categories.map((category) => (
                                         <option key={category} value={category}>
-                                            {category}
+                                            {CATEGORY_LABELS[category] ?? category}
                                         </option>
                                     ))}
                                 </select>
@@ -180,13 +199,23 @@ function SurveyAdminPage() {
                         </div>
                     </div>
 
-                    {!isLoading && surveys.length > 0 && (
-                        <div className="max-w-7xl mx-auto text-xs text-[#5a665a] flex justify-between items-center">
-                            <span>
-                                Mostrando <strong>{filteredSurveys.length}</strong> de <strong>{surveys.length}</strong> encuestas
-                            </span>
-                        </div>
-                    )}
+                    <div className="max-w-7xl flex items-center justify-between mx-auto">
+                        {!isLoading && surveys.length > 0 && (
+                            <div className="text-xs text-[#5a665a] flex justify-between items-center">
+                                <span>
+                                    Mostrando <strong>{filteredSurveys.length}</strong> de <strong>{surveys.length}</strong> encuestas
+                                </span>
+                            </div>
+                        )}
+
+                        <button
+                            type="button"
+                            className="px-4 py-2 text-xs font-medium rounded-lg shadow-sm bg-white text-[#434843] hover:bg-stone-100 transition-colors"
+                            onClick={handleClearFilters}
+                        >
+                            Limpiar filtros
+                        </button>
+                    </div>
 
                     {isLoading ? (
                         <div className="group bg-white rounded-xl p-8 max-w-7xl mx-auto text-sm text-[#434843]">
@@ -221,7 +250,7 @@ function SurveyAdminPage() {
                                         </p>
                                     )}
                                     <p className="text-xs font-medium text-[#5a665a]">
-                                        Categoría: {survey.category}
+                                        Categoría: {CATEGORY_LABELS[survey.category] ?? survey.category}
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-4">
