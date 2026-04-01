@@ -6,6 +6,7 @@ import {
     getSurveyById,
     getSurveyOptionsByQuestionIds,
     getSurveyQuestionsBySurveyId,
+    getSurveyResponse,
     saveSurveyResponse,
     type Survey,
     type SurveyAnswerValue,
@@ -26,6 +27,7 @@ function SurveyPage() {
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
     const [submitError, setSubmitError] = useState<string | null>(null)
     const [submitSuccess, setSubmitSuccess] = useState<boolean>(false)
+    const [hasResponded, setHasResponded] = useState<boolean>(false)
 
     useEffect(() => {
         if (!id) {
@@ -69,6 +71,18 @@ function SurveyPage() {
                 if (!cancelled) {
                     setOptions(relatedOptions)
                 }
+
+                if (!cancelled && user && trainingId) {
+                    const existingResponse = await getSurveyResponse(db, {
+                        surveyId: id,
+                        trainingId,
+                        userId: user.uid,
+                    })
+
+                    if (!cancelled && existingResponse) {
+                        setHasResponded(true)
+                    }
+                }
             } catch {
                 if (!cancelled) {
                     setSurvey(null)
@@ -83,9 +97,12 @@ function SurveyPage() {
         return () => {
             cancelled = true
         }
-    }, [id])
+    }, [id, trainingId, user])
 
     const handleTextChange = (questionId: string, value: string): void => {
+        if (hasResponded) {
+            return
+        }
         setAnswers((prev) => ({
             ...prev,
             [questionId]: value,
@@ -93,6 +110,9 @@ function SurveyPage() {
     }
 
     const handleRatingSelect = (questionId: string, value: number): void => {
+        if (hasResponded) {
+            return
+        }
         setAnswers((prev) => ({
             ...prev,
             [questionId]: value,
@@ -100,6 +120,9 @@ function SurveyPage() {
     }
 
     const handleSingleSelect = (questionId: string, optionId: string): void => {
+        if (hasResponded) {
+            return
+        }
         setAnswers((prev) => ({
             ...prev,
             [questionId]: optionId,
@@ -107,6 +130,9 @@ function SurveyPage() {
     }
 
     const handleToggleMultiple = (questionId: string, optionId: string): void => {
+        if (hasResponded) {
+            return
+        }
         setAnswers((prev) => {
             const current = prev[questionId]
             const currentArray: string[] = Array.isArray(current) ? current : []
@@ -126,6 +152,11 @@ function SurveyPage() {
     const handleSubmit = async (): Promise<void> => {
         setSubmitError(null)
         setSubmitSuccess(false)
+
+        if (hasResponded) {
+            setSubmitError("Ya has respondido esta encuesta para esta capacitación.")
+            return
+        }
 
         if (!id || !trainingId) {
             setSubmitError("Encuesta o capacitación no válidas.")
@@ -183,6 +214,7 @@ function SurveyPage() {
                 answers,
             })
 
+            setHasResponded(true)
             setSubmitSuccess(true)
         } catch (error) {
             console.error("No fue posible guardar la respuesta de la encuesta:", error)
@@ -248,6 +280,7 @@ function SurveyPage() {
                                         {isText && (
                                             <textarea
                                                 className="mt-3 w-full min-h-24 rounded-xl border border-border bg-white px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60"
+                                                disabled={hasResponded}
                                                 value={typeof answerValue === "string" ? answerValue : ""}
                                                 onChange={(event) => handleTextChange(question.id, event.target.value)}
                                                 placeholder="Escribe tu respuesta aquí"
@@ -270,6 +303,7 @@ function SurveyPage() {
                                                                     : "bg-white text-[#1b3022] border-border hover:bg-[#e2efe4]",
                                                             )}
                                                             onClick={() => handleRatingSelect(question.id, numeric)}
+                                                            disabled={hasResponded}
                                                         >
                                                             {numeric}
                                                         </button>
@@ -306,6 +340,7 @@ function SurveyPage() {
                                                                     : "bg-white text-[#434843] border-border hover:bg-[#f3f4f3]",
                                                             )}
                                                             onClick={handleClick}
+                                                            disabled={hasResponded}
                                                         >
                                                             {opt.text}
                                                         </button>
@@ -326,16 +361,18 @@ function SurveyPage() {
                                     ¡Gracias! Tu respuesta ha sido registrada correctamente.
                                 </p>
                             )}
-                            <div className="mt-8 flex justify-end">
-                                <button
-                                    type="button"
-                                    onClick={() => { void handleSubmit() }}
-                                    disabled={isSubmitting || questions.length === 0}
-                                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#1b3022] text-white text-sm font-semibold shadow-md hover:bg-[#14251a] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    {isSubmitting ? "Guardando respuestas…" : "Guardar encuesta"}
-                                </button>
-                            </div>
+                            {!hasResponded && (
+                                <div className="mt-8 flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => { void handleSubmit() }}
+                                        disabled={isSubmitting || questions.length === 0}
+                                        className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#1b3022] text-white text-sm font-semibold shadow-md hover:bg-[#14251a] disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        {isSubmitting ? "Guardando respuestas…" : "Guardar encuesta"}
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

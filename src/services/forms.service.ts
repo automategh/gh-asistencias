@@ -300,6 +300,33 @@ export const createOption = async (data: Omit<SurveyOption, 'id'>, database: Dat
 }
 
 /**
+ * Obtiene, si existe, la respuesta de un colaborador para una encuesta y capacitación concretas.
+ * Devuelve `null` cuando el usuario aún no ha respondido.
+ */
+export async function getSurveyResponse(
+    database: Database,
+    params: { surveyId: string; trainingId: string; userId: string },
+): Promise<SurveyResponse | null> {
+    const trimmedSurveyId = params.surveyId.trim()
+    const trimmedTrainingId = params.trainingId.trim()
+    const trimmedUserId = params.userId.trim()
+
+    if (!trimmedSurveyId || !trimmedTrainingId || !trimmedUserId) {
+        return null
+    }
+
+    const responseRef = ref(database, `surveyResponses/${trimmedSurveyId}/${trimmedTrainingId}/${trimmedUserId}`)
+    const snapshot = await get(responseRef)
+
+    if (!snapshot.exists()) {
+        return null
+    }
+
+    const value = snapshot.val() as SurveyResponse | null
+    return value ?? null
+}
+
+/**
  * Guarda (o sobrescribe) la respuesta de un colaborador para una encuesta dada.
  *
  * La respuesta se normaliza en el nodo:
