@@ -1,4 +1,6 @@
 import { get, push, ref, set, type Database } from "firebase/database"
+import { getAllAvailableDatabases } from "@/lib/firebase/databaseResolver"
+import { getDatabaseForUrl } from "@/services/firebase"
 
 /**
  * Estructura principal de una encuesta almacenada en Realtime Database.
@@ -47,6 +49,71 @@ export type SurveyOption = {
     order: number
     text: string
     value?: number
+}
+
+/**
+ * Valor permitido para una respuesta de encuesta.
+ * Puede ser texto libre, una lista de IDs de opciones (para selección múltiple)
+ * o un valor numérico (por ejemplo para escalas de rating).
+ */
+export type SurveyAnswerValue = string | string[] | number
+
+/**
+ * Respuesta persistida de una encuesta.
+ * Se almacena bajo `surveyResponses/{surveyId}/{trainingId}/{userId}`.
+ */
+export type SurveyResponse = {
+    /** Identificador de la respuesta (se reutiliza el uid del colaborador) */
+    id: string
+    /** Encuesta a la que corresponde la respuesta */
+    surveyId: string
+    /** Identificador de la capacitación/reunión relacionada */
+    trainingId: string
+    /** UID del colaborador que respondió */
+    userId: string
+    /** Nombre visible del colaborador (snapshot para UI) */
+    userName?: string | null
+    /** Email del colaborador (snapshot para UI) */
+    userEmail?: string | null
+    /** Fecha de creación en formato ISO 8601 */
+    createdAt: string
+    /** Respuestas por id de pregunta */
+    answers: Record<string, SurveyAnswerValue>
+}
+
+
+/**
+ * Localiza en qué base de datos está almacenada una encuesta a partir de su ID.
+ *
+ * - Recorre todas las bases de datos configuradas (corporativo, CCCI, CCCR, CEVP, ...).
+ * - Para cada una, consulta `surveys/{surveyId}`.
+ * - Devuelve la primera coincidencia encontrada con su Database.
+ *
+ * Si no se encuentra la encuesta en ninguna base de datos, devuelve `null`.
+ */
+export async function findSurveyDatabaseById(surveyId: string): Promise<Database | null> {
+    const cleanId = surveyId.trim()
+    if (!cleanId) {
+        return null
+    }
+
+    const databases = getAllAvailableDatabases()
+
+    for (const dbInfo of databases) {
+        const db = getDatabaseForUrl(dbInfo.url)
+        if (!db) {
+            continue
+        }
+
+        const surveyRef = ref(db, `surveys/${cleanId}`)
+        const snapshot = await get(surveyRef)
+
+        if (snapshot.exists()) {
+            return db
+        }
+    }
+
+    return null
 }
 
 /**
@@ -231,3 +298,72 @@ export const createOption = async (data: Omit<SurveyOption, 'id'>, database: Dat
 
     return newRef.key as string
 }
+
+/**
+ * Guarda (o sobrescribe) la respuesta de un colaborador para una encuesta dada.
+ *
+ * La respuesta se normaliza en el nodo:
+ * `surveyResponses/{surveyId}/{trainingId}/{userId}`
+ * usando el UID del usuario como clave primaria para evitar duplicados.
+ */
+export async function saveSurveyResponse(
+    database: Database,
+    params: {
+        surveyId: string
+        trainingId: string
+        userId: string
+        userName?: string | null
+        userEmail?: string | null
+        answers: Record<string, SurveyAnswerValue | null | undefined>
+    },
+): Promise<SurveyResponse> {
+    const trimmedSurveyId = params.surveyId.trim()
+    const trimmedTrainingId = params.trainingId.trim()
+    const trimmedUserId = params.userId.trim()
+
+    if (!trimmedSurveyId || !trimmedTrainingId || !trimmedUserId) {
+        throw new Error("Los identificadores de encuesta, capacitación o usuario no son válidos.")
+    }
+
+    const normalizedAnswers: Record<string, SurveyAnswerValue> = {}
+
+    for (const [questionId, value] of Object.entries(params.answers)) {
+        if (value === null || typeof value === "undefined") {
+            continue
+        }
+
+        if (typeof value === "string" && value.trim().length > 0) {
+            normalizedAnswers[questionId] = value
+            continue
+        }
+
+        if (typeof value === "number") {
+            normalizedAnswers[questionId] = value
+            continue
+        }
+
+        if (Array.isArray(value) && value.length > 0) {
+            normalizedAnswers[questionId] = value
+        }
+    }
+
+    const createdAt = new Date().toISOString()
+
+    const response: SurveyResponse = {
+        id: trimmedUserId,
+        surveyId: trimmedSurveyId,
+        trainingId: trimmedTrainingId,
+        userId: trimmedUserId,
+        userName: params.userName ?? null,
+        userEmail: params.userEmail ?? null,
+        createdAt,
+        answers: normalizedAnswers,
+    }
+
+    const responseRef = ref(database, `surveyResponses/${trimmedSurveyId}/${trimmedTrainingId}/${trimmedUserId}`)
+
+    await set(responseRef, response)
+
+    return response
+}
+

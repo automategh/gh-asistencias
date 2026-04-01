@@ -19,6 +19,7 @@ import ReportTrainingPlanPage from './pages/reports/ReportTrainingPlanPage'
 import SurveyAdminPage from './pages/survey/SurveyAdminPage'
 import NewSurveyPage from './pages/survey/NewSurveyPage'
 import EditSurveyPage from './pages/survey/EditSurveyPage'
+import SurveyPage from './pages/survey/SurveyPage'
 
 
 function App() {
@@ -82,14 +83,21 @@ function App() {
 
                     <Route path='/survey/create' element={(
                         <RoleRoute allowed={["Admin", "HR"]}>
-                            <NewSurveyPage/>
+                            <NewSurveyPage />
                         </RoleRoute>
                     )} />
 
-                    <Route path="/survey/:id" element={(
-                        <RoleRoute allowed={["Admin", "HR"]}>
-                            <EditSurveyPage />
-                        </RoleRoute>
+                    <Route
+                        path="/survey/:id"
+                        element={(
+                            <RoleRoute allowed={["Admin", "HR"]}>
+                                <EditSurveyPage />
+                            </RoleRoute>
+                        )}
+                    />
+
+                    <Route path="/survey/:id/response/:trainingId" element={(
+                        <SurveyPage />
                     )} />
 
                     <Route path="/checkin/:id" element={<ChekinPage />} />

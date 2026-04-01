@@ -1,12 +1,13 @@
 import Layout from '@/components/layouts/layout'
 import { QRCodeDisplay } from '@/components/meet/qr-code-display'
 import { useDatabase } from '@/context/DatabaseContext'
+import { useAuth } from '@/context/AuthContext'
+import { getSurveys, type Survey } from '@/services/forms.service'
 import { cancelMeeting, closeMeeting, completeMeeting, getMeetingById, reopenMeeting } from '@/services/meetings.service'
 import type { Meeting } from '@/types/meeting'
 import { BarChart3, Calendar, Clock, FileText, MapPin } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useAuth } from '@/context/AuthContext'
 
 function DetailMeetPage() {
 
@@ -14,6 +15,7 @@ function DetailMeetPage() {
     const { database } = useDatabase()
     const { user, role } = useAuth()
     const [meeting, setMeeting] = useState<Meeting | null>(null)
+    const [satisfactionSurvey, setSatisfactionSurvey] = useState<Survey | null>(null)
     const [closing, setClosing] = useState(false)
     const [completing, setCompleting] = useState(false)
     const [cancel, setCancel] = useState(false)
@@ -24,15 +26,41 @@ function DetailMeetPage() {
             return
         }
 
-        getMeetingById(database, id)
-            .then((m) => {
-                setMeeting(m)
+        let cancelled = false
 
-            })
-            .catch((error) => {
-                console.error('Error al cargar la reunión:', error)
-            })
+        const loadMeetingAndSurvey = async () => {
+            try {
+                const loadedMeeting = await getMeetingById(database, id)
 
+                if (cancelled) {
+                    return
+                }
+
+                setMeeting(loadedMeeting)
+
+                if (!loadedMeeting || loadedMeeting.type !== 'training') {
+                    setSatisfactionSurvey(null)
+                    return
+                }
+
+                const surveys = await getSurveys(database)
+
+                if (cancelled) {
+                    return
+                }
+
+                const survey = surveys.find((item) => item.category === 'training' && item.isActive && Boolean(item.predetermined)) ?? null
+                setSatisfactionSurvey(survey)
+            } catch (error) {
+                console.error('Error al cargar la reunión o la encuesta de satisfacción:', error)
+            }
+        }
+
+        void loadMeetingAndSurvey()
+
+        return () => {
+            cancelled = true
+        }
     }, [database, id])
 
     /**
@@ -233,6 +261,18 @@ function DetailMeetPage() {
                                     <p className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Descripción</p>
                                     <p className="text-foreground leading-relaxed">{meeting?.description}</p>
                                 </div>
+
+                                {meeting?.type === 'training' && satisfactionSurvey && (
+                                    <div className="pb-6 border-b border-border">
+                                        <p className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Encuesta de satisfacción</p>
+                                        <Link
+                                            to={`/survey/${satisfactionSurvey.id}/response/${meeting.id}`}
+                                            className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary-light underline-offset-2 hover:underline"
+                                        >
+                                            Responder encuesta de satisfacción
+                                        </Link>
+                                    </div>
+                                )}
 
                                 <div className="grid md:grid-cols-2 gap-6 pb-6 border-b border-border">
                                     <div>
