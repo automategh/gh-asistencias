@@ -20,6 +20,7 @@ import SurveyAdminPage from './pages/survey/SurveyAdminPage'
 import NewSurveyPage from './pages/survey/NewSurveyPage'
 import EditSurveyPage from './pages/survey/EditSurveyPage'
 import SurveyPage from './pages/survey/SurveyPage'
+import SurveyResultsPage from './pages/survey/SurveyResultsPage'
 
 
 function App() {
@@ -92,6 +93,15 @@ function App() {
                         element={(
                             <RoleRoute allowed={["Admin", "HR"]}>
                                 <EditSurveyPage />
+                            </RoleRoute>
+                        )}
+                    />
+
+                    <Route
+                        path="/survey/:id/results"
+                        element={(
+                            <RoleRoute allowed={["Admin", "HR"]}>
+                                <SurveyResultsPage />
                             </RoleRoute>
                         )}
                     />

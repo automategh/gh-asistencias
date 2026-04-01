@@ -327,6 +327,45 @@ export async function getSurveyResponse(
 }
 
 /**
+ * Obtiene todas las respuestas de una encuesta agrupadas por capacitación.
+ *
+ * Lee el nodo `surveyResponses/{surveyId}` y devuelve un mapa donde la clave
+ * es el `trainingId` y el valor es el arreglo de respuestas asociadas.
+ */
+export async function getSurveyResponsesByTraining(
+    database: Database,
+    surveyId: string,
+): Promise<Record<string, SurveyResponse[]>> {
+    const cleanId = surveyId.trim()
+    if (!cleanId) {
+        return {}
+    }
+
+    const rootRef = ref(database, `surveyResponses/${cleanId}`)
+    const snapshot = await get(rootRef)
+
+    if (!snapshot.exists()) {
+        return {}
+    }
+
+    const rawValue = snapshot.val() as Record<string, Record<string, SurveyResponse>> | null
+    if (!rawValue) {
+        return {}
+    }
+
+    const grouped: Record<string, SurveyResponse[]> = {}
+
+    for (const [trainingId, responsesByUser] of Object.entries(rawValue)) {
+        const items = Object.values(responsesByUser ?? {})
+        if (items.length > 0) {
+            grouped[trainingId] = items
+        }
+    }
+
+    return grouped
+}
+
+/**
  * Obtiene todas las respuestas registradas para una combinación
  * concreta de encuesta y capacitación.
  *

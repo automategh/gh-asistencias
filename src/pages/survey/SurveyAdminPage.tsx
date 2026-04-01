@@ -262,6 +262,15 @@ function SurveyAdminPage() {
                                         Gestionar
                                         <Edit className="w-5 h-5" />
                                     </button>
+                                    {survey.category === "training" && survey.predetermined && (
+                                        <button
+                                            type="button"
+                                            className="flex items-center gap-2 border border-[#d6e3d5] text-[#1b3022] px-5 py-2.5 rounded-full font-semibold text-xs hover:bg-[#f3f4f3] transition-all"
+                                            onClick={() => navigate(`/survey/${survey.id}/results`)}
+                                        >
+                                            Ver respuestas por capacitación
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))
