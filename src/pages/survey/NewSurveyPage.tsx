@@ -1,6 +1,6 @@
 import Layout from "@/components/layouts/layout"
 import { useDatabase } from "@/context/DatabaseContext"
-import { createQuestion, createSurvey, type Survey, type SurveyQuestion } from "@/services/forms.service"
+import { createOption, createQuestion, createSurvey, type QuestionType, type Survey, type SurveyQuestion } from "@/services/forms.service"
 import type { MeetingKind } from "@/types/meeting"
 
 import { ArrowRight, ChevronDown, ChevronRight, Copy, PlusCircle, Trash } from "lucide-react"
@@ -8,10 +8,22 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 
 /**
- * Tipos de pregunta soportados por el constructor visual de encuestas.
- * Se utilizan para controlar el renderizado y la validación en el formulario.
+ * Borrador de opción de respuesta manejado en el constructor de encuestas.
+ * No incluye "id" porque ese identificador lo asigna Firebase al persistir.
  */
-type QuestionType = "nps" | "scale" | "text"
+interface QuestionOptionDraft {
+    readonly text: string
+    readonly value?: number
+}
+
+/**
+ * Borrador de pregunta que se utiliza solo en la UI.
+ * Extiende la pregunta base sin los identificadores controlados por Firebase
+ * y añade el arreglo de opciones cuando el tipo de pregunta lo requiere.
+ */
+interface QuestionDraft extends Omit<SurveyQuestion, "id" | "surveyId"> {
+    readonly options?: QuestionOptionDraft[]
+}
 
 /**
  * Pantalla de creación de nuevas encuestas.
@@ -31,7 +43,8 @@ function NewSurveyPage() {
 
     // Listado de preguntas que componen la encuesta.
     // No se manejan los campos "id" ni "surveyId" aquí, ya que los asigna Firebase.
-    const [questions, setQuestions] = useState<Omit<SurveyQuestion, 'id' | 'surveyId'>[]>([])
+    // Para preguntas de selección se gestionan opciones locales en la propiedad "options".
+    const [questions, setQuestions] = useState<QuestionDraft[]>([])
     // Estado de error contextualizado por campo para mostrar mensajes de validación en UI.
     const [error, setError] = useState({
         label: '',
@@ -48,11 +61,11 @@ function NewSurveyPage() {
         setQuestions(prev => ([
             ...prev,
             {
-                text: '',
+                text: "",
                 order: prev.length + 1,
                 required: false,
-                type: 'text',
-            }
+                type: "text",
+            },
         ]))
     }
 
@@ -60,10 +73,53 @@ function NewSurveyPage() {
      * Actualiza un campo concreto de una pregunta identificada por su índice en el arreglo.
      * Permite modificar texto, tipo y si es obligatoria sin mutar el estado original.
      */
-    const handleEditQuestion = (index: number, field: keyof Omit<SurveyQuestion, 'id' | 'surveyId'>, value: string | boolean) => {
-        setQuestions(prev => prev.map((q, i) =>
-            i === index ? { ...q, [field]: value } : q
-        ))
+    const handleEditQuestion = (index: number, field: keyof Omit<SurveyQuestion, "id" | "surveyId">, value: string | boolean) => {
+        setQuestions(prev => prev.map((q, i) => {
+            if (i !== index) {
+                return q
+            }
+
+            // Cuando cambia el tipo de pregunta, también debemos ajustar
+            // la estructura de opciones para que la UI y la persistencia
+            // estén alineadas con el nuevo tipo.
+            if (field === "type") {
+                const nextType = value as QuestionType
+
+                let nextOptions: QuestionOptionDraft[] | undefined
+
+                // Para preguntas de selección (única o múltiple) se inicializa
+                // un mínimo de 2 opciones si aún no existen.
+                if (nextType === "single" || nextType === "multiple") {
+                    nextOptions = q.options && q.options.length > 0
+                        ? q.options
+                        : [
+                            { text: "Opción 1" },
+                            { text: "Opción 2" },
+                        ]
+                // Para preguntas de tipo rating se genera automáticamente
+                // una escala fija del 1 al 10 con su valor numérico asociado.
+                } else if (nextType === "rating") {
+                    nextOptions = Array.from({ length: 10 }, (_, indexOption) => {
+                        const numericValue = indexOption + 1
+                        return {
+                            text: String(numericValue),
+                            value: numericValue,
+                        }
+                    })
+                }
+
+                return {
+                    ...q,
+                    type: nextType,
+                    options: nextOptions,
+                }
+            }
+
+            return {
+                ...q,
+                [field]: value,
+            }
+        }))
     }
 
     /**
@@ -75,10 +131,16 @@ function NewSurveyPage() {
             const q = prev[index]
             if (!q) return prev
             // Duplicar sin id, solo los campos relevantes
-            const { text, required, type } = q
+            const { text, required, type, options } = q
             return [
                 ...prev,
-                { text, order: prev.length + 1, required, type }
+                {
+                    text,
+                    order: prev.length + 1,
+                    required,
+                    type,
+                    options: options ? options.map((option) => ({ ...option })) : undefined,
+                },
             ]
         })
     }
@@ -88,6 +150,76 @@ function NewSurveyPage() {
      */
     const handleDeleteQuestion = (index: number) => {
         setQuestions(prev => prev.filter((_, i) => i !== index))
+    }
+
+    /**
+     * Añade una nueva opción al final de la lista de opciones de una pregunta
+     * de tipo selección (single/multiple).
+     */
+    const handleAddOption = (questionIndex: number) => {
+        setQuestions(prev => prev.map((question, index) => {
+            if (index !== questionIndex) {
+                return question
+            }
+
+            const currentOptions = question.options ?? []
+            const nextOrder = currentOptions.length + 1
+            const nextOption: QuestionOptionDraft = {
+                text: `Opción ${nextOrder}`,
+            }
+
+            return {
+                ...question,
+                options: [...currentOptions, nextOption],
+            }
+        }))
+    }
+
+    /**
+     * Actualiza el texto de una opción concreta identificada por su índice
+     * dentro de una pregunta determinada.
+     */
+    const handleEditOption = (questionIndex: number, optionIndex: number, text: string) => {
+        setQuestions(prev => prev.map((question, index) => {
+            if (index !== questionIndex || !question.options) {
+                return question
+            }
+
+            const updatedOptions = question.options.map((option, indexOption) => {
+                if (indexOption !== optionIndex) {
+                    return option
+                }
+
+                return {
+                    ...option,
+                    text,
+                }
+            })
+
+            return {
+                ...question,
+                options: updatedOptions,
+            }
+        }))
+    }
+
+    /**
+     * Elimina una opción de respuesta de la pregunta indicada, manteniendo
+     * el resto de opciones sin mutaciones directas del estado previo.
+     */
+    const handleDeleteOption = (questionIndex: number, optionIndex: number) => {
+        setQuestions(prev => prev.map((question, index) => {
+            if (index !== questionIndex || !question.options) {
+                return question
+            }
+
+            const filteredOptions = question.options.filter((_, indexOption) => indexOption !== optionIndex)
+
+            return {
+                ...question,
+                options: filteredOptions,
+            }
+        }))
     }
 
     // Opciones de categoría basadas en los tipos de reuniones configurados en la aplicación.
@@ -123,6 +255,23 @@ function NewSurveyPage() {
             return;
         }
 
+        const hasInvalidSelectionQuestion = questions.some((question) => {
+            if (question.type !== "single" && question.type !== "multiple") {
+                return false
+            }
+
+            if (!question.options || question.options.length === 0) {
+                return true
+            }
+
+            return question.options.some((option) => !option.text.trim())
+        })
+
+        if (hasInvalidSelectionQuestion) {
+            setError({ label: "Preguntas", message: "Las preguntas de selección deben tener opciones con texto." })
+            return
+        }
+
         // preparamos los payloads para crear la encuesta y sus preguntas, luego redirigimos a la página de detalles de la encuesta recién creada}
         const surveyData: Omit<Survey, 'id'> = {
             name: data.name,
@@ -135,18 +284,45 @@ function NewSurveyPage() {
         }
 
         try {
-            const surveyId = await createSurvey(surveyData, database!)
+            if (!database) {
+                setError({ label: "General", message: "No hay base de datos activa para crear la encuesta." })
+                return
+            }
+
+            const surveyId = await createSurvey(surveyData, database)
             // Aquí podríamos crear las preguntas asociadas a la encuesta usando createQuestion y luego redirigir a la página de detalles de la encuesta recién creada
 
             for (let i = 0; i < questions.length; i++) {
                 const q = questions[i]
-                await createQuestion({
+                const questionId = await createQuestion({
                     surveyId,
                     text: q.text,
                     type: q.type,
                     required: q.required,
-                    order: q.order
-                }, database!)
+                    order: q.order,
+                }, database)
+
+                if (q.type === "single" || q.type === "multiple") {
+                    const options = q.options ?? []
+                    for (let indexOption = 0; indexOption < options.length; indexOption++) {
+                        const option = options[indexOption]
+                        await createOption({
+                            questionId,
+                            order: indexOption + 1,
+                            text: option.text.trim() || `Opción ${indexOption + 1}`,
+                            value: option.value,
+                        }, database)
+                    }
+                } else if (q.type === "rating") {
+                    for (let numericValue = 1; numericValue <= 10; numericValue++) {
+                        await createOption({
+                            questionId,
+                            order: numericValue,
+                            text: String(numericValue),
+                            value: numericValue,
+                        }, database)
+                    }
+                }
             }
 
             setSuccess(true)
@@ -289,22 +465,63 @@ function NewSurveyPage() {
                                                             </button>
                                                         </div>
                                                     </div>
-                                                    <div className="grid grid-cols-2 gap-6 items-end">
-                                                        <div className="space-y-2">
-                                                            <label className="text-xs uppercase tracking-widest text-outline">Tipo de pregunta</label>
-                                                            <div className="relative">
-                                                                <select
-                                                                    className="w-full bg-[#edeeed] border-none rounded-md px-4 py-2.5 appearance-none focus:ring-2 focus:ring-[#1b3022] font-medium text-sm"
-                                                                    value={q.type}
-                                                                    onChange={e => handleEditQuestion(idx, 'type', e.target.value as QuestionType)}
-                                                                >
-                                                                    <option value="single">Selección única</option>
-                                                                    <option value="multiple">Selección múltiple</option>
-                                                                    <option value="text">Texto libre</option>
-                                                                    <option value="rating">Escala de valoración 1 - 10</option>
-                                                                </select>
-                                                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-outline w-5 h-5" />
+                                                    <div className="grid grid-cols-2 gap-6 items-start">
+                                                        <div className="space-y-3">
+                                                            <div className="space-y-2">
+                                                                <label className="text-xs uppercase tracking-widest text-outline">Tipo de pregunta</label>
+                                                                <div className="relative">
+                                                                    <select
+                                                                        className="w-full bg-[#edeeed] border-none rounded-md px-4 py-2.5 appearance-none focus:ring-2 focus:ring-[#1b3022] font-medium text-sm"
+                                                                        value={q.type}
+                                                                        onChange={e => handleEditQuestion(idx, 'type', e.target.value as QuestionType)}
+                                                                    >
+                                                                        <option value="single">Selección única</option>
+                                                                        <option value="multiple">Selección múltiple</option>
+                                                                        <option value="text">Texto libre</option>
+                                                                        <option value="rating">Escala de valoración 1 - 10</option>
+                                                                    </select>
+                                                                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-outline w-5 h-5" />
+                                                                </div>
                                                             </div>
+
+                                                            {(q.type === "single" || q.type === "multiple") && (
+                                                                <div className="space-y-2 mt-4">
+                                                                    <p className="text-xs font-label uppercase tracking-widest text-outline">Opciones de respuesta</p>
+                                                                    <div className="space-y-2">
+                                                                        {(q.options ?? []).map((option, indexOption) => (
+                                                                            <div key={indexOption} className="flex items-center gap-2">
+                                                                                <input
+                                                                                    className="flex-1 px-3 py-2 bg-[#f5f5f5] border-none rounded-lg focus:ring-2 focus:ring-[#1b3022]/10 text-sm"
+                                                                                    placeholder={`Opción ${indexOption + 1}`}
+                                                                                    value={option.text}
+                                                                                    onChange={(event) => handleEditOption(idx, indexOption, event.target.value)}
+                                                                                />
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="p-2 text-error hover:bg-[#ffdad6] rounded-lg transition-all"
+                                                                                    title="Eliminar opción"
+                                                                                    onClick={() => handleDeleteOption(idx, indexOption)}
+                                                                                >
+                                                                                    <Trash className="w-4 h-4 text-red-500 hover:text-[#93000a]" />
+                                                                                </button>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="mt-2 text-xs font-semibold text-primary hover:underline"
+                                                                        onClick={() => handleAddOption(idx)}
+                                                                    >
+                                                                        Añadir opción
+                                                                    </button>
+                                                                </div>
+                                                            )}
+
+                                                            {q.type === "rating" && (
+                                                                <p className="mt-3 text-xs text-outline">
+                                                                    Esta pregunta usará automáticamente una escala de 1 a 10.
+                                                                </p>
+                                                            )}
                                                         </div>
                                                         <div className="flex justify-end space-x-3">
                                                             <button
