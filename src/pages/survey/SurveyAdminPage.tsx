@@ -16,6 +16,8 @@ function SurveyAdminPage() {
     const [isLoading, setIsLoading] = useState<boolean>(false)
     const [searchTerm, setSearchTerm] = useState<string>("")
     const [statusFilter, setStatusFilter] = useState<"all" | "active">("all")
+    const [categoryFilter, setCategoryFilter] = useState<string>("all")
+    const [onlyPredetermined, setOnlyPredetermined] = useState<boolean>(false)
 
     useEffect(() => {
         if (!database) {
@@ -50,11 +52,21 @@ function SurveyAdminPage() {
 
     const normalizedSearch = searchTerm.trim().toLowerCase()
 
+    const categories = Array.from(new Set(surveys.map((survey) => survey.category))).sort()
+
     /**
      * Aplica los filtros de estado y búsqueda sobre el listado completo de encuestas.
      */
     const filteredSurveys = surveys.filter((survey) => {
         if (statusFilter === "active" && !survey.isActive) {
+            return false
+        }
+
+        if (onlyPredetermined && !survey.predetermined) {
+            return false
+        }
+
+        if (categoryFilter !== "all" && survey.category !== categoryFilter) {
             return false
         }
 
@@ -141,7 +153,40 @@ function SurveyAdminPage() {
                                 Activos
                             </button>
                         </div>
+                        <div className="flex items-center gap-3">
+                            <div className="relative">
+                                <select
+                                    className="px-3 pr-8 py-2 bg-white border-none rounded-lg text-sm font-medium text-[#191c1c] focus:ring-2 focus:ring-[#1b3022]"
+                                    value={categoryFilter}
+                                    onChange={(event) => setCategoryFilter(event.target.value)}
+                                >
+                                    <option value="all">Todas las categorías</option>
+                                    {categories.map((category) => (
+                                        <option key={category} value={category}>
+                                            {category}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <label className="flex items-center gap-2 text-xs text-[#434843]">
+                                <input
+                                    type="checkbox"
+                                    className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-0"
+                                    checked={onlyPredetermined}
+                                    onChange={(event) => setOnlyPredetermined(event.target.checked)}
+                                />
+                                Solo predeterminadas
+                            </label>
+                        </div>
                     </div>
+
+                    {!isLoading && surveys.length > 0 && (
+                        <div className="max-w-7xl mx-auto text-xs text-[#5a665a] flex justify-between items-center">
+                            <span>
+                                Mostrando <strong>{filteredSurveys.length}</strong> de <strong>{surveys.length}</strong> encuestas
+                            </span>
+                        </div>
+                    )}
 
                     {isLoading ? (
                         <div className="group bg-white rounded-xl p-8 max-w-7xl mx-auto text-sm text-[#434843]">
