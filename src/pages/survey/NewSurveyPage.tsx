@@ -54,10 +54,18 @@ function NewSurveyPage() {
     // Bandera de éxito para mostrar modal de confirmación cuando la encuesta se crea correctamente.
     const [success, setSuccess] = useState(false)
 
+    // Bandera de envío para evitar envíos dobles y mostrar feedback de carga.
+    const [isSubmitting, setIsSubmitting] = useState(false)
+
+    const clearErrorForLabel = (label: string): void => {
+        setError(prev => (prev.label === label ? { label: '', message: '' } : prev))
+    }
+
     /**
      * Añade una nueva pregunta vacía al final del formulario, con valores por defecto.
      */
     const handleAddQuestion = () => {
+        clearErrorForLabel('Preguntas')
         setQuestions(prev => ([
             ...prev,
             {
@@ -74,6 +82,7 @@ function NewSurveyPage() {
      * Permite modificar texto, tipo y si es obligatoria sin mutar el estado original.
      */
     const handleEditQuestion = (index: number, field: keyof Omit<SurveyQuestion, "id" | "surveyId">, value: string | boolean) => {
+        clearErrorForLabel('Preguntas')
         setQuestions(prev => prev.map((q, i) => {
             if (i !== index) {
                 return q
@@ -149,6 +158,7 @@ function NewSurveyPage() {
      * Elimina una pregunta según su índice dentro del listado actual.
      */
     const handleDeleteQuestion = (index: number) => {
+        clearErrorForLabel('Preguntas')
         setQuestions(prev => prev.filter((_, i) => i !== index))
     }
 
@@ -157,6 +167,7 @@ function NewSurveyPage() {
      * de tipo selección (single/multiple).
      */
     const handleAddOption = (questionIndex: number) => {
+        clearErrorForLabel('Preguntas')
         setQuestions(prev => prev.map((question, index) => {
             if (index !== questionIndex) {
                 return question
@@ -180,6 +191,7 @@ function NewSurveyPage() {
      * dentro de una pregunta determinada.
      */
     const handleEditOption = (questionIndex: number, optionIndex: number, text: string) => {
+        clearErrorForLabel('Preguntas')
         setQuestions(prev => prev.map((question, index) => {
             if (index !== questionIndex || !question.options) {
                 return question
@@ -208,6 +220,7 @@ function NewSurveyPage() {
      * el resto de opciones sin mutaciones directas del estado previo.
      */
     const handleDeleteOption = (questionIndex: number, optionIndex: number) => {
+        clearErrorForLabel('Preguntas')
         setQuestions(prev => prev.map((question, index) => {
             if (index !== questionIndex || !question.options) {
                 return question
@@ -237,6 +250,12 @@ function NewSurveyPage() {
      * posteriormente persiste cada una de las preguntas asociadas.
      */
     const handleSubmit = async () => {
+        if (isSubmitting) {
+            return
+        }
+
+        setError({ label: '', message: '' })
+
         // Validación básica de campos obligatorios
         if (!data.name.trim()) {
             setError({ label: "Nombre", message: "El nombre es obligatorio." });
@@ -284,6 +303,7 @@ function NewSurveyPage() {
         }
 
         try {
+            setIsSubmitting(true)
             if (!database) {
                 setError({ label: "General", message: "No hay base de datos activa para crear la encuesta." })
                 return
@@ -329,6 +349,8 @@ function NewSurveyPage() {
         } catch (err) {
             setError({ label: "General", message: err instanceof Error ? err.message : "Ocurrió un error al crear la encuesta." })
             return
+        } finally {
+            setIsSubmitting(false)
         }
     }
 
@@ -354,6 +376,11 @@ function NewSurveyPage() {
 
                 <div className='px-4 md:px-12 py-10 md:py-16 space-y-10'>
                     <div className="mx-auto max-w-7xl">
+                        {error.label === 'General' && error.message && (
+                            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                {error.message}
+                            </div>
+                        )}
                         <section className="bg-white rounded-xl shadow-[0_20px_24px_-4px_rgba(25,28,28,0.04)] overflow-hidden">
                             <div className="p-8 border-b border-[#e1e3e2]/30 flex items-center justify-between">
                                 <div className="flex items-center gap-4">
@@ -368,9 +395,13 @@ function NewSurveyPage() {
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-[#434843] ml-1">Nombre de la Encuesta</label>
                                     <input
-                                        onChange={(e) => setData({
-                                            ...data, name: e.target.value
-                                        })}
+                                        onChange={(e) => {
+                                            clearErrorForLabel('Nombre')
+                                            setData({
+                                                ...data,
+                                                name: e.target.value,
+                                            })
+                                        }}
                                         value={data.name}
                                         className="w-full px-5 py-4 bg-[#edeeed] border-none rounded-xl focus:ring-2 focus:ring-[#1b3022]/10 transition-all text-[#191c1c] placeholder:text-outline/60" placeholder="Ej: Encuesta de satisfacción 2026" type="text" />
                                     {error.label === "Nombre" && <p className="text-sm text-red-500 mt-1">{error.message}</p>}
@@ -380,9 +411,13 @@ function NewSurveyPage() {
                                         <label className="text-sm font-bold text-[#434843] ml-1">Categoría</label>
                                         <div className="relative">
                                             <select
-                                                onChange={(e) => setData({
-                                                    ...data, category: e.target.value
-                                                })}
+                                                onChange={(e) => {
+                                                    clearErrorForLabel('Categoría')
+                                                    setData({
+                                                        ...data,
+                                                        category: e.target.value,
+                                                    })
+                                                }}
                                                 value={data.category}
                                                 className="w-full px-5 py-4 bg-[#edeeed] border-none rounded-xl focus:ring-2 focus:ring-primary-container/10 appearance-none transition-all text-[#191c1c]">
                                                 <option value="">Seleccionar categoría...</option>
@@ -396,9 +431,13 @@ function NewSurveyPage() {
                                     </div>
                                     <div className="flex items-center gap-3 mt-6">
                                         <input
-                                            onChange={(e) => setData({
-                                                ...data, predetermined: e.target.checked
-                                            })}
+                                            onChange={(e) => {
+                                                clearErrorForLabel('General')
+                                                setData({
+                                                    ...data,
+                                                    predetermined: e.target.checked,
+                                                })
+                                            }}
                                             checked={data.predetermined}
                                             id="default-category"
                                             type="checkbox"
@@ -412,9 +451,13 @@ function NewSurveyPage() {
                                 <div className="space-y-2">
                                     <label className="text-sm font-bold text-[#434843] ml-1">Descripción</label>
                                     <textarea
-                                        onChange={(e) => setData({
-                                            ...data, description: e.target.value
-                                        })}
+                                        onChange={(e) => {
+                                            clearErrorForLabel('General')
+                                            setData({
+                                                ...data,
+                                                description: e.target.value,
+                                            })
+                                        }}
                                         value={data.description}
                                         className="w-full px-5 py-4 bg-[#edeeed] border-none rounded-xl focus:ring-2 focus:ring-[#1b3022]/10 transition-all text-[#191c1c] resize-none" placeholder="Describe brevemente el objetivo de esta encuesta..." rows={4}></textarea>
 
@@ -583,7 +626,14 @@ function NewSurveyPage() {
 
 
                                 <div className="mt-12">
-                                    <button onClick={handleSubmit} type="button" className="w-full px-6 py-4 bg-primary text-white font-semibold rounded-3xl transition-all duration-300 hover:bg-primary-light">Guardar Encuesta</button>
+                                    <button
+                                        onClick={handleSubmit}
+                                        type="button"
+                                        disabled={isSubmitting}
+                                        className="w-full px-6 py-4 bg-primary text-white font-semibold rounded-3xl transition-all duration-300 hover:bg-primary-light disabled:opacity-60 disabled:cursor-not-allowed"
+                                    >
+                                        {isSubmitting ? 'Guardando encuesta...' : 'Guardar Encuesta'}
+                                    </button>
                                 </div>
                             </div>
                         </div>
