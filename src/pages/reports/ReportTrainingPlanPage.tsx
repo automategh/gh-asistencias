@@ -1,10 +1,10 @@
 import Layout from "@/components/layouts/layout"
-import { ChevronDown, Clock, Download, Eye, IterationCw, ListFilterIcon, LucideBarChart, Smile, TrendingUp, Users } from "lucide-react"
+import { ChevronDown, ChevronRight, Clock, Download, Eye, IterationCw, ListFilterIcon, LucideBarChart, Smile, TrendingUp, Users } from "lucide-react"
 import { useEffect, useState, useRef } from "react"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas-pro"
 import * as XLSX from "xlsx"
-import { getUserProfile } from "@/services/user.service"    
+import { getUserProfile, loadUsersCargoMap, resolveCrossDbUserCargoByEmail, type UserCargoCache, type UserEmailCargoCache } from "@/services/user.service"    
 import { useDatabase } from "@/context/DatabaseContext"
 import { useAuth } from "@/context/AuthContext"
 import { getDepartmentNames } from "@/services/departaments/departments.service"
@@ -18,6 +18,7 @@ import {
     type TrainingKpiSummary,
 } from "@/services/meetings.analytics.service"
 import { getTrainingsWithParticipants, type TrainingWithParticipants } from "@/services/meetings.training.listing"
+import { useNavigate } from "react-router-dom"
 
 /**
  * Página de reporte para el plan de formación.
@@ -46,6 +47,8 @@ function ReportTrainingPlanPage() {
     const [isGenerating, setIsGenerating] = useState<boolean>(false)
     const [trainings, setTrainings] = useState<TrainingWithParticipants[]>([])
     const [leaderName, setLeaderName] = useState<string | null>(null)
+
+    const navigate = useNavigate()
 
     useEffect(() => {
         let cancelled = false
@@ -170,23 +173,25 @@ function ReportTrainingPlanPage() {
         setShowExportMenu(false)
         // Solo asistentes presentes o tarde
         const rows: Array<Array<string | number>> = []
-        // Cache para evitar múltiples lecturas de usuario
-        const userCache: Record<string, string> = {}
+
+        // Cargar un mapa uid -> cargo en una sola lectura (BD seleccionada)
+        const cargoCache: UserCargoCache = await loadUsersCargoMap(database)
+
+        // Caché por email para búsquedas cruzadas solo cuando el recinto es corporativo
+        const crossDbCargoCache: UserEmailCargoCache = {}
+
         for (const { meeting, trainer, participants, areas } of trainings) {
             const areaStr = areas.length > 0 ? areas.join(", ") : "-"
             const hours = Math.round((meeting.endTime - meeting.startTime) / (1000 * 60 * 60))
             const dateStr = new Date(meeting.startTime).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })
             const asistentes = participants.filter(p => p.attendance === "present" || p.attendance === "late")
             for (const p of asistentes) {
-                let cargo = userCache[p.uid]
-                if (cargo === undefined) {
-                    try {
-                        const user = await getUserProfile(p.uid, database)
-                        cargo = user?.cargo ?? ""
-                        userCache[p.uid] = cargo
-                    } catch {
-                        cargo = ""
-                    }
+                let cargo = cargoCache[p.uid] ?? ""
+
+                // Si estamos en corporativo y en la BD actual no existe el cargo,
+                // intentamos resolverlo en las demás BDs usando el email del participante.
+                if (!cargo) {
+                    cargo = await resolveCrossDbUserCargoByEmail(p.email, crossDbCargoCache)
                 }
                 rows.push([
                     meeting.title,
@@ -304,7 +309,13 @@ function ReportTrainingPlanPage() {
                 <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs">
                     <nav className='px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto flex justify-between items-center'>
                         <div>
-                            <span className="inline-flex items-center rounded-md bg-secondary px-2 py-1 text-xs font-medium text-[#664d2d] ">Modulo Reportes</span>
+                            <div className="flex items-center gap-2 text-xs text-outline mb-1 font-label tracking-wide uppercase">
+                                <span
+                                    className="hover:text-secondary cursor-pointer transition-colors"
+                                    onClick={() => navigate("/reports")}>Reportes</span>
+                                <ChevronRight className="w-4 h-4" />
+                                <span>Plan de formación</span>
+                            </div>
                             <h1 className="text-3xl font-bold tracking-tight">Plan de formación</h1>
                         </div>
                         <div className="relative">
