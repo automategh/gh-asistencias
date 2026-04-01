@@ -517,11 +517,6 @@ function NewSurveyPage() {
                                                                 </div>
                                                             )}
 
-                                                            {q.type === "rating" && (
-                                                                <p className="mt-3 text-xs text-outline">
-                                                                    Esta pregunta usará automáticamente una escala de 1 a 10.
-                                                                </p>
-                                                            )}
                                                         </div>
                                                         <div className="flex justify-end space-x-3">
                                                             <button
