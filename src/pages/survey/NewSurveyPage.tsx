@@ -1,6 +1,7 @@
 import Layout from "@/components/layouts/layout"
 import { useDatabase } from "@/context/DatabaseContext"
 import { createQuestion, createSurvey, type Survey, type SurveyQuestion } from "@/services/forms.service"
+import type { MeetingKind } from "@/types/meeting"
 
 import { ArrowRight, ChevronDown, ChevronRight, Copy, PlusCircle, Trash } from "lucide-react"
 import { useState } from "react"
@@ -90,11 +91,14 @@ function NewSurveyPage() {
     }
 
     // Opciones de categoría basadas en los tipos de reuniones configurados en la aplicación.
-    const meetingKindOptions = [
-        { value: "meeting", label: "Reunión" },
-        { value: "training", label: "Capacitación" },
-        { value: "custom", label: "Personalizada" },
-    ];
+    // Se parte del tipo MeetingKind para mantener un solo origen de verdad.
+    const MEETING_KIND_LABELS: Record<MeetingKind, string> = {
+        meeting: "Reunión",
+        training: "Capacitación",
+        custom: "Personalizada",
+    }
+
+    const meetingKinds: MeetingKind[] = ["meeting", "training", "custom"]
 
     /**
      * Valida los datos del formulario, crea la encuesta en Realtime Database y
@@ -206,8 +210,8 @@ function NewSurveyPage() {
                                                 value={data.category}
                                                 className="w-full px-5 py-4 bg-[#edeeed] border-none rounded-xl focus:ring-2 focus:ring-primary-container/10 appearance-none transition-all text-[#191c1c]">
                                                 <option value="">Seleccionar categoría...</option>
-                                                {meetingKindOptions.map(opt => (
-                                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                                {meetingKinds.map((kind) => (
+                                                    <option key={kind} value={kind}>{MEETING_KIND_LABELS[kind]}</option>
                                                 ))}
                                             </select>
                                             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-outline w-5 h-5" />
