@@ -396,7 +396,7 @@ function SurveyResultsPage() {
                                                     No se encontraron respuestas para esta capacitación.
                                                 </p>
                                             ) : (
-                                                <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+                                                <div className="space-y-3 max-h-120 overflow-y-auto pr-1">
                                                     {responses.map((response) => {
                                                         const createdAtDate = new Date(response.createdAt)
                                                         const createdAtLabel = Number.isNaN(createdAtDate.getTime())
