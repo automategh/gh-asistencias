@@ -40,6 +40,7 @@ export async function createMeeting(
         title: input.title.trim(),
         type: input.type,
         customType: input.customType ?? null,
+        satisfactionSurveyId: input.satisfactionSurveyId ?? null,
         description: input.description?.trim() ?? null,
         location: input.location.trim(),
         startTime: input.startTime,

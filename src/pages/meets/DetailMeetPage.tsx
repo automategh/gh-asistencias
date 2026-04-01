@@ -2,7 +2,7 @@ import Layout from '@/components/layouts/layout'
 import { QRCodeDisplay } from '@/components/meet/qr-code-display'
 import { useDatabase } from '@/context/DatabaseContext'
 import { useAuth } from '@/context/AuthContext'
-import { getSurveys, type Survey } from '@/services/forms.service'
+import { getSurveys, getSurveyById, type Survey } from '@/services/forms.service'
 import { cancelMeeting, closeMeeting, completeMeeting, getMeetingById, reopenMeeting } from '@/services/meetings.service'
 import type { Meeting } from '@/types/meeting'
 import { BarChart3, Calendar, Clock, FileText, MapPin } from 'lucide-react'
@@ -43,14 +43,27 @@ function DetailMeetPage() {
                     return
                 }
 
+                if (loadedMeeting.satisfactionSurveyId && loadedMeeting.satisfactionSurveyId.trim().length > 0) {
+                    const surveyById = await getSurveyById(database, loadedMeeting.satisfactionSurveyId)
+
+                    if (cancelled) {
+                        return
+                    }
+
+                    if (surveyById) {
+                        setSatisfactionSurvey(surveyById)
+                        return
+                    }
+                }
+
                 const surveys = await getSurveys(database)
 
                 if (cancelled) {
                     return
                 }
 
-                const survey = surveys.find((item) => item.category === 'training' && item.isActive && Boolean(item.predetermined)) ?? null
-                setSatisfactionSurvey(survey)
+                const fallbackSurvey = surveys.find((item) => item.category === 'training' && item.isActive && Boolean(item.predetermined)) ?? null
+                setSatisfactionSurvey(fallbackSurvey)
             } catch (error) {
                 console.error('Error al cargar la reunión o la encuesta de satisfacción:', error)
             }

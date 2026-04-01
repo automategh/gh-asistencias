@@ -16,6 +16,7 @@ import type { MeetingKind, ParticipantInput, ParticipantRole } from '@/types/mee
 import { createMeeting, addParticipants } from '@/services/meetings.service'
 import { listAllUsersAcrossDatabases } from '@/services/roles.service'
 import type { RecintoKey } from '@/lib/firebase/databaseResolver'
+import { getSurveys, type Survey } from '@/services/forms.service'
 
 /**
  * Convierte un valor `datetime-local` a epoch ms, interpretándolo en zona local
@@ -58,6 +59,7 @@ function NewMeetPage() {
         title: string
         type: MeetingKind
         customType: string
+        satisfactionSurveyId: string
         description: string
         location: string
         startTime: string
@@ -68,6 +70,7 @@ function NewMeetPage() {
         title: '',
         type: 'meeting',
         customType: '',
+        satisfactionSurveyId: '',
         description: '',
         location: '',
         startTime: '',
@@ -83,6 +86,7 @@ function NewMeetPage() {
     const [search, setSearch] = useState<string>('')
     const [groupBy, setGroupBy] = useState<'none' | 'recinto' | 'department' | 'recintoDepartment'>('none')
     const [selected, setSelected] = useState<Array<ParticipantInput>>([])
+    const [trainingSurveys, setTrainingSurveys] = useState<Survey[]>([])
 
     /** Maneja cambios de cualquier control del formulario */
     function handleChange(e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>): void {
@@ -110,6 +114,63 @@ function NewMeetPage() {
         loadUsers().catch(() => {})
         return () => { cancelled = true }
     }, [])
+
+    useEffect(() => {
+        if (!database) {
+            setTrainingSurveys([])
+            return
+        }
+
+        let cancelled = false
+
+        async function loadTrainingSurveys(): Promise<void> {
+            try {
+                const surveys = await getSurveys(database)
+                if (cancelled) return
+
+                const trainings = surveys.filter(item => item.category === 'training' && item.isActive)
+                setTrainingSurveys(trainings)
+
+                if (trainings.length === 0) return
+
+                setForm(prev => {
+                    if (prev.type !== 'training') return prev
+                    if (prev.satisfactionSurveyId && prev.satisfactionSurveyId.trim().length > 0) {
+                        return prev
+                    }
+                    const predetermined = trainings.find(item => Boolean(item.predetermined)) ?? trainings[0]
+                    return {
+                        ...prev,
+                        satisfactionSurveyId: predetermined?.id ?? '',
+                    }
+                })
+            } catch {
+                if (!cancelled) {
+                    setTrainingSurveys([])
+                }
+            }
+        }
+
+        loadTrainingSurveys().catch(() => {})
+
+        return () => {
+            cancelled = true
+        }
+    }, [database])
+
+    useEffect(() => {
+        if (form.type !== 'training') return
+        if (trainingSurveys.length === 0) return
+        if (form.satisfactionSurveyId && form.satisfactionSurveyId.trim().length > 0) return
+
+        const predetermined = trainingSurveys.find(item => Boolean(item.predetermined)) ?? trainingSurveys[0]
+        if (!predetermined) return
+
+        setForm(prev => ({
+            ...prev,
+            satisfactionSurveyId: predetermined.id,
+        }))
+    }, [form.type, form.satisfactionSurveyId, trainingSurveys])
 
     const filteredUsers = useMemo(() => {
         const q = search.trim().toLowerCase()
@@ -197,6 +258,9 @@ function NewMeetPage() {
                 title: form.title,
                 type: form.type,
                 customType: form.type === 'custom' ? form.customType || null : null,
+                satisfactionSurveyId: form.type === 'training' && form.satisfactionSurveyId
+                    ? form.satisfactionSurveyId
+                    : null,
                 description: form.description || null,
                 location: form.location,
                 startTime: startMs,
@@ -210,7 +274,7 @@ function NewMeetPage() {
 
             setSuccess('Reunión creada correctamente')
             setForm({
-                title: '', type: 'meeting', customType: '', description: '', location: '', startTime: '', endTime: '',
+                title: '', type: 'meeting', customType: '', satisfactionSurveyId: '', description: '', location: '', startTime: '', endTime: '',
             })
             setSelected([])
         } catch (err) {
@@ -258,6 +322,30 @@ function NewMeetPage() {
                                 </select>
                             </div>
                         </div>
+
+                        {form.type === 'training' && (
+                            <div className="mb-6">
+                                <label className="block text-sm font-semibold text-foreground mb-2">Encuesta de satisfacción</label>
+                                {trainingSurveys.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">
+                                        No hay encuestas de capacitación configuradas en esta base de datos.
+                                    </p>
+                                ) : (
+                                    <select
+                                        name="satisfactionSurveyId"
+                                        value={form.satisfactionSurveyId}
+                                        onChange={handleChange}
+                                        className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 focus:border-transparent hover:bg-white dark:hover:bg-slate-800"
+                                    >
+                                        {trainingSurveys.map(survey => (
+                                            <option key={survey.id} value={survey.id}>
+                                                {survey.name}{survey.predetermined ? ' (Predeterminada)' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                )}
+                            </div>
+                        )}
 
                         {form.type === 'custom' && (
                             <div className="mb-6">

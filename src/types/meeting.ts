@@ -27,6 +27,12 @@ export interface Meeting {
   readonly type: MeetingKind
   /** Etiqueta de tipo cuando `type` es "custom" */
   readonly customType?: string | null
+  /**
+   * Encuesta de satisfacción asociada cuando la reunión es de tipo
+   * capacitación. Se guarda el id de la encuesta para poder reutilizarla
+   * en el detalle de la capacitación y en los reportes.
+   */
+  readonly satisfactionSurveyId?: string | null
   /** Descripción/agenda (opcional) */
   readonly description?: string | null
   /** Ubicación donde se lleva a cabo */
@@ -101,6 +107,8 @@ export interface MeetingCreateInput {
   readonly type: MeetingKind
   /** Etiqueta para tipo personalizado si aplica */
   readonly customType?: string | null
+  /** Id de encuesta de satisfacción asociada cuando `type` es "training" */
+  readonly satisfactionSurveyId?: string | null
   /** Descripción/agenda */
   readonly description?: string | null
   /** Ubicación */
