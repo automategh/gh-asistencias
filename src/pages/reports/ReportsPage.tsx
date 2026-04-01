@@ -84,7 +84,7 @@ function ReportsPage() {
 
                             {/* primer grid */}
                             <div
-
+                                onClick={() => navigate('/reports/individual')}
                                 className="bg-white rounded-4xl p-10 shadow-[0_4px_30px_rgba(0,0,0,0.02)] flex flex-col justify-between group cursor-pointer hover:shadow-[0_30px_60px_rgba(0,0,0,0.06)] transition-all duration-500 border border-transparent hover:border-emerald-900/10 h-105">
                                 <div>
                                     <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-900 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500">
@@ -103,7 +103,7 @@ function ReportsPage() {
 
                             {/* segundo grid */}
                             <div
-
+                                onClick={() => navigate('/reports/group')}
                                 className="bg-white rounded-4xl p-10 shadow-[0_4px_30px_rgba(0,0,0,0.02)] flex flex-col justify-between group cursor-pointer hover:shadow-[0_30px_60px_rgba(0,0,0,0.06)] transition-all duration-500 border border-transparent hover:border-emerald-900/10 h-105">
                                 <div>
                                     <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-900 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500">

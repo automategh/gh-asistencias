@@ -16,11 +16,13 @@ import RegisterPage from './pages/auth/RegisterPage'
 import RoleRoute from './components/auth/role-route'
 import ReportsPage from './pages/reports/ReportsPage'
 import ReportTrainingPlanPage from './pages/reports/ReportTrainingPlanPage'
+import ReportGroupPage from './pages/reports/ReportGroupPage'
 import SurveyAdminPage from './pages/survey/SurveyAdminPage'
 import NewSurveyPage from './pages/survey/NewSurveyPage'
 import EditSurveyPage from './pages/survey/EditSurveyPage'
 import SurveyPage from './pages/survey/SurveyPage'
 import SurveyResultsPage from './pages/survey/SurveyResultsPage'
+import ReportIndividualPage from './pages/reports/ReportIndividualPage'
 
 
 function App() {
@@ -74,6 +76,22 @@ function App() {
                             </RoleRoute>
                         )}
                     />
+
+                        <Route
+                            path="/reports/group"
+                            element={(
+                                <RoleRoute allowed={["Admin", "HR", "Lider"]}>
+                                    <ReportGroupPage />
+                                </RoleRoute>
+                            )}
+                        />
+
+                    <Route path="/reports/individual" element={(
+                        <RoleRoute allowed={["Admin", "HR", "Lider"]}>
+                            <ReportIndividualPage />
+                        </RoleRoute>
+                    )} />
+
                     <Route path="/survey"
                         element={(
                             <RoleRoute allowed={["Admin", "HR"]}>

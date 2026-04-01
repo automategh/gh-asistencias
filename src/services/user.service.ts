@@ -46,6 +46,78 @@ export async function getLeaderNames(database: Database) {
 }
 
 /**
+ * Representa un usuario simplificado para uso en vistas de reportes e indicadores.
+ */
+export interface ReportUserItem {
+    readonly uid: string
+    readonly name: string
+    readonly email: string
+    readonly department?: string | null
+    readonly cargo?: string | null
+    readonly immediateBoss?: string | null
+}
+
+/**
+ * Obtiene usuarios para vistas de reportes.
+ *
+ * - Si se pasa `leaderName`, solo devuelve usuarios cuyo `immediateBoss`
+ *   coincide (ignorando mayúsculas/minúsculas y espacios).
+ * - Filtra usuarios sin nombre o email válidos.
+ */
+export async function getUsersForReports(
+    database: Database,
+    options?: { leaderName?: string | null },
+): Promise<ReportUserItem[]> {
+    if (!database) {
+        throw new Error("La base de datos no está disponible");
+    }
+
+    const usersRef = ref(database, "users");
+    const snapshot = await get(usersRef);
+    const raw = snapshot.val() as Record<string, Partial<UserProfile>> | null;
+
+    if (!raw) {
+        return [];
+    }
+
+    const normalizedLeader = typeof options?.leaderName === "string" && options.leaderName.trim().length > 0
+        ? options.leaderName.trim().toLowerCase()
+        : null;
+
+    const items: ReportUserItem[] = [];
+
+    for (const [uid, data] of Object.entries(raw)) {
+        const name = typeof data.name === "string" ? data.name.trim() : "";
+        const email = typeof data.email === "string" ? data.email.trim() : "";
+
+        if (!name || !email) {
+            continue;
+        }
+
+        if (normalizedLeader) {
+            const bossRaw = typeof data.immediateBoss === "string" ? data.immediateBoss : null;
+            const bossNormalized = bossRaw ? bossRaw.trim().toLowerCase() : "";
+            if (!bossNormalized || bossNormalized !== normalizedLeader) {
+                continue;
+            }
+        }
+
+        items.push({
+            uid,
+            name,
+            email,
+            department: typeof data.department === "string" ? data.department : data.department ?? null,
+            cargo: typeof data.cargo === "string" ? data.cargo : data.cargo ?? null,
+            immediateBoss: typeof data.immediateBoss === "string" ? data.immediateBoss : data.immediateBoss ?? null,
+        });
+    }
+
+    items.sort((first, second) => first.name.localeCompare(second.name));
+
+    return items;
+}
+
+/**
  * Caché en memoria para resolver el cargo de usuarios durante una misma operación
  * (por ejemplo, al exportar el plan de formación a Excel).
  *
