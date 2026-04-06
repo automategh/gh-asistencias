@@ -189,10 +189,19 @@ export async function updateSurvey(
 
 /**
  * Obtiene todas las encuestas almacenadas en la base de datos.
+ *
+ * Acepta una instancia de Database o null para alinearse con el contexto
+ * de la aplicación. Si la base de datos es null, lanza un error claro
+ * para evitar llamadas silenciosas con configuración inválida.
+ *
  * @param database Instancia de Realtime Database desde la que se leerán las encuestas.
  * @returns Arreglo de encuestas tipadas, ordenadas por fecha de creación descendente.
  */
-export async function getSurveys(database: Database): Promise<Survey[]> {
+export async function getSurveys(database: Database | null): Promise<Survey[]> {
+    if (!database) {
+        throw new Error("La base de datos no está disponible para consultar encuestas")
+    }
+
     const surveysRef = ref(database, "surveys")
     const snapshot = await get(surveysRef)
 

@@ -17,6 +17,7 @@ import { createMeeting, addParticipants } from '@/services/meetings.service'
 import { listAllUsersAcrossDatabases } from '@/services/roles.service'
 import type { RecintoKey } from '@/lib/firebase/databaseResolver'
 import { getSurveys, type Survey } from '@/services/forms.service'
+import { createTeamsMeetingViaCloudFunction } from '@/services/teams.service'
 
 /**
  * Convierte un valor `datetime-local` a epoch ms, interpretándolo en zona local
@@ -78,6 +79,7 @@ function NewMeetPage() {
     })
 
     const [submitting, setSubmitting] = useState<boolean>(false)
+    const [creatingTeams, setCreatingTeams] = useState<boolean>(false)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
 
@@ -236,6 +238,7 @@ function NewMeetPage() {
     async function handleSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
         e.preventDefault()
         setSubmitting(true)
+        setCreatingTeams(false)
         setError(null)
         setSuccess(null)
         try {
@@ -272,7 +275,37 @@ function NewMeetPage() {
                 await addParticipants(database, meeting.id, selected, { startTime: meeting.startTime, status: meeting.status })
             }
 
-            setSuccess('Reunión creada correctamente')
+            const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+
+            const hostParticipant = selected.find(participant => participant.role === 'host')
+            const organizerEmail = hostParticipant?.email ?? user.email ?? null
+
+            try {
+                setCreatingTeams(true)
+
+                await createTeamsMeetingViaCloudFunction({
+                    organizerEmail,
+                    subject: meeting.title,
+                    bodyHtml: meeting.description ?? undefined,
+                    startTime: meeting.startTime,
+                    endTime: meeting.endTime,
+                    timeZone,
+                    attendees: selected.map(participant => ({
+                        email: participant.email,
+                        name: participant.name,
+                        type: 'required',
+                    })),
+                })
+
+                setSuccess('Reunión creada correctamente y sincronizada con Teams')
+            } catch (teamsError) {
+                const message = teamsError instanceof Error ? teamsError.message : 'Error al crear la reunión en Teams'
+                // No interrumpe la creación local; solo informa el problema con Teams.
+                setSuccess('Reunión creada correctamente, pero hubo un problema al crearla en Teams')
+                console.error('Error al crear reunión en Teams:', message)
+            } finally {
+                setCreatingTeams(false)
+            }
             setForm({
                 title: '', type: 'meeting', customType: '', satisfactionSurveyId: '', description: '', location: '', startTime: '', endTime: '',
             })
@@ -551,7 +584,7 @@ function NewMeetPage() {
                                     disabled={submitting}
                                     className="flex-1 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:shadow-md disabled:opacity-50"
                                 >
-                                    {submitting ? 'Creando…' : 'Crear Reunión'}
+                                    {submitting || creatingTeams ? 'Creando…' : 'Crear Reunión'}
                                 </button>
                             </div>
                         </div>

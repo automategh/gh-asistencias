@@ -29,5 +29,7 @@ module.exports = {
     "quotes": ["error", "double"],
     "import/no-unresolved": 0,
     "indent": ["error", 2],
+    // Evita conflicto de opciones con la versión actual de @typescript-eslint
+    "@typescript-eslint/no-unused-expressions": "off",
   },
 };

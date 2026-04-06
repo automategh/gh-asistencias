@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
+import { getFunctions } from "firebase/functions";
 import type { FirebaseApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 import { getStorage } from "firebase/storage";
@@ -29,6 +30,7 @@ try {
 export const auth = app ? getAuth(app) : null;
 export const analytics = app ? getAnalytics(app) : null;
 export const storage = app ? getStorage(app) : null;
+export const functions = app ? getFunctions(app) : null;
 
 export const DEFAULT_DATABASE_URL = firebaseConfig.databaseURL ?? null;
 export const DATABASE_CCCI_URL = import.meta.env.VITE_FIREBASE_DATABASE_URL_CCCI ?? null;
