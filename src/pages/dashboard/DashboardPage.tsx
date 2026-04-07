@@ -195,7 +195,7 @@ function DashboardPage() {
                                 Dashboard de Asistencias
                             </h1>
                             <p className="text-sm text-muted-foreground mt-1">
-                                Resumen mensual de reuniones y capacitaciones: asistencias vs citados.
+                                Resumen mensual de actividades: asistencias vs citados.
                             </p>
                         </div>
                         <div className="flex flex-col items-end gap-2">
@@ -309,7 +309,7 @@ function DashboardPage() {
                             <section className="grid md:grid-cols-4 gap-6">
                                 <div className="bg-card rounded-2xl border border-border p-6 transition-all duration-300 hover:shadow-lg">
                                     <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">
-                                        Reuniones / Capacitaciones
+                                        Actividades
                                     </p>
                                     <p className="text-4xl font-bold text-primary">{totalMeetings}</p>
                                     <p className="text-xs text-muted-foreground mt-1">Eventos programados en el mes filtrado.</p>
@@ -317,7 +317,7 @@ function DashboardPage() {
                                 <div className="bg-card rounded-2xl border border-border p-6 transition-all duration-300 hover:shadow-lg">
                                     <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">Citados</p>
                                     <p className="text-4xl font-bold text-foreground">{totalInvited}</p>
-                                    <p className="text-xs text-muted-foreground mt-1">Personas invitadas a estos eventos.</p>
+                                    <p className="text-xs text-muted-foreground mt-1">Personas invitadas a estas actividades.</p>
                                 </div>
                                 <div className="bg-card rounded-2xl border border-border p-6 transition-all duration-300 hover:shadow-lg">
                                     <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">
@@ -325,7 +325,7 @@ function DashboardPage() {
                                     </p>
                                     <p className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">{totalPresent}</p>
                                     <p className="text-xs text-muted-foreground mt-1">
-                                        Presentes + llegadas tarde en los eventos del mes.
+                                        Presentes en las actividades del mes.
                                     </p>
                                 </div>
                                 <div className="bg-card rounded-2xl border border-border p-6 transition-all duration-300 hover:shadow-lg">

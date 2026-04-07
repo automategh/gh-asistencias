@@ -79,18 +79,18 @@ function MeetsPage() {
                     )
                 }
             } catch (err) {
-                if (!cancelled) setError(err instanceof Error ? err.message : 'No fue posible cargar las reuniones')
+                if (!cancelled) setError(err instanceof Error ? err.message : 'No fue posible cargar las actividades')
             } finally {
                 if (!cancelled) setLoading(false)
             }
         }
         // Ejecutar
-        load().catch(() => setError('No fue posible cargar las reuniones'))
+        load().catch(() => setError('No fue posible cargar las actividades'))
         return () => { cancelled = true }
     }, [database, databaseUrl, user?.uid, now, isCorporateUser, availableDatabases])
 
     /**
-     * Aplica los filtros de fecha, estado y búsqueda sobre una lista de reuniones.
+     * Aplica los filtros de fecha, estado y búsqueda sobre una lista de actividades.
      */
     const applyFilters = useCallback((meetings: MeetingWithIndex[]): MeetingWithIndex[] => {
         let result = meetings
@@ -206,7 +206,7 @@ function MeetsPage() {
             <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                 <Calendar className="w-8 h-8 text-muted-foreground" />
             </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">No hay reuniones</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-2">No hay actividades</h3>
             <p className="text-muted-foreground mb-6">Comienza creando tu primera reunión</p>
             <Link
                 to="/new-meeting"
@@ -224,7 +224,7 @@ function MeetsPage() {
             <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
                 <header className="bg-card border-b border-border sticky top-0 z-20 backdrop-blur-xl">
                     <nav className="max-w-4xl mx-auto px-6 py-4">
-                        <h1 className="text-3xl font-bold mt-4 text-foreground">Reuniones/Capacitaciones</h1>
+                        <h1 className="text-3xl font-bold mt-4 text-foreground">Actividades</h1>
                     </nav>
                 </header>
 
@@ -326,7 +326,7 @@ function MeetsPage() {
                     {activeTab === 'invited' && (
                         <section>
                             <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-                                <h2 className="text-xl font-bold text-foreground">Reuniones a las que me han citado</h2>
+                                <h2 className="text-xl font-bold text-foreground">Actividades a las que me han citado</h2>
                             </div>
                             {invitedVisible.length > 0 ? (
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
