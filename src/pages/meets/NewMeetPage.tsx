@@ -297,12 +297,12 @@ function NewMeetPage() {
                     })),
                 })
 
-                setSuccess('Reunión creada correctamente y sincronizada con Teams')
+                setSuccess('Actividad creada correctamente y sincronizada con Teams')
             } catch (teamsError) {
-                const message = teamsError instanceof Error ? teamsError.message : 'Error al crear la reunión en Teams'
+                const message = teamsError instanceof Error ? teamsError.message : 'Error al crear la actividad en Teams'
                 // No interrumpe la creación local; solo informa el problema con Teams.
-                setSuccess('Reunión creada correctamente, pero hubo un problema al crearla en Teams')
-                console.error('Error al crear reunión en Teams:', message)
+                setSuccess('Actividad creada correctamente, pero hubo un problema al crearla en Teams')
+                console.error('Error al crear actividad en Teams:', message)
             } finally {
                 setCreatingTeams(false)
             }
@@ -311,7 +311,7 @@ function NewMeetPage() {
             })
             setSelected([])
         } catch (err) {
-            const message = err instanceof Error ? err.message : 'Error al crear la reunión'
+            const message = err instanceof Error ? err.message : 'Error al crear la actividad'
             setError(message)
         } finally {
             setSubmitting(false)
@@ -323,7 +323,7 @@ function NewMeetPage() {
             <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
                 <header className="bg-card border-b border-border sticky top-0 z-10 backdrop-blur-xl">
                     <nav className="max-w-4xl mx-auto px-6 py-4">
-                        <h1 className="text-3xl font-bold mt-4 text-foreground">Nueva Reunión</h1>
+                        <h1 className="text-3xl font-bold mt-4 text-foreground">Nueva Actividad</h1>
                     </nav>
                 </header>
 
