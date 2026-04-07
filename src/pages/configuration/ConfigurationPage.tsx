@@ -134,6 +134,32 @@ function ConfigurationProfilePage() {
             setSavingProfile(false);
         }
     }
+
+    async function handleSignatureUpload(event: ChangeEvent<HTMLInputElement>): Promise<void> {
+        if (!event.target.files || event.target.files.length === 0) {
+            return;
+        }
+
+        const file = event.target.files[0];
+
+        if (!file.type.startsWith("image/")) {
+            alert("Por favor selecciona un archivo de imagen válido (PNG, JPG, etc.).");
+            return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onloadend = () => {
+            const result = reader.result;
+            if (typeof result === "string") {
+                setSignature(result);
+            }
+        };
+
+        reader.readAsDataURL(file);
+        // Permitir volver a seleccionar el mismo archivo si el usuario lo desea
+        event.target.value = "";
+    }
     function handlePasswordFieldChange(event: ChangeEvent<HTMLInputElement>): void {
         const { name, value } = event.target;
         setPasswordForm(prev => ({ ...prev, [name]: value }));
@@ -414,21 +440,36 @@ function ConfigurationProfilePage() {
                                 )}
 
                                 {isEditing && !isLocked && (
-                                    <div className="space-y-2">
+                                    <div className="space-y-3">
                                         <p className="text-xs text-muted-foreground">
-                                            Dibuja tu firma y pulsa "Confirmar" para asociarla a tu perfil. Los cambios se guardan al pulsar
-                                            "Guardar Cambios".
+                                            Puedes dibujar tu firma o adjuntar una imagen. Los cambios se guardan al pulsar
+                                            {" "}
+                                            <span className="font-semibold">"Guardar Cambios"</span>.
                                         </p>
 
-                                        {!signature ? (
-                                            <SignaturePadCanvas
-                                                height={160}
-                                                disabled={false}
-                                                onSave={(sig) => {
-                                                    setSignature(sig)
-                                                }}
-                                            />
-                                        ) : (
+                                        {!signature && (
+                                            <>
+                                                <SignaturePadCanvas
+                                                    height={160}
+                                                    disabled={false}
+                                                    onSave={(sig) => {
+                                                        setSignature(sig)
+                                                    }}
+                                                />
+
+                                                <div className="space-y-1">
+                                                    <p className="text-xs text-muted-foreground">O bien adjunta una imagen de tu firma (PNG, JPG, etc.):</p>
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        onChange={handleSignatureUpload}
+                                                        className="block w-full text-xs text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-border file:text-xs file:font-semibold file:bg-muted file:text-foreground hover:file:bg-muted/80"
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
+
+                                        {signature && (
                                             <Button
                                                 type="button"
                                                 onClick={() => {
