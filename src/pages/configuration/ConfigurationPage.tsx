@@ -333,7 +333,7 @@ function ConfigurationProfilePage() {
                             <div>
                                 <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
                                     <Building2 className="w-4 h-4 text-primary" />
-                                    Departamento
+                                    Area
                                 </label>
                                 {isEditing ? (
                                     <select
@@ -343,7 +343,7 @@ function ConfigurationProfilePage() {
                                         onChange={handleInputChange}
                                         className={`w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 ${isLocked ? 'bg-muted/30 text-muted-foreground' : 'focus:ring-primary text-foreground'}`}
                                     >
-                                        <option value="">Selecciona un departamento</option>
+                                        <option value="">Selecciona un area</option>
                                         {departaments.map((dep) => (
                                             <option key={dep.id} value={dep.name}>{dep.name}</option>
                                         ))}
