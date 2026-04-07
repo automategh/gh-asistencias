@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 
 function ConfigurationProfilePage() {
 
-    const { user: firebaseUser } = useAuth();
+    const { user: firebaseUser, profilePhotoUrl } = useAuth();
     const { database, isCorporateUser, databaseUrl } = useDatabase();
     const [user, setUser] = useState<UserProfile | null>(null)
     const [isEditing, setIsEditing] = useState<boolean>(false);
@@ -204,8 +204,17 @@ function ConfigurationProfilePage() {
                     {/* Profile Card */}
                     <div className="bg-card rounded-2xl border border-border p-8 mb-6">
                         <div className="flex items-center gap-6 mb-8 pb-8 border-b border-border">
-                            <div className="w-24 h-24 bg-linear-to-br from-secondary to-accent rounded-2xl flex items-center justify-center text-4xl font-bold text-secondary-foreground">
-                                {initialLetter}
+                            <div className="w-24 h-24 rounded-full overflow-hidden border border-border bg-muted flex items-center justify-center text-4xl font-bold text-secondary-foreground">
+                                {profilePhotoUrl ? (
+                                    <img
+                                        src={profilePhotoUrl}
+                                        alt={firebaseUser?.displayName ?? user?.name ?? firebaseUser?.email ?? "Foto de perfil"}
+                                        className="w-full h-full object-cover"
+                                        referrerPolicy="no-referrer"
+                                    />
+                                ) : (
+                                    <span>{initialLetter}</span>
+                                )}
                             </div>
                             <div className="grow">
                                 <h2 className="text-3xl font-bold text-foreground mb-2">{user?.name}</h2>

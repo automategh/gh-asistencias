@@ -11,6 +11,7 @@ interface AuthContextType {
     user: User | null;
     loading: boolean;
     role: string | null;
+    profilePhotoUrl: string | null;
     loginWithMicrosoft: () => Promise<void>;
     loginWithEmailPassword: (email: string, password: string) => Promise<void>;
     registerWithEmailPassword: (data: RegisterFormData) => Promise<void>;
@@ -32,6 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [loading, setLoading] = useState(false);
     const [role, setRole] = useState<string | null>(null);
     const [user, setUser] = useState<User | null>(null);
+    const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
 
     useEffect(() => {
         if (!auth) {
@@ -77,6 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Escuchar cambios en el estado de autenticación
         const unsusbscribe = onAuthStateChanged(auth, (firebaseUser) => {
             setUser(firebaseUser);
+            setProfilePhotoUrl(firebaseUser?.photoURL ?? null);
             setLoading(false);
 
             if (firebaseUser) {
@@ -93,8 +96,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const handleLoginWithMicrosoft = async () => {
         setLoading(true);
         try {
-            await loginWithMicrosoft();
-            // onAuthStateChanged actualizará 'user' y el efecto anterior hará la redirección.
+            const result = await loginWithMicrosoft();
+
+            // Guardamos temporalmente la foto de perfil si viene desde Microsoft Graph
+            if (result.photoUrl) {
+                setProfilePhotoUrl(result.photoUrl);
+            } else if (result.user?.photoURL) {
+                setProfilePhotoUrl(result.user.photoURL);
+            }
+
+            // onAuthStateChanged actualizará 'user' y el efecto anterior sincronizará el resto.
         } finally {
             setLoading(false);
         }
@@ -153,6 +164,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         loading,
         role,
+        profilePhotoUrl,
         loginWithMicrosoft: handleLoginWithMicrosoft,
         loginWithEmailPassword: handleLoginWithEmailPassword,
         registerWithEmailPassword: handleRegisterWithEmailPassword,

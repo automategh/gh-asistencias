@@ -11,7 +11,7 @@ interface SidebarProps {
 
 export function Sidebar({ onCollapsedChange }: SidebarProps) {
 
-    const { user, logout, role } = useAuth()
+    const { user, logout, role, profilePhotoUrl } = useAuth()
 
     const location = useLocation()
 
@@ -139,8 +139,17 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                         className={`flex items-center gap-3 p-3 bg-muted/30 rounded-lg ${isCollapsed ? "lg:justify-center lg:p-3" : ""} cursor-pointer`}
                         onClick={() => setShowDbModal(true)}
                     >
-                        <div className="w-10 h-10 bg-linear-to-br from-secondary to-accent rounded-full flex items-center justify-center shrink-0">
-                            <UserCircle className="w-5 h-5 text-secondary-foreground" />
+                        <div className="w-10 h-10 rounded-full overflow-hidden border border-border bg-muted flex items-center justify-center shrink-0">
+                            {profilePhotoUrl ? (
+                                <img
+                                    src={profilePhotoUrl}
+                                    alt={user?.displayName ?? user?.email ?? "Foto de perfil"}
+                                    className="w-full h-full object-cover"
+                                    referrerPolicy="no-referrer"
+                                />
+                            ) : (
+                                <UserCircle className="w-5 h-5 text-secondary-foreground" />
+                            )}
                         </div>
                         <div
                             className={`flex-1 min-w-0 transition-all duration-300 overflow-hidden ${isCollapsed ? "lg:hidden" : "lg:block"}`}

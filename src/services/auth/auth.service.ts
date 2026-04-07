@@ -1,4 +1,4 @@
-import { createUserWithEmailAndPassword, OAuthProvider, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, OAuthProvider, type OAuthCredential, type User, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile } from "firebase/auth";
 import { auth, DATABASE_CCCI_URL, DATABASE_CCCR_URL, DATABASE_CEVP_URL, DEFAULT_DATABASE_URL, getDatabaseForUrl } from "../firebase";
 import { getDatabaseByRecinto, resolveDatabaseByEmail, type RecintoKey } from "@/lib/firebase/databaseResolver";
 import { get, ref, set } from "firebase/database";
@@ -38,6 +38,46 @@ const ALLOWED_DOMAINS = [
 
 
 /**
+ * Obtiene la foto de perfil del usuario autenticado en Microsoft
+ * usando Microsoft Graph y devuelve una data URL (base64) o null
+ * si no existe o no se puede leer.
+ *
+ * @param accessToken Token de acceso OAuth de Microsoft con scope User.Read.
+ */
+async function fetchMicrosoftProfilePhoto(accessToken: string): Promise<string | null> {
+    try {
+        const response = await fetch("https://graph.microsoft.com/v1.0/me/photo/$value", {
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+            },
+        });
+
+        if (!response.ok) {
+            console.warn("No se pudo obtener la foto de perfil desde Microsoft Graph", response.status, response.statusText);
+            return null;
+        }
+
+        const blob = await response.blob();
+
+        return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const result = typeof reader.result === "string" ? reader.result : null;
+                resolve(result);
+            };
+            reader.onerror = () => {
+                reject(reader.error ?? new Error("Error al leer el blob de la foto de perfil"));
+            };
+            reader.readAsDataURL(blob);
+        });
+    } catch (error) {
+        console.error("Error al obtener la foto de perfil desde Microsoft Graph:", error);
+        return null;
+    }
+}
+
+
+/**
  * Determina si el dominio de un correo electrónico está permitido.
  *
  * - La verificación es insensible a mayúsculas/minúsculas.
@@ -55,9 +95,11 @@ function isDomainAllowed(email: string | null): boolean {
 
 /** Inicia sesión con Microsoft utilizando Firebase Authentication.
  * Si el usuario es nuevo, crea una entrada en la base de datos en Realtime Database.
- * @returns Objeto con la información del usuario autenticado y el token de acceso.
+ * Además intenta obtener la foto de perfil desde Microsoft Graph y la devuelve
+ * como data URL (no se almacena en el perfil de Firebase para evitar límites de tamaño).
+ * @returns Objeto con la información del usuario autenticado y, si existe, la foto de perfil.
  */
-export const loginWithMicrosoft = async () => {
+export const loginWithMicrosoft = async (): Promise<{ user: User; photoUrl: string | null }> => {
     if (!auth) throw new Error('Firebase Auth no inicializado');
     try {
 
@@ -70,8 +112,21 @@ export const loginWithMicrosoft = async () => {
             throw new Error('Dominio de correo no permitido.');
         }
 
-        // Informacion del usuario autenticado
+        // Información del usuario autenticado
         const user = result.user;
+
+        // Intentar obtener la foto de perfil desde Microsoft Graph de forma opcional
+        let resolvedPhotoUrl: string | null = null;
+        try {
+            const credential = OAuthProvider.credentialFromResult(result) as OAuthCredential | null;
+            const accessToken = credential?.accessToken ?? null;
+
+            if (accessToken) {
+                resolvedPhotoUrl = await fetchMicrosoftProfilePhoto(accessToken);
+            }
+        } catch (photoError) {
+            console.warn("No se pudo obtener la foto de perfil desde Microsoft:", photoError);
+        }
 
         // Resolver la base de datos según el email del usuario
         const { databaseUrl, recinto } = resolveDatabaseByEmail(user.email ?? null);
@@ -127,7 +182,7 @@ export const loginWithMicrosoft = async () => {
             });
         }
 
-        return { user };
+        return { user, photoUrl: resolvedPhotoUrl };
     } catch (error) {
         console.error("Error durante la autenticación con Microsoft:", error);
         throw error;
