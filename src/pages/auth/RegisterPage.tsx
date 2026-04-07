@@ -98,7 +98,6 @@ function RegisterPage() {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         if (!emailRegex.test(data.email)) return "El correo no es válido."
         if (!data.identify.trim()) return "La identificación es obligatoria.";
-        if (!data.department.trim()) return "El área es obligatoria.";
         if (!data.cargo.trim()) return "El cargo es obligatorio.";
         if (!data.recint.trim()) return "El recinto es obligatorio.";
         if (!data.worksAtHeroica && !data.companyName.trim()) return "La empresa es obligatoria si no trabajas en Grupo Heroica.";
@@ -239,9 +238,9 @@ function RegisterPage() {
                                     required
                                 >
                                     <option value="" disabled>Selecciona tu recinto</option>
-                                    <option value="ccci">CCCI</option>
-                                    <option value="cevp">CEVP</option>
-                                    <option value="cccr">CCCR</option>
+                                    <option value="ccci">Centro de convenciones Cartagena de Indias</option>
+                                    <option value="cevp">Centro de eventos Valle del Pacifico</option>
+                                    <option value="cccr">Centro de convenciones Costa Rica</option>
                                     <option value="corporativo">Corporativo</option>
                                 </select>
                                 <ChevronDown className="absolute right-3 top-3.5 w-5 h-5 text-muted-foreground pointer-events-none" />
