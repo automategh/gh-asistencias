@@ -48,7 +48,7 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
         { icon: Calendar, name: "Actividades", path: "/meets", roles: ["Admin", "Lider", "User"] },
         { icon: User, name: "Perfil", path: "/configure-profile", roles: ["Admin", "Lider", "User"] },
         { icon: ChartColumnBig, name: "Reportes", path: "/reports", roles: ["Admin", "HR", "Lider"] },
-        { icon: Building2Icon, name: "Departamentos", path: "/departments", roles: ["Admin", "HR"] },
+        { icon: Building2Icon, name: "Areas", path: "/departments", roles: ["Admin", "HR"] },
         { icon: ClipboardList, name: "Encuestas", path: "/survey", roles: ["Admin", "HR"] },
         { icon: UserCog, name: "Permisos", path: "/permissions", roles: ["Admin"] },
     ]

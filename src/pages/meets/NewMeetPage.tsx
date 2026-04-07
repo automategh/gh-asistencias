@@ -219,7 +219,7 @@ function NewMeetPage() {
         if (groupBy === 'none') return null
         const groups: Record<string, UserItem[]> = {}
         filteredUsers.forEach(u => {
-            const departmentKey = u.department && u.department.trim().length > 0 ? u.department.trim() : 'Sin departamento'
+            const departmentKey = u.department && u.department.trim().length > 0 ? u.department.trim() : 'Sin área'
             const key = groupBy === 'recinto'
                 ? u.recinto
                 : groupBy === 'department'
@@ -464,8 +464,8 @@ function NewMeetPage() {
                                             >
                                                 <option value="none">Sin agrupación</option>
                                                 <option value="recinto">Recinto</option>
-                                                <option value="department">Departamento</option>
-                                                <option value="recintoDepartment">Recinto y departamento</option>
+                                                <option value="department">Área</option>
+                                                <option value="recintoDepartment">Recinto y área</option>
                                             </select>
                                         </div>
                                     </div>
@@ -503,8 +503,8 @@ function NewMeetPage() {
                                                                 <div>
                                                                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                                                         {groupBy === 'recinto' && `Recinto: ${groupKey}`}
-                                                                        {groupBy === 'department' && `Departamento: ${groupKey}`}
-                                                                        {isRecintoDepartment && displayRecinto && displayDepartment && `Recinto: ${displayRecinto} · Departamento: ${displayDepartment}`}
+                                                                        {groupBy === 'department' && `Área: ${groupKey}`}
+                                                                        {isRecintoDepartment && displayRecinto && displayDepartment && `Recinto: ${displayRecinto} · Área: ${displayDepartment}`}
                                                                     </p>
                                                                     {(groupBy === 'department' || isRecintoDepartment) && (
                                                                         <p className="text-[11px] text-muted-foreground">

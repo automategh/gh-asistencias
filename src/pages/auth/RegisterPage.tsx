@@ -98,7 +98,7 @@ function RegisterPage() {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
         if (!emailRegex.test(data.email)) return "El correo no es válido."
         if (!data.identify.trim()) return "La identificación es obligatoria.";
-        if (!data.department.trim()) return "El departamento es obligatorio.";
+        if (!data.department.trim()) return "El área es obligatoria.";
         if (!data.cargo.trim()) return "El cargo es obligatorio.";
         if (!data.recint.trim()) return "El recinto es obligatorio.";
         if (!data.worksAtHeroica && !data.companyName.trim()) return "La empresa es obligatoria si no trabajas en Grupo Heroica.";
@@ -187,7 +187,7 @@ function RegisterPage() {
                             </div>
                         </div>
                         <div>
-                            <label className="block text-sm font-semibold text-foreground mb-2">Departamento *</label>
+                            <label className="block text-sm font-semibold text-foreground mb-2">Área *</label>
 
                             <div className="relative">
                                 <Building2 className="absolute left-3 top-3.5 w-5 h-5 text-muted-foreground pointer-events-none" />
@@ -199,7 +199,7 @@ function RegisterPage() {
                                     className="w-full bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 focus:border-transparent hover:bg-white dark:hover:bg-slate-800 pl-10 pr-10 appearance-none cursor-pointer py-3"
                                     required
                                 >
-                                    <option value="" disabled>Selecciona tu departamento</option>
+                                    <option value="" disabled>Selecciona tu área</option>
                                     {departaments.map((dept) => (
                                         <option key={dept} value={dept}>{dept}</option>
                                     ))}

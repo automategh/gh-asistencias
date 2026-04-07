@@ -45,7 +45,7 @@ export default function DepartmentsPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          const message = err instanceof Error ? err.message : "No fue posible cargar los departamentos"
+          const message = err instanceof Error ? err.message : "No fue posible cargar las áreas"
           setError(message)
         }
       } finally {
@@ -57,7 +57,7 @@ export default function DepartmentsPage() {
 
     load().catch(() => {
       if (!cancelled) {
-        setError("No fue posible cargar los departamentos")
+        setError("No fue posible cargar los areas")
         setLoading(false)
       }
     })
@@ -83,7 +83,7 @@ export default function DepartmentsPage() {
       setDepartaments(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
       setNewName("")
     } catch (err) {
-      const message = err instanceof Error ? err.message : "No fue posible crear el departamento"
+      const message = err instanceof Error ? err.message : "No fue posible crear el área"
       setError(message)
     } finally {
       setSavingNew(false)
@@ -110,7 +110,7 @@ export default function DepartmentsPage() {
       setDepartaments(prev => prev.map(d => (d.id === editing.id ? { ...d, name: trimmed } : d)).sort((a, b) => a.name.localeCompare(b.name)))
       cancelEdit()
     } catch (err) {
-      const message = err instanceof Error ? err.message : "No fue posible actualizar el departamento"
+      const message = err instanceof Error ? err.message : "No fue posible actualizar el área"
       setError(message)
     } finally {
       setSavingEdit(false)
@@ -131,7 +131,7 @@ export default function DepartmentsPage() {
         cancelEdit()
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "No fue posible eliminar el departamento"
+      const message = err instanceof Error ? err.message : "No fue posible eliminar el área"
       setError(message)
     } finally {
       setDeletingId(null)
@@ -143,8 +143,8 @@ export default function DepartmentsPage() {
       <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
         <header className="bg-card border-b border-border sticky top-0 z-20 backdrop-blur-xl">
           <nav className="max-w-4xl mx-auto px-6 py-4">
-            <h1 className="text-3xl font-bold mt-4 text-foreground">Departamentos</h1>
-            <p className="text-sm text-muted-foreground">Administra los departamentos del recinto actual.</p>
+            <h1 className="text-3xl font-bold mt-4 text-foreground">Áreas</h1>
+            <p className="text-sm text-muted-foreground">Administra las áreas del recinto actual.</p>
           </nav>
         </header>
 
@@ -153,13 +153,13 @@ export default function DepartmentsPage() {
           {error && <div className="p-3 text-sm text-red-600 border border-red-300 rounded">{error}</div>}
 
           <section className="bg-card rounded-2xl border border-border p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Nuevo departamento</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-4">Nueva área</h2>
             <form onSubmit={handleCreate} className="flex flex-col md:flex-row gap-3 items-stretch md:items-center">
               <input
                 type="text"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="Nombre del departamento"
+                placeholder="Nombre del área"
                 className="flex-1 px-4 py-2 bg-input border border-border rounded-lg text-sm"
               />
               <button
@@ -175,7 +175,7 @@ export default function DepartmentsPage() {
           <section className="bg-card rounded-2xl border border-border p-6">
             <h2 className="text-lg font-semibold text-foreground mb-4">Listado</h2>
             {departaments.length === 0 && !loading ? (
-              <p className="text-sm text-muted-foreground">Aún no hay departamentos.</p>
+              <p className="text-sm text-muted-foreground">Aún no hay áreas.</p>
             ) : (
               <ul className="space-y-3">
                 {departaments.map((dep) => {

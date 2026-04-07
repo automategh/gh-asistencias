@@ -559,7 +559,7 @@ function ReportTrainingPlanPage() {
                                     </div>
                                 </div>
                                 <div className="flex-1 min-w-50">
-                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Área / Departamento</label>
+                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Área</label>
                                     <div className="relative">
                                         <select
                                             className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-[#191c1c] appearance-none focus:ring-2 focus:ring-primary-container"
@@ -725,7 +725,7 @@ function ReportTrainingPlanPage() {
                                     ) : (
                                         (() => {
                                             /**
-                                             * Determina el número máximo de capacitaciones entre todos los departamentos
+                                             * Determina el número máximo de capacitaciones entre todos los área
                                              * para poder escalar las barras de distribución de forma proporcional.
                                              */
                                             const maxTrainings = departmentTrainingCounts.reduce<number>((max, item) => {
