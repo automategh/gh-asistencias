@@ -13,10 +13,11 @@ interface RoleRouteProps {
  * Debe usarse dentro de rutas ya protegidas por autenticación (ProtectedRoute).
  */
 export function RoleRoute({ allowed, children }: RoleRouteProps): JSX.Element {
-  const { role, loading } = useAuth()
+  const { role, loading, user } = useAuth()
   const location = useLocation()
 
-  if (loading) {
+  // Mientras se resuelve la sesión o el rol, no redirigimos todavía
+  if (loading || (user && role === null)) {
     return <div className="p-4 text-sm text-muted-foreground">Verificando permisos…</div>
   }
 
