@@ -1,6 +1,6 @@
 import { useAuth } from '@/context/AuthContext';
 import { get, ref } from 'firebase/database';
-import { Building2, Eye, EyeOff, Lock, Mail, Shield, User, Save, IdCardIcon, Briefcase, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Lock, Save, Loader2, IdCard, LucideFolderTree, AtSign, KeyRound, PenLine } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import type { UserProfile } from '@/types/user'
 import { useEffect, useState } from 'react'
@@ -203,310 +203,98 @@ function ConfigurationProfilePage() {
             .charAt(0)
             .toUpperCase() || ' '
 
-    const completePerfil = user && user.identify && user.department && user.immediateBoss;
-
     const companyLabel: string = (user?.companyName && user.companyName.trim().length > 0)
         ? user.companyName
         : 'Grupo Heroica';
 
+    const getRoleDescription = (role: string | undefined | null): string => {
+        if (!role) {
+            return 'Usuario estándar del sistema con acceso a sus propias asistencias y capacitaciones.';
+        }
+
+        switch (role) {
+            case 'Admin':
+                return 'Administrador de sistema con permisos globales. Responsable de la gestión de departamentos y reportes mensuales.';
+            case 'HR':
+                return 'Rol de Talento Humano enfocado en la administración de personal, seguimiento de capacitaciones y análisis de reportes.';
+            case 'Lider':
+                return 'Líder de equipo encargado de gestionar las asistencias y capacitaciones de su grupo de colaboradores.';
+            case 'User':
+            default:
+                return 'Colaborador que participa en las actividades de formación y registra sus asistencias.';
+        }
+    };
+
     return (
         <Layout>
             <div className="bg-linear-to-br from-background via-muted/5 to-background">
-                <header className="bg-card border-b border-border sticky top-0 z-10 backdrop-blur-xl">
-                    <nav className="max-w-4xl mx-auto px-6 py-4">
-                        <h1 className="text-3xl font-bold mt-4 text-foreground">Configuración del perfil</h1>
+                <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs">
+                    <nav className='px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto'>
+                        <h1 className="text-3xl font-bold tracking-tight">Configuración del perfil</h1>
+                        <p className="font-body text-on-surface-variant text-sm mt-1">Gestiona tu información personal y credenciales de acceso.</p>
                     </nav>
                 </header>
 
-
-                <div className="max-w-4xl mx-auto p-6 mt-8">
-                    {isMyDatabase === false && (
-                        <div className="mb-6 rounded-2xl border border-red-300 bg-red-50 text-red-700 p-4">
-                            <p className="text-sm">
-                                No estás en tu base de datos. Por lo tanto, no podrás ver tu información ni editar tu perfil en esta base.
-                            </p>
-                        </div>
-                    )}
-                    {/* Profile Card */}
-                    <div className="bg-card rounded-2xl border border-border p-8 mb-6">
-                        <div className="flex items-center gap-6 mb-8 pb-8 border-b border-border">
-                            <div className="w-24 h-24 rounded-full overflow-hidden border border-border bg-muted flex items-center justify-center text-4xl font-bold text-secondary-foreground">
-                                {profilePhotoUrl ? (
-                                    <img
-                                        src={profilePhotoUrl}
-                                        alt={firebaseUser?.displayName ?? user?.name ?? firebaseUser?.email ?? "Foto de perfil"}
-                                        className="w-full h-full object-cover"
-                                        referrerPolicy="no-referrer"
-                                    />
-                                ) : (
-                                    <span>{initialLetter}</span>
-                                )}
+                <div className='px-4 md:px-12 py-10 md:py-16 space-y-10'>
+                    <div className="max-w-7xl md:mx-auto">
+                        {isMyDatabase === false && (
+                            <div className="mb-6 rounded-2xl border border-red-300 bg-red-50 text-red-700 p-4">
+                                <p className="text-sm">
+                                    No estás en tu base de datos. Por lo tanto, no podrás ver tu información ni editar tu perfil en esta base.
+                                </p>
+                            </div>
+                        )}
+                        <section className='bg-[#f3f4f3] rounded-3xl p-8 mb-8 flex flex-col md:flex-row items-center md:items-start gap-8'>
+                            <div className="relative group">
+                                <div className="w-24 h-24 rounded-full overflow-hidden border border-border bg-secondary flex items-center justify-center text-4xl font-bold text-secondary-foreground">
+                                    {profilePhotoUrl ? (
+                                        <img
+                                            src={profilePhotoUrl}
+                                            alt={firebaseUser?.displayName ?? user?.name ?? firebaseUser?.email ?? "Foto de perfil"}
+                                            className="w-full h-full object-cover"
+                                            referrerPolicy="no-referrer"
+                                        />
+                                    ) : (
+                                        <span>{initialLetter}</span>
+                                    )}
+                                </div>
                             </div>
                             <div className="grow">
                                 <h2 className="text-3xl font-bold text-foreground mb-2">{user?.name}</h2>
                                 <div className="flex items-center gap-2 text-muted-foreground">
-                                    <Shield className="w-4 h-4" />
-                                    <span className="capitalize font-medium">{user?.role}</span>
+                                    <span className="text-xs px-2.5 py-1 rounded-lg bg-secondary-light/15 text-secondary">{user?.role === 'HR' ? 'Talento Humano' : user?.role}</span>
+                                    <div className='flex gap-2 items-center justify-center'>
+                                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                                        <span className="text-xs">Activo</span>
+                                    </div>
                                 </div>
+                                <p className="mt-3 text-sm text-muted-foreground max-w-xl">
+                                    {getRoleDescription(user?.role ?? null)}
+                                </p>
                             </div>
-                            {!isEditing && (
-                                <button
-                                    onClick={() => {
-                                        setFormData({
-                                            name: user?.name || '',
-                                            department: user?.department || '',
-                                            identify: user?.identify || '',
-                                            immediateBoss: user?.immediateBoss || '',
-                                            cargo: user?.cargo || '',
-                                        })
-                                        setIsEditing(true)
-                                    }}
-                                    disabled={isLocked}
-                                    title={isLocked ? 'No puedes editar tu perfil en esta base' : undefined}
-                                    className={`px-6 py-3 font-semibold rounded-lg transition-all duration-300 ${isLocked ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary text-primary-foreground hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5'}`}
-                                >
-                                    Editar Perfil
-                                </button>
-                            )}
-                        </div>
+                            <div className="md:ml-auto flex gap-3 self-center md:self-start">
 
-                        {/* Information Fields */}
-                        <div className="space-y-6">
-                            {/* Name */}
-                            <div>
-                                <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                                    <User className="w-4 h-4 text-primary" />
-                                    Nombre Completo
-                                </label>
-                                {isEditing ? (
-                                    <input
-                                        disabled
-                                        type="text"
-                                        name="name"
-                                        value={user?.name || ''}
-                                        onChange={handleInputChange}
-                                        className="w-full px-4 py-3 bg-muted/30 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
-                                    />
-                                ) : (
-                                    <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">{user?.name}</div>
-                                )}
-                            </div>
-
-
-                            {/* Identificación */}
-                            <div>
-                                <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                                    <IdCardIcon className="w-4 h-4 text-primary" />
-                                    Identificación
-                                </label>
-                                {isEditing ? (
-                                    <input
-                                        disabled={isLocked}
-                                        type="text"
-                                        name="identify"
-                                        value={formData.identify || ""}
-                                        onChange={handleInputChange}
-                                        placeholder="Ej: 123456789, 00000000"
-                                        className={`w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 ${isLocked ? 'bg-muted/30 text-muted-foreground' : 'focus:ring-primary text-foreground'}`}
-                                    />
-                                ) : (
-                                    <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
-                                        {user?.identify || "No especificado"}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Jefe Inmediato */}
-                            <div>
-                                <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                                    <User className="w-4 h-4 text-primary" />
-                                    Jefe Inmediato
-                                </label>
-                                {isEditing ? (
-                                    <select
-                                        disabled={isLocked}
-                                        name="immediateBoss"
-                                        value={formData.immediateBoss || ""}
-                                        onChange={handleInputChange}
-                                        className={`w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 ${isLocked ? 'bg-muted/30 text-muted-foreground' : 'focus:ring-primary text-foreground'}`}
-                                    >
-                                        <option value="">Selecciona un líder</option>
-                                        {leaders.map((leader, index) => (
-                                            <option key={index} value={leader}>
-                                                {leader}
-                                            </option>
-                                        ))}
-                                    </select>
-                                ) : (
-                                    <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
-                                        {user?.immediateBoss || "No especificado"}
-                                    </div>
-                                )}
-                            </div>
-                            {/* Email (Read Only) */}
-                            <div>
-                                <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                                    <Mail className="w-4 h-4 text-primary" />
-                                    Correo Electrónico
-                                </label>
-                                <div className="px-4 py-3 bg-muted/30 border border-border rounded-lg text-muted-foreground">
-                                    {user?.email}
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">El correo no puede ser modificado</p>
-                            </div>
-
-                            {/* Department */}
-                            <div>
-                                <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                                    <Building2 className="w-4 h-4 text-primary" />
-                                    Area
-                                </label>
-                                {isEditing ? (
-                                    <select
-                                        disabled={isLocked}
-                                        name="department"
-                                        value={formData.department || ""}
-                                        onChange={handleInputChange}
-                                        className={`w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 ${isLocked ? 'bg-muted/30 text-muted-foreground' : 'focus:ring-primary text-foreground'}`}
-                                    >
-                                        <option value="">Selecciona un area</option>
-                                        {departaments.map((dep) => (
-                                            <option key={dep.id} value={dep.name}>{dep.name}</option>
-                                        ))}
-                                    </select>
-                                ) : (
-                                    <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
-                                        {user?.department || "No especificado"}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Cargo */}
-                            <div>
-                                <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                                    <Briefcase className="w-4 h-4 text-primary" />
-                                    Cargo
-                                </label>
-                                {isEditing ? (
-                                    <input
-                                        disabled={isLocked}
-                                        type="text"
-                                        name="cargo"
-                                        value={formData.cargo || ""}
-                                        onChange={handleInputChange}
-                                        placeholder="Ej: Analista, Coordinador, Gerente"
-                                        className={`w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 ${isLocked ? 'bg-muted/30 text-muted-foreground' : 'focus:ring-primary text-foreground'}`}
-                                    />
-                                ) : (
-                                    <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
-                                        {user?.cargo || "No especificado"}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Empresa */}
-                            <div>
-                                <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                                    <Briefcase className="w-4 h-4 text-primary" />
-                                    Empresa donde trabajas
-                                </label>
-                                <div className="px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground">
-                                    {companyLabel}
-                                </div>
-                            </div>
-
-                            {/* Firma */}
-                            <div className="space-y-3">
-                                <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-primary/40 text-[10px] text-primary font-semibold">
-                                        F
-                                    </span>
-                                    Firma manuscrita
-                                </label>
-
-                                {user?.signatureUrl || signature ? (
-                                    <div>
-                                        <p className="text-xs text-muted-foreground mb-1">Firma actual registrada:</p>
-                                        <div className="inline-block border border-border bg-white rounded-md px-3 py-2">
-                                            <img
-                                                src={signature || user?.signatureUrl || ''}
-                                                alt="Firma registrada"
-                                                className="max-h-24 object-contain"
-                                            />
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <p className="text-xs text-muted-foreground">Aún no has registrado tu firma.</p>
-                                )}
-
-                                {isEditing && !isLocked && (
-                                    <div className="space-y-3">
-                                        <p className="text-xs text-muted-foreground">
-                                            Puedes dibujar tu firma o adjuntar una imagen. Los cambios se guardan al pulsar
-                                            {" "}
-                                            <span className="font-semibold">"Guardar Cambios"</span>.
-                                        </p>
-
-                                        {!signature && (
-                                            <>
-                                                <SignaturePadCanvas
-                                                    height={160}
-                                                    disabled={false}
-                                                    onSave={(sig) => {
-                                                        setSignature(sig)
-                                                    }}
-                                                />
-
-                                                <div className="space-y-1">
-                                                    <p className="text-xs text-muted-foreground">O bien adjunta una imagen de tu firma (PNG, JPG, etc.):</p>
-                                                    <input
-                                                        type="file"
-                                                        accept="image/*"
-                                                        onChange={handleSignatureUpload}
-                                                        className="block w-full text-xs text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-border file:text-xs file:font-semibold file:bg-muted file:text-foreground hover:file:bg-muted/80"
-                                                    />
-                                                </div>
-                                            </>
-                                        )}
-
-                                        {signature && (
-                                            <Button
-                                                type="button"
-                                                onClick={() => {
-                                                    setSignature(null)
-                                                }}
-                                                className="text-xs"
-                                            >
-                                                Cambiar firma
-                                            </Button>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
-
-
-                            {/* Action Buttons */}
-                            {isEditing && (
-                                <div className="flex gap-4 pt-6">
+                                {!isEditing && (
                                     <button
-                                        onClick={handleSave}
-                                        disabled={isLocked || savingProfile}
-                                        title={isLocked ? 'No puedes guardar cambios en esta base' : undefined}
-                                        className={`flex-1 px-6 py-3 font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-2 ${isLocked ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary text-primary-foreground hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5'}`}
+                                        onClick={() => {
+                                            setFormData({
+                                                name: user?.name || '',
+                                                department: user?.department || '',
+                                                identify: user?.identify || '',
+                                                immediateBoss: user?.immediateBoss || '',
+                                                cargo: user?.cargo || '',
+                                            })
+                                            setIsEditing(true)
+                                        }}
+                                        disabled={isLocked}
+                                        title={isLocked ? 'No puedes editar tu perfil en esta base' : undefined}
+                                        className={`px-8 py-2.5 rounded-full font-medium transition-all duration-300 ${isLocked ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary text-primary-foreground hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5'}`}
                                     >
-                                        {savingProfile ? (
-                                            <>
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                                Guardando cambios...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Save className="w-5 h-5" />
-                                                Guardar Cambios
-                                            </>
-                                        )}
+                                        Editar Perfil
                                     </button>
+                                )}
+
+                                {isEditing && (
                                     <button
                                         onClick={() => {
                                             setIsEditing(false)
@@ -518,119 +306,380 @@ function ConfigurationProfilePage() {
                                                 cargo: user?.cargo || "",
                                             })
                                         }}
-                                        className="flex-1 px-6 py-3 bg-transparent border-2 border-border text-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-muted"
+                                        className="flex-1 px-8 py-2.5 bg-muted hover:bg-muted-light text-foreground font-medium rounded-full transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
                                     >
                                         Cancelar
-                                    </button>
+                                    </button>)}
+                            </div>
+                        </section>
+
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            <div className="lg:col-span-2 space-y-8">
+                                <div className="bg-white rounded-3xl p-8 shadow-[0_20px_20px_rgba(25,28,28,0.02)]">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-900">
+                                            <IdCard className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-bold">Información Personal</h3>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                                        <div>
+                                            <label className="text-xs font-semibold text-muted-foreground mb-1 block">
+                                                Nombre completo
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={user?.name || ''}
+                                                disabled
+                                                className="w-full px-3 py-2 text-sm bg-muted/40 rounded-lg text-foreground cursor-not-allowed"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-semibold text-muted-foreground mb-1 block">
+                                                Identificación
+                                            </label>
+                                            <input
+                                                type="text"
+                                                name="identify"
+                                                value={isEditing ? (formData.identify || '') : (user?.identify || '')}
+                                                disabled={!isEditing || isLocked}
+                                                onChange={handleInputChange}
+                                                className={`w-full px-3 py-2 text-sm bg-muted/40 rounded-lg text-foreground ${!isEditing || isLocked ? 'cursor-not-allowed' : ''}`}
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
-                            )}
+
+                                <div className="bg-white rounded-3xl p-8 shadow-[0_20px_20px_rgba(25,28,28,0.02)]">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-900">
+                                            <LucideFolderTree className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-bold">Estructura organizacional</h3>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                                        <div>
+                                            <label className="text-xs font-semibold text-muted-foreground mb-1 block">
+                                                Área
+                                            </label>
+                                            <select
+                                                name="department"
+                                                value={isEditing ? (formData.department || '') : (user?.department || '')}
+                                                disabled={!isEditing || isLocked}
+                                                onChange={handleInputChange}
+                                                className={`w-full px-3 py-2 text-sm bg-muted/40 rounded-lg text-foreground ${!isEditing || isLocked ? 'cursor-not-allowed' : ''}`}
+                                            >
+                                                <option value="">Selecciona un área</option>
+                                                {departaments.map((dep) => (
+                                                    <option key={dep.id} value={dep.name}>
+                                                        {dep.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-semibold text-muted-foreground mb-1 block">
+                                                Cargo
+                                            </label>
+                                            <input
+                                                type="text"
+                                                name="cargo"
+                                                value={isEditing ? (formData.cargo || '') : (user?.cargo || '')}
+                                                disabled={!isEditing || isLocked}
+                                                onChange={handleInputChange}
+                                                className={`w-full px-3 py-2 text-sm bg-muted/40 rounded-lg text-foreground ${!isEditing || isLocked ? 'cursor-not-allowed' : ''}`}
+                                            />
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="text-xs font-semibold text-muted-foreground mb-1 block">
+                                                Jefe inmediato
+                                            </label>
+                                            {isEditing ? (
+                                                <select
+                                                    name="immediateBoss"
+                                                    value={formData.immediateBoss || ""}
+                                                    disabled={!isEditing || isLocked}
+                                                    onChange={handleInputChange}
+                                                    className={`w-full px-3 py-2 text-sm bg-muted/40 rounded-lg text-foreground ${!isEditing || isLocked ? 'cursor-not-allowed' : ''}`}
+                                                >
+                                                    <option value="">Selecciona un líder</option>
+                                                    {leaders.map((leader) => (
+                                                        <option key={leader} value={leader}>
+                                                            {leader}
+                                                        </option>
+                                                    ))}
+                                                </select>) : (
+                                                <div className={`w-full px-3 py-2 text-sm bg-muted/40 rounded-lg text-foreground ${!isEditing || isLocked ? 'cursor-not-allowed' : ''}`}>
+                                                    {user?.immediateBoss || 'No asignado'}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="text-xs font-semibold text-muted-foreground mb-1 block">
+                                                Dónde labora
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={companyLabel}
+                                                disabled
+                                                className="w-full px-3 py-2 text-sm bg-muted/40 rounded-lg text-foreground cursor-not-allowed"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-3xl p-8 shadow-[0_20px_20px_rgba(25,28,28,0.02)]">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-900">
+                                            <AtSign className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-bold">Contacto</h3>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                                        <div className='md:col-span-2'>
+                                            <label className="text-xs font-semibold text-muted-foreground mb-1 block">
+                                                Correo electrónico
+                                            </label>
+                                            <input
+                                                type="email"
+                                                value={user?.email || ''}
+                                                disabled
+                                                className="w-full px-3 py-2 text-sm bg-muted/40 rounded-lg text-foreground cursor-not-allowed"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-3xl p-8 shadow-[0_20px_20px_rgba(25,28,28,0.02)]">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-900">
+                                            <PenLine className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-bold">Firma manuscrita</h3>
+                                            <p className="text-xs text-muted-foreground">Visualiza tu firma registrada y accede rápidamente a su gestión.</p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-2">
+                                        <div className="inline-block border border-border bg-white rounded-md px-3 py-2 min-h-18 min-w-40 items-center justify-center">
+                                            {user?.signatureUrl || signature ? (
+                                                <img
+                                                    src={signature || user?.signatureUrl || ''}
+                                                    alt="Firma registrada"
+                                                    className="max-h-16 object-contain"
+                                                />
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground">Aún no has registrado tu firma.</span>
+                                            )}
+                                        </div>
+
+                                        {isEditing && !isLocked && (
+                                            <div className="space-y-3">
+                                                <p className="text-xs text-muted-foreground">
+                                                    Puedes dibujar tu firma o adjuntar una imagen. Los cambios se guardan al pulsar
+                                                    {" "}
+                                                    <span className="font-semibold">"Guardar Cambios"</span>.
+                                                </p>
+
+                                                {!signature && (
+                                                    <>
+                                                        <SignaturePadCanvas
+                                                            height={160}
+                                                            disabled={false}
+                                                            onSave={(sig) => {
+                                                                setSignature(sig)
+                                                            }}
+                                                        />
+
+                                                        <div className="space-y-1">
+                                                            <p className="text-xs text-muted-foreground">O bien adjunta una imagen de tu firma (PNG, JPG, etc.):</p>
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                onChange={handleSignatureUpload}
+                                                                className="block w-full text-xs text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-border file:text-xs file:font-semibold file:bg-muted file:text-foreground hover:file:bg-muted/80"
+                                                            />
+                                                        </div>
+                                                    </>
+                                                )}
+
+                                                {signature && (
+                                                    <Button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSignature(null)
+                                                        }}
+                                                        className="text-xs"
+                                                    >
+                                                        Cambiar firma
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-8">
+                                <div className="bg-[#1b3022] text-white rounded-3xl p-8 overflow-hidden relative">
+
+                                    <div className="absolute -right-10 -top-10 w-40 h-40 bg-emerald-800/30 rounded-full blur-3xl"></div>
+                                    <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-emerald-950/50 rounded-full blur-3xl"></div>
+                                    <h3 className="text-xl font-bold mb-4 relative z-10">Seguridad de la Cuenta</h3>
+
+                                    {isEmailPasswordUser ? (
+                                        <>
+                                            <p className="text-[#c8e3d2] text-sm mb-6 relative z-10">
+                                                Mantén tu cuenta protegida cambiando tu contraseña periódicamente.
+                                            </p>
+
+                                            <div className="space-y-4 relative z-10">
+                                                <div>
+                                                    <label className="text-xs font-semibold text-emerald-50 mb-2 flex items-center gap-2">
+                                                        <Lock className="w-4 h-4" />
+                                                        Contraseña actual
+                                                    </label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type={showPwd.current ? 'text' : 'password'}
+                                                            name="current"
+                                                            value={passwordForm.current}
+                                                            onChange={handlePasswordFieldChange}
+                                                            className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-sm text-white placeholder:text-emerald-100/60 pr-10 focus:outline-none focus:ring-2 focus:ring-emerald-400/80"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowPwd(prev => ({ ...prev, current: !prev.current }))}
+                                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-100"
+                                                            aria-label="Mostrar/ocultar contraseña actual"
+                                                        >
+                                                            {showPwd.current ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-xs font-semibold text-emerald-50 mb-2 flex items-center gap-2">
+                                                        <Lock className="w-4 h-4" />
+                                                        Nueva contraseña
+                                                    </label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type={showPwd.next ? 'text' : 'password'}
+                                                            name="next"
+                                                            value={passwordForm.next}
+                                                            onChange={handlePasswordFieldChange}
+                                                            className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-sm text-white placeholder:text-emerald-100/60 pr-10 focus:outline-none focus:ring-2 focus:ring-emerald-400/80"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowPwd(prev => ({ ...prev, next: !prev.next }))}
+                                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-100"
+                                                            aria-label="Mostrar/ocultar nueva contraseña"
+                                                        >
+                                                            {showPwd.next ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <label className="text-xs font-semibold text-emerald-50 mb-2 flex items-center gap-2">
+                                                        <Lock className="w-4 h-4" />
+                                                        Confirmar nueva contraseña
+                                                    </label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type={showPwd.confirm ? 'text' : 'password'}
+                                                            name="confirm"
+                                                            value={passwordForm.confirm}
+                                                            onChange={handlePasswordFieldChange}
+                                                            className="w-full px-3 py-2 rounded-lg bg-white/10 border border-white/20 text-sm text-white placeholder:text-emerald-100/60 pr-10 focus:outline-none focus:ring-2 focus:ring-emerald-400/80"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowPwd(prev => ({ ...prev, confirm: !prev.confirm }))}
+                                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-100"
+                                                            aria-label="Mostrar/ocultar confirmación"
+                                                        >
+                                                            {showPwd.confirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={handleChangePassword}
+                                                    className="mt-2 w-full bg-white text-emerald-900 font-semibold rounded-xl py-3 flex items-center justify-center gap-2 hover:bg-emerald-50 transition-all"
+                                                >
+                                                    <KeyRound className="w-5 h-5" />
+                                                    Cambiar contraseña
+                                                </button>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <p className="text-[#c8e3d2] text-sm relative z-10">
+                                            Tu contraseña se administra desde tu cuenta corporativa. Si necesitas cambiarla,
+                                            hazlo directamente en el portal de tu organización.
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className='md:col-span-3'>
+
+                                {isEditing && (
+                                    <div className="flex justify-center items-center gap-4 pt-6">
+                                        <button
+                                            onClick={handleSave}
+                                            disabled={isLocked || savingProfile}
+                                            title={isLocked ? 'No puedes guardar cambios en esta base' : undefined}
+                                            className={`flex-1 px-8 py-2.5 font-medium rounded-full transition-all duration-300 flex items-center justify-center gap-2 ${isLocked ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-primary text-primary-foreground hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5'}`}
+                                        >
+                                            {savingProfile ? (
+                                                <>
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                    Guardando cambios...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Save className="w-5 h-5" />
+                                                    Guardar Cambios
+                                                </>
+                                            )}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsEditing(false)
+                                                setFormData({
+                                                    name: user?.name || "",
+                                                    department: user?.department || "",
+                                                    identify: user?.identify || "",
+                                                    immediateBoss: user?.immediateBoss || "",
+                                                    cargo: user?.cargo || "",
+                                                })
+                                            }}
+                                            className="flex-1 px-8 py-2.5 bg-muted hover:bg-muted-light text-foreground font-medium rounded-full transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
+                                        >
+                                            Cancelar
+                                        </button>
+                                    </div>
+                                )}
+
+                            </div>
                         </div>
                     </div>
-
-                    {/* Account Info */}
-                    <div className="bg-card rounded-2xl border border-border p-6">
-                        <h3 className="text-lg font-bold text-foreground mb-4">Información de Cuenta</h3>
-                        <div className="space-y-3 text-sm">
-                            <div className="flex justify-between">
-                                <span className="text-muted-foreground">Tipo de Usuario</span>
-                                <span className="font-medium text-foreground capitalize">{user?.role}</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="text-muted-foreground">Estado del Perfil</span>
-                                <span className={`font-medium ${completePerfil ? "text-green-500" : "text-red-500"}`}> {completePerfil ? "Completo" : "Incompleto"}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Change Password */}
-                    {isEmailPasswordUser && (
-                        <div className="bg-card rounded-2xl border border-border p-6 mt-6">
-                            <h3 className="text-lg font-bold text-foreground mb-4">Cambiar contraseña</h3>
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                                        <Lock className="w-4 h-4 text-primary" />
-                                        Contraseña actual
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type={showPwd.current ? 'text' : 'password'}
-                                            name="current"
-                                            value={passwordForm.current}
-                                            onChange={handlePasswordFieldChange}
-                                            className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground pr-12"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPwd(prev => ({ ...prev, current: !prev.current }))}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                                            aria-label="Mostrar/ocultar contraseña actual"
-                                        >
-                                            {showPwd.current ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                                        </button>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                                        <Lock className="w-4 h-4 text-primary" />
-                                        Nueva contraseña
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type={showPwd.next ? 'text' : 'password'}
-                                            name="next"
-                                            value={passwordForm.next}
-                                            onChange={handlePasswordFieldChange}
-                                            className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground pr-12"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPwd(prev => ({ ...prev, next: !prev.next }))}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                                            aria-label="Mostrar/ocultar nueva contraseña"
-                                        >
-                                            {showPwd.next ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                                        </button>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                                        <Lock className="w-4 h-4 text-primary" />
-                                        Confirmar nueva contraseña
-                                    </label>
-                                    <div className="relative">
-                                        <input
-                                            type={showPwd.confirm ? 'text' : 'password'}
-                                            name="confirm"
-                                            value={passwordForm.confirm}
-                                            onChange={handlePasswordFieldChange}
-                                            className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground pr-12"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPwd(prev => ({ ...prev, confirm: !prev.confirm }))}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                                            aria-label="Mostrar/ocultar confirmación"
-                                        >
-                                            {showPwd.confirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="pt-2">
-                                    <button
-                                        type="button"
-                                        onClick={handleChangePassword}
-                                        className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light"
-                                    >
-                                        Cambiar contraseña
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
+
+
             </div>
-        </Layout>
+        </Layout >
     )
 }
 
