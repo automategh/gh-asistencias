@@ -163,6 +163,7 @@ export const loginWithMicrosoft = async (): Promise<{ user: User; photoUrl: stri
                 active: true,
                 createdAt: new Date().toISOString(),
                 lastLogin: new Date().toISOString(),
+                photoUrl: resolvedPhotoUrl ?? null,
             });
         } else {
 
@@ -173,12 +174,13 @@ export const loginWithMicrosoft = async (): Promise<{ user: User; photoUrl: stri
 
             // Usuario existente - actualizar último login
             console.log(`🔄 Actualizando último login de ${user.email} en BD de ${recinto}`);
-            const existingData = snapshot.val();
+            const existingData = snapshot.val() as { photoUrl?: string | null; name?: string | null };
             await set(userRef, {
                 ...existingData,
                 lastLogin: new Date().toISOString(),
                 // Actualizar datos que puedan haber cambiado
                 name: user.displayName || existingData.name,
+                photoUrl: resolvedPhotoUrl ?? existingData.photoUrl ?? null,
             });
         }
 

@@ -42,6 +42,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
         }
 
+        interface DbUserPayload {
+            readonly role?: string | null;
+            readonly photoUrl?: string | null;
+        }
+
         // Función asyncrónica para obtener el rol
         const fetchUserRole = async (uid: string, email: string | null) => {
             try {
@@ -62,8 +67,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const snapshot = await get(userRef);
 
                 if (snapshot.exists()) {
-                    const data = snapshot.val();
-                    setRole(data.role ?? "User");
+                    const data = snapshot.val() as DbUserPayload | null;
+
+                    if (data) {
+                        setRole(data.role ?? "User");
+
+                        if (typeof data.photoUrl === "string" && data.photoUrl.trim().length > 0) {
+                            setProfilePhotoUrl(data.photoUrl);
+                        }
+                    } else {
+                        setRole("User");
+                    }
                 } else {
                     // Usuario autenticado pero sin registro en esta BD
                     // Asignar rol por defecto "User" para permitir acceso básico

@@ -29,6 +29,7 @@ export interface UserProfile {
   readonly companyName?: string | null
   readonly cargo?: string | null
   readonly signatureUrl?: string | null
+    readonly photoUrl?: string | null
 }
 
 import type { RecintoKey } from "@/lib/firebase/databaseResolver"
