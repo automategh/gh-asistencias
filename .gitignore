@@ -23,7 +23,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-.firebase
 .firebase/*
+.firebase*
+.firebase
+.github/*
 
 .github/instructions/*
