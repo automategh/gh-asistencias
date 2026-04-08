@@ -43,10 +43,10 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
     }
 
     const links = [
-        { icon: LayoutDashboard, name: "Dashboard", path: "/", roles: ["Admin", "Lider", "User"] },
-        { icon: PlusCircleIcon, name: "Nueva Actividad", path: "/new-meeting", roles: ["Admin", "Lider"] },
-        { icon: Calendar, name: "Actividades", path: "/meets", roles: ["Admin", "Lider", "User"] },
-        { icon: User, name: "Perfil", path: "/configure-profile", roles: ["Admin", "Lider", "User"] },
+        { icon: LayoutDashboard, name: "Dashboard", path: "/", roles: ["Admin", "Lider", "User", "HR"] },
+        { icon: PlusCircleIcon, name: "Nueva Actividad", path: "/new-meeting", roles: ["Admin", "Lider", "HR"] },
+        { icon: Calendar, name: "Actividades", path: "/meets", roles: ["Admin", "Lider", "User", "HR"] },
+        { icon: User, name: "Perfil", path: "/configure-profile", roles: ["Admin", "Lider", "User", "HR"] },
         { icon: ChartColumnBig, name: "Reportes", path: "/reports", roles: ["Admin", "HR", "Lider"] },
         { icon: Building2Icon, name: "Areas", path: "/departments", roles: ["Admin", "HR"] },
         { icon: ClipboardList, name: "Encuestas", path: "/survey", roles: ["Admin", "HR"] },
