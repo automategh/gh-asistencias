@@ -49,6 +49,67 @@ export class Graph {
     }
 
     /**
+     * Envía un correo electrónico usando Microsoft Graph con adjuntos opcionales.
+     * Por defecto utiliza el correo de automatización configurado como remitente.
+     */
+    public async sendMailWithAttachment(options: SendMailWithAttachmentOptions): Promise<void> {
+        const token = await this.getToken();
+
+        const senderFromOptions = options.senderEmail?.trim();
+        const sender = senderFromOptions || this.defaultOrganizerEmail;
+
+        if (!sender) {
+            throw new Error(
+                "No se pudo determinar el remitente para el correo. Proporcione senderEmail o configure AZURE_DEFAULT_ORGANIZER_EMAIL.",
+            );
+        }
+
+        const toRecipients = options.to.map((recipient) => ({
+            emailAddress: {
+                address: recipient.email,
+                name: recipient.name ?? recipient.email,
+            },
+        }));
+
+        const attachments = (options.attachments ?? []).map((attachment) => ({
+            "@odata.type": "#microsoft.graph.fileAttachment",
+            name: attachment.name,
+            contentType: attachment.contentType,
+            contentBytes: attachment.contentBytes,
+        }));
+
+        const payload = {
+            message: {
+                subject: options.subject,
+                body: {
+                    contentType: "HTML" as const,
+                    content: options.htmlBody,
+                },
+                toRecipients,
+                attachments,
+            },
+            saveToSentItems: false,
+        };
+
+        const response = await fetch(
+            `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(sender)}/sendMail`,
+            {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            },
+        );
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Error al enviar correo con Graph: ${response.status} ${errorText}`);
+        }
+    }
+
+    /**
      * Crea una reunión de Teams en el calendario de un organizador.
      * El organizador puede ser dinámico (correo dentro del tenant) y, si falla
      * o es externo, se usa el organizador por defecto configurado en AZURE_DEFAULT_ORGANIZER_EMAIL.
@@ -192,4 +253,23 @@ interface GraphCreateEventRequest {
     }[];
     readonly isOnlineMeeting: true;
     readonly onlineMeetingProvider: "teamsForBusiness";
+}
+
+export interface MailRecipient {
+    readonly email: string;
+    readonly name?: string;
+}
+
+export interface MailAttachment {
+    readonly name: string;
+    readonly contentType: string;
+    readonly contentBytes: string;
+}
+
+export interface SendMailWithAttachmentOptions {
+    readonly to: readonly MailRecipient[];
+    readonly subject: string;
+    readonly htmlBody: string;
+    readonly senderEmail?: string | null;
+    readonly attachments?: readonly MailAttachment[];
 }

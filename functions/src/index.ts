@@ -1,5 +1,12 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onValueUpdated } from "firebase-functions/v2/database";
+import * as admin from "firebase-admin";
+import PDFDocument from "pdfkit";
 import { Graph, type CreateTeamsMeetingOptions, type GraphEvent, type MeetingAttendee } from "./graph";
+
+if (!admin.apps.length) {
+	admin.initializeApp();
+}
 
 interface CreateTeamsMeetingRequest {
 	readonly organizerEmail?: string | null;
@@ -106,6 +113,218 @@ export const createTeamsMeeting = onCall<CreateTeamsMeetingRequest>(
 			}
 			throw new HttpsError("internal", "Error al crear la reunión en Teams");
 		}
+	},
+);
+
+interface CertificateMeeting {
+	readonly id: string;
+	readonly title: string;
+	readonly type: string;
+	readonly location: string;
+	readonly startTime: number;
+	readonly endTime: number;
+}
+
+interface CertificateParticipant {
+	readonly uid: string;
+	readonly name: string;
+	readonly email: string;
+	readonly attendance?: string | null;
+	readonly noShow?: boolean | null;
+}
+
+function formatDate(epochMs: number): string {
+	const date = new Date(epochMs);
+	return date.toLocaleDateString("es-CO", {
+		day: "2-digit",
+		month: "long",
+		year: "numeric",
+	});
+}
+
+function formatTime(epochMs: number): string {
+	const date = new Date(epochMs);
+	return date.toLocaleTimeString("es-CO", {
+		hour: "2-digit",
+		minute: "2-digit",
+	});
+}
+
+async function buildCertificatePdf(meeting: CertificateMeeting, participant: CertificateParticipant): Promise<Buffer> {
+	return await new Promise<Buffer>((resolve, reject) => {
+		const document = new PDFDocument({ size: "A4", margin: 50 });
+		const chunks: Buffer[] = [];
+
+		document.on("data", (chunk: Buffer) => {
+			chunks.push(chunk);
+		});
+
+		document.on("end", () => {
+			resolve(Buffer.concat(chunks));
+		});
+
+		document.on("error", (error: Error) => {
+			reject(error);
+		});
+
+		document.fontSize(18).fillColor("#1b3022").text("CERTIFICADO DE ASISTENCIA", {
+			align: "center",
+		});
+
+		document.moveDown(2);
+
+		document.fontSize(12).fillColor("#000000").text("Se certifica que:", {
+			align: "left",
+		});
+
+		document.moveDown(1);
+
+		document
+			.fontSize(16)
+			.fillColor("#1b3022")
+			.text(participant.name, {
+				align: "center",
+			});
+
+		document.moveDown(2);
+
+		const startDate = formatDate(meeting.startTime);
+		const endDate = formatDate(meeting.endTime);
+		const startTime = formatTime(meeting.startTime);
+		const endTime = formatTime(meeting.endTime);
+
+		const isSameDay = startDate === endDate;
+
+		const dateText = isSameDay
+			? `${startDate}, de ${startTime} a ${endTime}`
+			: `desde el ${startDate} (${startTime}) hasta el ${endDate} (${endTime})`;
+
+		document
+			.fontSize(12)
+			.fillColor("#000000")
+			.text(
+				`Asistió a la capacitación "${meeting.title}" realizada en ${meeting.location}, ${dateText}.`,
+				{
+					align: "justify",
+				},
+			);
+
+		document.moveDown(3);
+
+		document.fontSize(10).fillColor("#555555").text("Este certificado ha sido generado automáticamente por el sistema de asistencias.", {
+			align: "center",
+		});
+
+		document.end();
+	});
+}
+
+export const onTrainingCompletedSendCertificates = onValueUpdated(
+	"/meetings/{meetingId}/status",
+	async (event): Promise<void> => {
+		const beforeStatus = event.data.before.val() as string | null;
+		const afterStatus = event.data.after.val() as string | null;
+
+		if (beforeStatus === afterStatus) {
+			return;
+		}
+
+		if (afterStatus !== "completed") {
+			return;
+		}
+
+		const meetingId = event.params.meetingId;
+		const database = admin.database();
+
+		const meetingSnap = await database.ref(`meetings/${meetingId}`).get();
+		if (!meetingSnap.exists()) {
+			return;
+		}
+
+		const meetingValue = meetingSnap.val() as Partial<CertificateMeeting>;
+		if (meetingValue.type !== "training") {
+			return;
+		}
+
+		const meeting: CertificateMeeting = {
+			id: meetingId,
+			title: meetingValue.title ?? "Capacitación",
+			type: meetingValue.type,
+			location: meetingValue.location ?? "",
+			startTime: meetingValue.startTime ?? 0,
+			endTime: meetingValue.endTime ?? 0,
+		};
+
+		const participantsSnap = await database.ref(`meetingParticipants/${meetingId}`).get();
+		if (!participantsSnap.exists()) {
+			return;
+		}
+
+		const participantsMap = participantsSnap.val() as Record<string, CertificateParticipant> | null;
+		if (!participantsMap) {
+			return;
+		}
+
+		const participants = Object.values(participantsMap).filter((participant) => {
+			if (!participant.email) {
+				return false;
+			}
+			const attendance = participant.attendance ?? null;
+			if (participant.noShow) {
+				return false;
+			}
+			return attendance === "present" || attendance === "late";
+		});
+
+		if (participants.length === 0) {
+			return;
+		}
+
+		const graph = new Graph();
+
+		await Promise.all(
+			participants.map(async (participant) => {
+				try {
+					const pdfBuffer = await buildCertificatePdf(meeting, participant);
+
+					const attachmentName = `Certificado-${participant.name.replace(/\s+/g, "-")}.pdf`;
+					const attachmentBase64 = pdfBuffer.toString("base64");
+
+					const subject = `Certificado de asistencia - ${meeting.title}`;
+					const htmlBody = `
+						<p>Hola ${participant.name},</p>
+						<p>
+							Adjuntamos tu certificado de asistencia a la capacitación
+							<strong>${meeting.title}</strong>.
+						</p>
+						<p>Muchas gracias por tu participación.</p>
+					`;
+
+					await graph.sendMailWithAttachment({
+						to: [
+							{
+								email: participant.email,
+								name: participant.name,
+							},
+						],
+						subject,
+						htmlBody,
+						attachments: [
+							{
+								name: attachmentName,
+								contentType: "application/pdf",
+								contentBytes: attachmentBase64,
+							},
+						],
+					});
+				} catch (error) {
+					console.error(
+						`No fue posible enviar el certificado de asistencia para el participante ${participant.uid} en la reunión ${meetingId}:`,
+						error,
+					);
+				}
+			}),
+		);
 	},
 );
 
