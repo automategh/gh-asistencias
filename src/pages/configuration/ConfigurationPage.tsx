@@ -231,7 +231,7 @@ function ConfigurationProfilePage() {
                 <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs">
                     <nav className='px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto'>
                         <h1 className="text-3xl font-bold tracking-tight">Configuración del perfil</h1>
-                        <p className="font-body text-on-surface-variant text-sm mt-1">Gestiona tu información personal y credenciales de acceso.</p>
+                        <p className="font-body text-[#434843] text-sm mt-1">Gestiona tu información personal y credenciales de acceso.</p>
                     </nav>
                 </header>
 
