@@ -1,5 +1,5 @@
 import Layout from "@/components/layouts/layout"
-import { ChevronDown, ChevronRight, Clock, Download, Eye, IterationCw, ListFilterIcon, LucideBarChart, Smile, TrendingUp, Users } from "lucide-react"
+import { ChevronDown, ChevronRight, Clock, Download, Eye, IterationCw, LucideBarChart, Search, Smile, TrendingUp, Users } from "lucide-react"
 import { useEffect, useState, useRef } from "react"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas-pro"
@@ -858,7 +858,7 @@ function ReportTrainingPlanPage() {
                                         className="p-2 rounded-lg bg-[#edeeed] text-outline hover:text-primary-container transition-colors"
                                         onClick={handleToggleTableFilters}
                                     >
-                                        <ListFilterIcon className="w-4 h-4" />
+                                        <Search className="w-4 h-4" />
                                     </button>
                                     {showSortDropdown && (
                                         <div className="absolute right-0 top-10 w-48 bg-white border border-[#edeeed] rounded-lg shadow-lg z-10 py-2">

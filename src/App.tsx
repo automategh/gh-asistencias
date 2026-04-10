@@ -25,7 +25,6 @@ import SurveyPage from './pages/survey/SurveyPage'
 import SurveyResultsPage from './pages/survey/SurveyResultsPage'
 import ReportIndividualPage from './pages/reports/ReportIndividualPage'
 
-
 function App() {
     return (
         <>
