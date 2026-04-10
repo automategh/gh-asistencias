@@ -311,7 +311,7 @@ function AttendancePage() {
                 <div className="max-w-sm md:max-w-7xl mx-auto mt-10 px-2 sm:px-4 pb-10">
                     <div
                         ref={attendanceRef}
-                        className="attendance-print bg-card border border-border rounded-2xl shadow-xl px-4 sm:px-8 py-6 sm:py-8 overflow-x-auto"
+                        className="attendance-print bg-card rounded-2xl shadow-xl px-4 sm:px-8 py-6 sm:py-8 overflow-x-auto"
                     >
                         <div className="flex justify-between items-center gap-6 mb-8">
                             <div className="w-28 sm:w-32 md:w-40 aspect-video flex items-center justify-center">
@@ -358,7 +358,7 @@ function AttendancePage() {
                             </div>
                         </div>
 
-                        <div className="overflow-x-auto rounded-xl border border-border shadow-sm">
+                        <div className="overflow-x-auto rounded-xl shadow-sm">
                             <table className="w-full min-w-215 text-xs sm:text-sm border-collapse">
                                 <thead>
                                     <tr className="bg-muted/80 text-foreground">
@@ -385,7 +385,10 @@ function AttendancePage() {
                                         </tr>
                                     ) : (
                                         attendance.map((item) => (
-                                            <tr key={item.uid}>
+                                            <tr
+                                                key={item.uid}
+                                                data-html2canvas-ignore={item.noShow ? "true" : undefined}
+                                            >
                                                 <td className="px-3 py-3 text-foreground align-top wrap-break-word">{item.name}</td>
                                                 <td className="px-3 py-3 text-foreground align-top wrap-break-word">{item.identify ?? '—'}</td>
                                                 <td className="px-3 py-3 text-foreground align-top wrap-break-word">{item.companyName ?? 'Grupo Heroica'}</td>

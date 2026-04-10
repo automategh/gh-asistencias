@@ -1,5 +1,5 @@
 import Layout from "@/components/layouts/layout"
-import { ChevronDown, ChevronRight, Clock, Download, Eye, IterationCw, LucideBarChart, Search, Smile, TrendingUp, Users } from "lucide-react"
+import { ChevronDown, ChevronRight, Clock, Download, Eye, IterationCw, LucideBarChart, Search, Smile, TrendingUp, Users, X } from "lucide-react"
 import { useEffect, useState, useRef } from "react"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas-pro"
@@ -176,6 +176,9 @@ function ReportTrainingPlanPage() {
     const [tableSortDirection, setTableSortDirection] = useState<"asc" | "desc">("desc")
     const [showSortDropdown, setShowSortDropdown] = useState<boolean>(false)
 
+    const [isAttendeesModalOpen, setIsAttendeesModalOpen] = useState<boolean>(false)
+    const [selectedTrainingForModal, setSelectedTrainingForModal] = useState<TrainingWithParticipants | null>(null)
+
     const navigate = useNavigate()
 
     useEffect(() => {
@@ -321,7 +324,10 @@ function ReportTrainingPlanPage() {
             const areaStr = areas.length > 0 ? areas.join(", ") : "-"
             const hours = Math.round((meeting.endTime - meeting.startTime) / (1000 * 60 * 60))
             const dateStr = new Date(meeting.startTime).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })
-            const asistentes = participants.filter(p => p.attendance === "present" || p.attendance === "late")
+            const asistentes = participants.filter((participant) =>
+                (participant.attendance === "present" || participant.attendance === "late")
+                && !participant.noShow,
+            )
             for (const p of asistentes) {
                 let cargo = cargoCache[p.uid] ?? ""
 
@@ -488,6 +494,22 @@ function ReportTrainingPlanPage() {
         setShowSortDropdown(false)
     }
 
+    /**
+     * Abre el modal con el detalle de asistentes para una capacitación específica.
+     */
+    const handleOpenAttendeesModal = (training: TrainingWithParticipants): void => {
+        setSelectedTrainingForModal(training)
+        setIsAttendeesModalOpen(true)
+    }
+
+    /**
+     * Cierra el modal de asistentes y limpia la capacitación seleccionada.
+     */
+    const handleCloseAttendeesModal = (): void => {
+        setIsAttendeesModalOpen(false)
+        setSelectedTrainingForModal(null)
+    }
+
     const filteredAndSortedTrainings: TrainingWithParticipants[] = (() => {
         if (trainings.length === 0) {
             return []
@@ -524,13 +546,28 @@ function ReportTrainingPlanPage() {
                 return (firstHours - secondHours) * multiplier
             }
 
-            const firstAttendees = first.participants.filter((participant) => participant.attendance === "present" || participant.attendance === "late").length
-            const secondAttendees = second.participants.filter((participant) => participant.attendance === "present" || participant.attendance === "late").length
+            const firstAttendees = first.participants.filter((participant) =>
+                (participant.attendance === "present" || participant.attendance === "late")
+                && !participant.noShow,
+            ).length
+            const secondAttendees = second.participants.filter((participant) =>
+                (participant.attendance === "present" || participant.attendance === "late")
+                && !participant.noShow,
+            ).length
             return (firstAttendees - secondAttendees) * multiplier
         })
 
         return sorted
     })()
+
+    const attendeesForSelectedTraining = selectedTrainingForModal
+        ? selectedTrainingForModal.participants
+            .filter((participant) =>
+                (participant.attendance === "present" || participant.attendance === "late")
+                && !participant.noShow,
+            )
+            .sort((first, second) => first.name.localeCompare(second.name, "es-ES"))
+        : []
 
     return (
         <Layout>
@@ -1028,7 +1065,8 @@ function ReportTrainingPlanPage() {
                                                 <td colSpan={6} className="py-8 text-center text-[#434843]">No hay capacitaciones registradas para el periodo y filtros seleccionados.</td>
                                             </tr>
                                         ) : (
-                                            filteredAndSortedTrainings.map(({ meeting, trainer, participants, areas }) => {
+                                            filteredAndSortedTrainings.map((training) => {
+                                                const { meeting, trainer, participants, areas } = training
                                                 // Áreas involucradas: mostrar todas las áreas únicas
                                                 const area = areas.length > 0 ? areas.join(", ") : "-"
                                                 // Fecha formateada
@@ -1036,8 +1074,11 @@ function ReportTrainingPlanPage() {
                                                 const dateStr = date.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })
                                                 // Horas
                                                 const hours = Math.round((meeting.endTime - meeting.startTime) / (1000 * 60 * 60))
-                                                // Asistentes: solo los presentes o tarde
-                                                const attendees = participants.filter(p => p.attendance === "present" || p.attendance === "late").length
+                                                // Asistentes: solo los presentes o tarde que no estén marcados como noShow
+                                                const attendees = participants.filter((participant) =>
+                                                    (participant.attendance === "present" || participant.attendance === "late")
+                                                    && !participant.noShow,
+                                                ).length
                                                 return (
                                                     <tr key={meeting.id} className="hover:bg-slate-50 transition-colors group">
                                                         <td className="px-8 py-5">
@@ -1053,7 +1094,11 @@ function ReportTrainingPlanPage() {
                                                         <td className="px-8 py-5 text-sm font-bold text-emerald-900">{hours} hrs</td>
                                                         <td className="px-8 py-5 text-sm font-medium text-[#191c1c] text-center">{attendees}</td>
                                                         <td className="px-8 py-5 text-center">
-                                                            <button className="px-3 py-1 rounded-lg bg-[#edeeed] text-outline hover:text-primary-container transition-colors">
+                                                            <button
+                                                                type="button"
+                                                                className="px-3 py-1 rounded-lg bg-[#edeeed] text-outline hover:text-primary-container transition-colors"
+                                                                onClick={() => handleOpenAttendeesModal(training)}
+                                                            >
                                                                 <Eye className="w-4 h-4" />
                                                             </button>
                                                         </td>
@@ -1067,6 +1112,81 @@ function ReportTrainingPlanPage() {
                         </section>
                     </div>
                 </div>
+                {isAttendeesModalOpen && selectedTrainingForModal && (
+                    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-xs">
+                        <div className="bg-white rounded-2xl shadow-[0_24px_40px_rgba(15,23,42,0.25)] w-full max-w-lg mx-4">
+                            <div className="flex items-start justify-between px-6 pt-5 pb-3 border-b border-[#edeeed]">
+                                <div>
+                                    <p className="text-[10px] uppercase tracking-widest text-outline font-bold mb-1">Asistentes</p>
+                                    <h2 className="text-lg font-bold text-[#191c1c] leading-snug">
+                                        {selectedTrainingForModal.meeting.title}
+                                    </h2>
+                                    <p className="text-[11px] text-slate-500 mt-1">
+                                        {new Date(selectedTrainingForModal.meeting.startTime).toLocaleDateString("es-ES", {
+                                            day: "2-digit",
+                                            month: "short",
+                                            year: "numeric",
+                                        })}
+                                        {" · "}
+                                        {Math.round(
+                                            (selectedTrainingForModal.meeting.endTime - selectedTrainingForModal.meeting.startTime)
+                                            / (1000 * 60 * 60),
+                                        )}
+                                        {" hrs"}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleCloseAttendeesModal}
+                                    className="p-1.5 rounded-full hover:bg-[#edeeed] text-outline hover:text-[#191c1c] transition-colors"
+                                >
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <div className="px-6 pt-4 pb-5 max-h-80 overflow-y-auto">
+                                {attendeesForSelectedTraining.length === 0 ? (
+                                    <p className="text-sm text-[#434843]">
+                                        No se registraron asistentes presentes o tarde para esta capacitación.
+                                    </p>
+                                ) : (
+                                    <>
+                                        <p className="text-xs text-outline mb-3">
+                                            Total de asistentes: <span className="font-semibold text-[#191c1c]">{attendeesForSelectedTraining.length}</span>
+                                        </p>
+                                        <ul className="space-y-2">
+                                            {attendeesForSelectedTraining.map((participant) => (
+                                                <li
+                                                    key={participant.uid}
+                                                    className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-[#f6f7f6]"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-[#d6e3d5] flex items-center justify-center text-xs font-bold text-[#1b3022]">
+                                                            {participant.name
+                                                                .split(" ")
+                                                                .filter((part) => part.length > 0)
+                                                                .slice(0, 2)
+                                                                .map((part) => part[0]?.toUpperCase())
+                                                                .join("")}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-semibold text-[#191c1c] leading-tight">{participant.name}</p>
+                                                            {participant.email && (
+                                                                <p className="text-[11px] text-slate-500 leading-tight">{participant.email}</p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <span className="text-[11px] font-medium text-emerald-900 bg-[#d0e9d4] px-2.5 py-1 rounded-full capitalize">
+                                                        {participant.attendance === "late" ? "Tarde" : "Presente"}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </Layout>
     )

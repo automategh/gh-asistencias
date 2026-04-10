@@ -134,8 +134,13 @@ function accumulateMeeting(
     summary.totalInvited += 1
     kindStats.invited += 1
 
+    const isNoShow = Boolean(p.noShow)
     const attendance = p.attendance ?? null
-    if (attendance === "present") {
+
+    if (isNoShow) {
+      summary.totalAbsent += 1
+      kindStats.absent += 1
+    } else if (attendance === "present") {
       summary.totalPresent += 1
       kindStats.present += 1
     } else if (attendance === "late") {
@@ -387,7 +392,7 @@ export async function getTrainingKpiForYear(
 
     for (const participant of relevantParticipants) {
       const attendance = participant.attendance ?? null
-      if (attendance === "present" || attendance === "late") {
+      if (!participant.noShow && (attendance === "present" || attendance === "late")) {
         totalAttended += 1
       }
     }
@@ -592,6 +597,10 @@ export async function getTrainingHoursByRoleForYear(
     const participants: MeetingParticipant[] = participantsValue ? Object.values(participantsValue) : []
 
     for (const participant of participants) {
+      if (participant.noShow) {
+        continue
+      }
+
       const user = usersByUid[participant.uid]
       if (!user) {
         continue
