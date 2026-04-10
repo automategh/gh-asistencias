@@ -18,6 +18,8 @@ import { listAllUsersAcrossDatabases } from '@/services/roles.service'
 import type { RecintoKey } from '@/lib/firebase/databaseResolver'
 import { getSurveys, type Survey } from '@/services/forms.service'
 import { createTeamsMeetingViaCloudFunction } from '@/services/teams.service'
+import { buildUserGroups, buildUserGroupsByField, getUserGroupingDefinitions, type GroupingFieldKey, type UserGroupingId } from '@/lib/userGrouping'
+import { getUserGroupingConfig, type UserGroupingConfig } from '@/services/user-grouping.service'
 
 /**
  * Convierte un valor `datetime-local` a epoch ms, interpretándolo en zona local
@@ -83,10 +85,19 @@ function NewMeetPage() {
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
 
-    type UserItem = { uid: string; name: string; email: string; recinto: RecintoKey; department?: string | null }
+    type UserItem = {
+        uid: string
+        name: string
+        email: string
+        recinto: RecintoKey
+        department?: string | null
+        immediateBoss?: string | null
+        cargo?: string | null
+        companyName?: string | null
+    }
     const [allUsers, setAllUsers] = useState<UserItem[]>([])
     const [search, setSearch] = useState<string>('')
-    const [groupBy, setGroupBy] = useState<'none' | 'recinto' | 'department' | 'recintoDepartment'>('none')
+    const [groupBy, setGroupBy] = useState<UserGroupingId>('none')
     const [selected, setSelected] = useState<Array<ParticipantInput>>([])
     const [trainingSurveys, setTrainingSurveys] = useState<Survey[]>([])
 
@@ -108,6 +119,9 @@ function NewMeetPage() {
                 email: user.email,
                 recinto: user.recinto,
                 department: user.department ?? null,
+                immediateBoss: user.immediateBoss ?? null,
+                cargo: user.cargo ?? null,
+                companyName: user.companyName ?? null,
             }))
             // Ordenar alfabéticamente por nombre para mejor UX
             list.sort((a, b) => a.name.localeCompare(b.name))
@@ -215,21 +229,128 @@ function NewMeetPage() {
 
     // Selección/rol de usuarios gestionados desde la lista filtrada y la lista de seleccionados
 
-    const groupedUsers = useMemo(() => {
-        if (groupBy === 'none') return null
-        const groups: Record<string, UserItem[]> = {}
-        filteredUsers.forEach(u => {
-            const departmentKey = u.department && u.department.trim().length > 0 ? u.department.trim() : 'Sin área'
-            const key = groupBy === 'recinto'
-                ? u.recinto
-                : groupBy === 'department'
-                    ? departmentKey
-                    : `${u.recinto}||${departmentKey}`
-            if (!groups[key]) groups[key] = []
-            groups[key].push(u)
-        })
-        return groups
-    }, [filteredUsers, groupBy])
+    type SelectableGrouping = {
+        readonly id: UserGroupingId
+        readonly label: string
+        readonly kind: 'builtin' | 'byField'
+        readonly fieldKey?: GroupingFieldKey
+    }
+
+    const builtinDefinitions = useMemo(() => getUserGroupingDefinitions(), [])
+
+    const [availableGroupings, setAvailableGroupings] = useState<SelectableGrouping[]>([])
+
+    useEffect(() => {
+        let cancelled = false
+
+        async function loadGroupings(): Promise<void> {
+            if (!database) {
+                const defaults: SelectableGrouping[] = builtinDefinitions.map((definition) => ({
+                    id: definition.id,
+                    label: definition.label,
+                    kind: 'builtin',
+                }))
+                if (!cancelled) {
+                    setAvailableGroupings(defaults)
+                }
+                return
+            }
+
+            try {
+                const config: UserGroupingConfig | null = await getUserGroupingConfig(database)
+                const items = config?.items ?? []
+
+                const builtinMap = new Map<UserGroupingId, SelectableGrouping>()
+                builtinDefinitions.forEach((definition) => {
+                    builtinMap.set(definition.id as UserGroupingId, {
+                        id: definition.id as UserGroupingId,
+                        label: definition.label,
+                        kind: 'builtin',
+                    })
+                })
+
+                const merged: SelectableGrouping[] = []
+
+                builtinDefinitions.forEach((definition) => {
+                    const baseId = definition.id as UserGroupingId
+                    const configItem = items.find((item) => item.id === baseId)
+                    const enabled = configItem ? configItem.enabled : baseId !== 'none'
+                    if (!enabled) {
+                        return
+                    }
+                    const label = configItem?.label && configItem.label.trim().length > 0
+                        ? configItem.label
+                        : definition.label
+                    merged.push({
+                        id: baseId,
+                        label,
+                        kind: 'builtin',
+                    })
+                })
+
+                items.forEach((item) => {
+                    const isBuiltin = builtinMap.has(item.id)
+                    if (isBuiltin) {
+                        return
+                    }
+                    if (!item.enabled) {
+                        return
+                    }
+                    const label = item.label && item.label.trim().length > 0
+                        ? item.label
+                        : item.id
+                    const fieldKey: GroupingFieldKey | undefined = item.fieldKey ?? undefined
+
+                    merged.push({
+                        id: item.id,
+                        label,
+                        kind: item.kind ?? 'byField',
+                        fieldKey,
+                    })
+                })
+
+                if (!cancelled) {
+                    setAvailableGroupings(merged)
+                }
+            } catch {
+                if (!cancelled) {
+                    const fallback: SelectableGrouping[] = builtinDefinitions.map((definition) => ({
+                        id: definition.id,
+                        label: definition.label,
+                        kind: 'builtin',
+                    }))
+                    setAvailableGroupings(fallback)
+                }
+            }
+        }
+
+        loadGroupings().catch(() => {})
+
+        return () => {
+            cancelled = true
+        }
+    }, [database, builtinDefinitions])
+
+    useEffect(() => {
+        if (availableGroupings.length === 0) {
+            return
+        }
+        const exists = availableGroupings.some((item) => item.id === groupBy)
+        if (!exists) {
+            setGroupBy(availableGroupings[0]?.id ?? 'none')
+        }
+    }, [availableGroupings, groupBy])
+
+    const userGroups = useMemo(() => {
+        const selected = availableGroupings.find((item) => item.id === groupBy)
+        if (!selected) {
+            return buildUserGroups<UserItem>(filteredUsers, 'none')
+        }
+        if (selected.kind === 'byField' && selected.fieldKey) {
+            return buildUserGroupsByField<UserItem>(filteredUsers, selected.fieldKey)
+        }
+        return buildUserGroups<UserItem>(filteredUsers, groupBy)
+    }, [availableGroupings, filteredUsers, groupBy])
 
     /**
      * Envía el formulario: valida campos, crea la reunión y persiste
@@ -459,20 +580,21 @@ function NewMeetPage() {
                                             <span>Agrupar por</span>
                                             <select
                                                 value={groupBy}
-                                                onChange={(e) => setGroupBy(e.target.value as 'none' | 'recinto' | 'department' | 'recintoDepartment')}
+                                                onChange={(e) => setGroupBy(e.target.value as UserGroupingId)}
                                                 className="px-3 py-1.5 bg-input border border-border rounded text-xs"
                                             >
-                                                <option value="none">Sin agrupación</option>
-                                                <option value="recinto">Recinto</option>
-                                                <option value="department">Área</option>
-                                                <option value="recintoDepartment">Recinto y área</option>
+                                                {availableGroupings.map(grouping => (
+                                                    <option key={grouping.id} value={grouping.id}>
+                                                        {grouping.label}
+                                                    </option>
+                                                ))}
                                             </select>
                                         </div>
                                     </div>
                                     <div className="mt-3 h-80 overflow-y-auto border border-border rounded">
                                         {filteredUsers.length === 0 ? (
                                             <div className="p-3 text-sm text-muted-foreground">Sin resultados</div>
-                                        ) : groupBy === 'none' || !groupedUsers ? (
+                                        ) : groupBy === 'none' || userGroups.length === 0 ? (
                                             <ul>
                                                 {filteredUsers.map(u => (
                                                     <li key={u.uid} className="flex items-center justify-between px-3 py-2 border-b border-border last:border-b-0">
@@ -486,56 +608,46 @@ function NewMeetPage() {
                                             </ul>
                                         ) : (
                                             <div className="space-y-3">
-                                                {Object.entries(groupedUsers).map(([groupKey, users]) => {
-                                                    const isRecintoDepartment = groupBy === 'recintoDepartment'
-                                                    let displayRecinto: string | null = null
-                                                    let displayDepartment: string | null = null
-
-                                                    if (isRecintoDepartment) {
-                                                        const [recintoKey, departmentKey] = groupKey.split('||')
-                                                        displayRecinto = recintoKey
-                                                        displayDepartment = departmentKey
-                                                    }
-
-                                                    return (
-                                                        <div key={groupKey} className="border-b border-border last:border-b-0 pb-2">
-                                                            <div className="flex items-center justify-between px-3 py-2">
-                                                                <div>
-                                                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                                                        {groupBy === 'recinto' && `Recinto: ${groupKey}`}
-                                                                        {groupBy === 'department' && `Área: ${groupKey}`}
-                                                                        {isRecintoDepartment && displayRecinto && displayDepartment && `Recinto: ${displayRecinto} · Área: ${displayDepartment}`}
+                                                {userGroups.map(group => (
+                                                    <div key={group.key} className="border-b border-border last:border-b-0 pb-2">
+                                                        <div className="flex items-center justify-between px-3 py-2">
+                                                            <div>
+                                                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                                                    {group.header}
+                                                                </p>
+                                                                {group.helperText && (
+                                                                    <p className="text-[11px] text-muted-foreground">
+                                                                        {group.helperText}
                                                                     </p>
-                                                                    {(groupBy === 'department' || isRecintoDepartment) && (
-                                                                        <p className="text-[11px] text-muted-foreground">
-                                                                            {isRecintoDepartment && displayDepartment && displayRecinto
-                                                                                ? `Estos son los de ${displayDepartment.toLowerCase()} del recinto ${displayRecinto.toLowerCase()}.`
-                                                                                : `Estos son los de ${groupKey.toLowerCase()}.`}
-                                                                        </p>
-                                                                    )}
-                                                                </div>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => addUsersBulk(users)}
-                                                                    className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary-light"
-                                                                >
-                                                                    Agregar todos
-                                                                </button>
+                                                                )}
                                                             </div>
-                                                            <ul>
-                                                                {users.map(u => (
-                                                                    <li key={u.uid} className="flex items-center justify-between px-3 py-1.5">
-                                                                        <div>
-                                                                            <p className="text-sm font-medium text-foreground">{u.name}</p>
-                                                                            <p className="text-xs text-muted-foreground">{u.email}</p>
-                                                                        </div>
-                                                                        <button type="button" onClick={() => addUser(u)} className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary-light">Añadir</button>
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => addUsersBulk(group.users as UserItem[])}
+                                                                className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary-light"
+                                                            >
+                                                                Agregar todos
+                                                            </button>
                                                         </div>
-                                                    )
-                                                })}
+                                                        <ul>
+                                                            {group.users.map(u => (
+                                                                <li key={u.uid} className="flex items-center justify-between px-3 py-1.5">
+                                                                    <div>
+                                                                        <p className="text-sm font-medium text-foreground">{u.name}</p>
+                                                                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => addUser(u as UserItem)}
+                                                                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary-light"
+                                                                    >
+                                                                        Añadir
+                                                                    </button>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                ))}
                                             </div>
                                         )}
                                     </div>

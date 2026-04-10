@@ -8,6 +8,7 @@ import DashboardPage from './pages/dashboard/DashboardPage'
 import NewMeetPage from './pages/meets/NewMeetPage'
 import PermissionsPage from './pages/permissions/PermissionsPage'
 import DepartmentsPage from './pages/configuration/DepartmentsPage'
+import UserGroupingPage from './pages/configuration/UserGroupingPage'
 import MeetsPage from './pages/meets/MeetsPage'
 import DetailMeetPage from './pages/meets/DetailMeetPage'
 import AttendancePage from './pages/meets/AttendancePage'
@@ -37,6 +38,14 @@ function App() {
                         element={(
                             <RoleRoute allowed={["Admin", "HR"]}>
                                 <DepartmentsPage />
+                            </RoleRoute>
+                        )}
+                    />
+                    <Route
+                        path="/user-grouping"
+                        element={(
+                            <RoleRoute allowed={["Admin", "HR"]}>
+                                <UserGroupingPage />
                             </RoleRoute>
                         )}
                     />

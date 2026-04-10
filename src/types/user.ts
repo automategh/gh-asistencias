@@ -44,6 +44,9 @@ export interface CrossDbUserItem {
   readonly role?: string | null
   readonly active?: boolean | null
   readonly department?: string | null
+  readonly immediateBoss?: string | null
+  readonly cargo?: string | null
+  readonly companyName?: string | null
   readonly recinto: RecintoKey
   readonly databaseUrl: string
 }
