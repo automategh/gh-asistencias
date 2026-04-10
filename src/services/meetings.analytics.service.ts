@@ -71,6 +71,18 @@ export interface AttendanceQueryOptions {
   type?: MeetingKind | "ALL"
 }
 
+function getPeriodRangeForYearAndMonth(year: number, month?: number | null): { startTime: number; endTime: number } {
+  if (typeof month === "number" && month >= 1 && month <= 12) {
+    const startTime = new Date(year, month - 1, 1, 0, 0, 0, 0).getTime()
+    const endTime = new Date(year, month, 0, 23, 59, 59, 999).getTime()
+    return { startTime, endTime }
+  }
+
+  const startTime = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
+  const endTime = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
+  return { startTime, endTime }
+}
+
 /**
  * Crea un objeto de estadísticas vacío para un tipo de reunión.
  */
@@ -265,13 +277,12 @@ export function getEmptyAttendanceSummary(): AttendanceSummary {
  * @param year Año calendario para el que se desean obtener las capacitaciones
  * @returns Promesa que resuelve con el número de capacitaciones encontradas
  */
-export async function getTrainingCountForYear(database: Database, year: number): Promise<number> {
-  const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
-  const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
+export async function getTrainingCountForYear(database: Database, year: number, month?: number | null): Promise<number> {
+  const { startTime, endTime } = getPeriodRangeForYearAndMonth(year, month)
 
   const summary = await getAttendanceSummaryForDatabase(database, {
-    startTime: startOfYear,
-    endTime: endOfYear,
+    startTime,
+    endTime,
     type: "training",
   })
 
@@ -292,16 +303,16 @@ export async function getTrainingKpiForYear(
   year: number,
   department?: string | null,
   leaderName?: string | null,
+  month?: number | null,
 ): Promise<TrainingKpiSummary> {
-  const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
-  const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
+  const { startTime, endTime } = getPeriodRangeForYearAndMonth(year, month)
 
   const meetingsRef = ref(database, "meetings")
   const q = query(
     meetingsRef,
     orderByChild("startTime"),
-    startAt(startOfYear),
-    endAt(endOfYear),
+    startAt(startTime),
+    endAt(endTime),
   )
 
   const snapshot = await get(q)
@@ -436,16 +447,16 @@ export async function getTrainingCountsByDepartmentForYear(
   database: Database,
   year: number,
   leaderName?: string | null,
+  month?: number | null,
 ): Promise<DepartmentTrainingCount[]> {
-  const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
-  const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
+  const { startTime, endTime } = getPeriodRangeForYearAndMonth(year, month)
 
   const meetingsRef = ref(database, "meetings")
   const q = query(
     meetingsRef,
     orderByChild("startTime"),
-    startAt(startOfYear),
-    endAt(endOfYear),
+    startAt(startTime),
+    endAt(endTime),
   )
 
   const snapshot = await get(q)
@@ -532,16 +543,16 @@ export async function getTrainingHoursByRoleForYear(
   year: number,
   department?: string | null,
   leaderName?: string | null,
+  month?: number | null,
 ): Promise<TrainingHoursByRole[]> {
-  const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
-  const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
+  const { startTime, endTime } = getPeriodRangeForYearAndMonth(year, month)
 
   const meetingsRef = ref(database, "meetings")
   const q = query(
     meetingsRef,
     orderByChild("startTime"),
-    startAt(startOfYear),
-    endAt(endOfYear),
+    startAt(startTime),
+    endAt(endTime),
   )
 
   const snapshot = await get(q)

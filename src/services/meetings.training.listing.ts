@@ -15,16 +15,25 @@ export async function getTrainingsWithParticipants(
     year: number,
     department?: string | null,
     leaderName?: string | null,
+    month?: number | null,
 ): Promise<TrainingWithParticipants[]> {
-    const startOfYear = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
-    const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
+    const { startTime, endTime } = ((): { startTime: number; endTime: number } => {
+        if (typeof month === "number" && month >= 1 && month <= 12) {
+            const start = new Date(year, month - 1, 1, 0, 0, 0, 0).getTime()
+            const end = new Date(year, month, 0, 23, 59, 59, 999).getTime()
+            return { startTime: start, endTime: end }
+        }
+        const start = new Date(year, 0, 1, 0, 0, 0, 0).getTime()
+        const end = new Date(year, 11, 31, 23, 59, 59, 999).getTime()
+        return { startTime: start, endTime: end }
+    })()
 
     const meetingsRef = ref(database, "meetings")
     const q = query(
         meetingsRef,
         orderByChild("startTime"),
-        startAt(startOfYear),
-        endAt(endOfYear)
+        startAt(startTime),
+        endAt(endTime)
     )
 
     const snapshot = await get(q)

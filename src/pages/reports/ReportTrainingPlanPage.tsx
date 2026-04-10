@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react"
 import jsPDF from "jspdf"
 import html2canvas from "html2canvas-pro"
 import * as XLSX from "xlsx"
-import { getUserProfile, loadUsersCargoMap, resolveCrossDbUserCargoByEmail, type UserCargoCache, type UserEmailCargoCache } from "@/services/user.service"    
+import { getUserProfile, loadUsersCargoMap, resolveCrossDbUserCargoByEmail, type UserCargoCache, type UserEmailCargoCache } from "@/services/user.service"
 import { useDatabase } from "@/context/DatabaseContext"
 import { useAuth } from "@/context/AuthContext"
 import { getDepartmentNames } from "@/services/departaments/departments.service"
@@ -21,6 +21,21 @@ import { getTrainingsWithParticipants, type TrainingWithParticipants } from "@/s
 import { getSurveys, getSurveyQuestionsBySurveyId, getSurveyResponsesForTraining, type Survey, type SurveyQuestion } from "@/services/forms.service"
 import type { Database } from "firebase/database"
 import { useNavigate } from "react-router-dom"
+
+const MONTH_LABELS: readonly string[] = [
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+]
 
 async function computeAverageSatisfaction(
     database: Database,
@@ -135,6 +150,8 @@ function ReportTrainingPlanPage() {
     const [departments, setDepartments] = useState<string[]>([])
     const [years, setYears] = useState<number[]>([])
     const [selectedYear, setSelectedYear] = useState<number | null>(null)
+    const [periodMode, setPeriodMode] = useState<"year" | "month">("year")
+    const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
     const [selectedDepartment, setSelectedDepartment] = useState<string>("")
 
     const [totalTrainings, setTotalTrainings] = useState<number>(0)
@@ -268,7 +285,16 @@ function ReportTrainingPlanPage() {
                 heightLeft -= pageHeight
             }
 
-            const exportTitle = `Plan de Formación ${selectedYear}${selectedDepartment ? ` - ${selectedDepartment}` : ""}`
+            const periodLabel = (() => {
+                if (!selectedYear) return "Sin-periodo"
+                if (periodMode === "month" && typeof selectedMonth === "number") {
+                    const monthName = MONTH_LABELS[selectedMonth - 1] ?? "Mes"
+                    return `${selectedYear} - ${monthName}`
+                }
+                return String(selectedYear)
+            })()
+
+            const exportTitle = `Plan de Formación ${periodLabel}${selectedDepartment ? ` - ${selectedDepartment}` : ""}`
             const fileName = `${exportTitle.toLowerCase().replace(/\s+/g, '-')}.pdf`
 
             pdf.save(fileName)
@@ -344,6 +370,23 @@ function ReportTrainingPlanPage() {
             return
         }
 
+        if (periodMode === "month" && (selectedMonth === null || selectedMonth < 1 || selectedMonth > 12)) {
+            setTotalTrainings(0)
+            setTotalHours(0)
+            setTotalAttended(0)
+            setTrainingsDeltaPct(null)
+            setHoursDeltaPct(null)
+            setAttendedDeltaPct(null)
+            setDepartmentTrainingCounts([])
+            setSelectedAreaForChart(null)
+            setHoursByRole([])
+            setTrainings([])
+            setAvgSatisfaction(null)
+            setSatisfactionDeltaPct(null)
+            setTableSearch("")
+            return
+        }
+
         // Para líderes, si no tenemos su nombre, no podemos filtrar colaboradores de forma segura.
         // En ese caso devolvemos un estado vacío hasta que el perfil esté disponible.
         if (role === "Lider" && (!leaderName || leaderName.trim().length === 0)) {
@@ -367,15 +410,18 @@ function ReportTrainingPlanPage() {
             setIsGenerating(true)
             const previousYear = selectedYear - 1
 
+            const monthForCurrent = periodMode === "month" ? selectedMonth : null
+            const monthForPrevious = periodMode === "month" ? selectedMonth : null
+
             const effectiveLeaderName = role === "Lider" ? leaderName : null
 
             const [currentKpi, previousKpi, rawDepartmentCounts, hoursByRoleForYear, trainingsList, trainingsListPrevious] = await Promise.all([
-                getTrainingKpiForYear(database, selectedYear, selectedDepartment || null, effectiveLeaderName),
-                getTrainingKpiForYear(database, previousYear, selectedDepartment || null, effectiveLeaderName),
-                getTrainingCountsByDepartmentForYear(database, selectedYear, effectiveLeaderName),
-                getTrainingHoursByRoleForYear(database, selectedYear, selectedDepartment || null, effectiveLeaderName),
-                getTrainingsWithParticipants(database, selectedYear, selectedDepartment || null, effectiveLeaderName),
-                getTrainingsWithParticipants(database, previousYear, selectedDepartment || null, effectiveLeaderName),
+                getTrainingKpiForYear(database, selectedYear, selectedDepartment || null, effectiveLeaderName, monthForCurrent),
+                getTrainingKpiForYear(database, previousYear, selectedDepartment || null, effectiveLeaderName, monthForPrevious),
+                getTrainingCountsByDepartmentForYear(database, selectedYear, effectiveLeaderName, monthForCurrent),
+                getTrainingHoursByRoleForYear(database, selectedYear, selectedDepartment || null, effectiveLeaderName, monthForCurrent),
+                getTrainingsWithParticipants(database, selectedYear, selectedDepartment || null, effectiveLeaderName, monthForCurrent),
+                getTrainingsWithParticipants(database, previousYear, selectedDepartment || null, effectiveLeaderName, monthForPrevious),
             ]) as [
                     TrainingKpiSummary,
                     TrainingKpiSummary,
@@ -533,29 +579,31 @@ function ReportTrainingPlanPage() {
                         <section className="bg-[#f3f4f3] p-6 rounded-xl space-y-4 max-w-7xl mx-auto">
                             <div className="flex flex-wrap items-end gap-6">
                                 <div className="flex-1 min-w-50">
-                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Periodo Anual</label>
-                                    <div className="relative">
-                                        <select
-                                            className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-[#191c1c] appearance-none focus:ring-2 focus:ring-primary-container"
-                                            value={selectedYear ?? ""}
-                                            onChange={(event) => {
-                                                const value = event.target.value
-                                                setSelectedYear(value ? Number(value) : null)
-                                            }}
-                                        >
-                                            {years.length === 0 ? (
-                                                <option value="" disabled>
-                                                    No hay capacitaciones registradas
-                                                </option>
-                                            ) : (
-                                                years.map((year) => (
-                                                    <option key={year} value={year}>
-                                                        {year} {year === new Date().getFullYear() ? "- Ciclo Actual" : "- Histórico"}
+                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Periodo</label>
+                                    <div className="space-y-2">
+                                        <div className="relative">
+                                            <select
+                                                className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-[#191c1c] appearance-none focus:ring-2 focus:ring-primary-container"
+                                                value={selectedYear ?? ""}
+                                                onChange={(event) => {
+                                                    const value = event.target.value
+                                                    setSelectedYear(value ? Number(value) : null)
+                                                }}
+                                            >
+                                                {years.length === 0 ? (
+                                                    <option value="" disabled>
+                                                        No hay capacitaciones registradas
                                                     </option>
-                                                ))
-                                            )}
-                                        </select>
-                                        <ChevronDown className="absolute right-3 top-3 text-outline pointer-events-none" />
+                                                ) : (
+                                                    years.map((year) => (
+                                                        <option key={year} value={year}>
+                                                            {year} {year === new Date().getFullYear() ? "- Ciclo Actual" : "- Histórico"}
+                                                        </option>
+                                                    ))
+                                                )}
+                                            </select>
+                                            <ChevronDown className="absolute right-3 top-3 text-outline pointer-events-none" />
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="flex-1 min-w-50">
@@ -587,6 +635,42 @@ function ReportTrainingPlanPage() {
                                         <IterationCw className={`w-4 h-4 ${isGenerating ? "animate-spin" : ""}`} />
                                         {isGenerating ? "Generando..." : "Generar Plan"}
                                     </button>
+                                </div>
+                            </div>
+                            <div className="flex gap-2 items-center justify-between text-[10px] text-outline">
+                                <div className="flex gap-2 items-center">
+                                    <button
+                                        type="button"
+                                        className={`px-3 py-1 rounded-full border text-[10px] font-semibold transition-colors ${periodMode === "year" ? "bg-[#1b3022] text-white border-[#1b3022]" : "bg-white border-[#edeeed] hover:bg-[#edeeed]"}`}
+                                        onClick={() => setPeriodMode("year")}
+                                    >
+                                        Ciclo anual
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`px-3 py-1 rounded-full border text-[10px] font-semibold transition-colors ${periodMode === "month" ? "bg-[#1b3022] text-white border-[#1b3022]" : "bg-white border-[#edeeed] hover:bg-[#edeeed]"}`}
+                                        onClick={() => setPeriodMode("month")}
+                                    >
+                                        Mensual
+                                    </button>
+                                    {periodMode === "month" && (
+                                        <div className="relative flex-1 min-w-32">
+                                            <select
+                                                className="w-full bg-white border border-[#edeeed] rounded-lg py-2 pl-3 pr-8 text-xs font-medium text-[#191c1c] appearance-none focus:outline-none focus:ring-1 focus:ring-primary-container"
+                                                value={selectedMonth ?? ""}
+                                                onChange={(event) => {
+                                                    const value = event.target.value
+                                                    setSelectedMonth(value ? Number(value) : null)
+                                                }}
+                                            >
+                                                <option value="">Todos los meses</option>
+                                                {MONTH_LABELS.map((label, index) => (
+                                                    <option key={label} value={index + 1}>{label}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown className="absolute right-2 top-2.5 w-4 h-4 text-outline pointer-events-none" />
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </section>
