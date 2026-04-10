@@ -597,7 +597,8 @@ export async function getTrainingHoursByRoleForYear(
     const participants: MeetingParticipant[] = participantsValue ? Object.values(participantsValue) : []
 
     for (const participant of participants) {
-      if (participant.noShow) {
+      const attendance = participant.attendance ?? null
+      if (participant.noShow || (attendance !== "present" && attendance !== "late")) {
         continue
       }
 
