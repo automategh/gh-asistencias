@@ -1,11 +1,12 @@
 import Layout from "@/components/layouts/layout"
 import { useAuth } from "@/context/AuthContext"
 import { useDatabase } from "@/context/DatabaseContext"
-import { getTrainingYearsForDatabase } from "@/services/meetings.analytics.service"
+import { getMeetingYearsForDatabase } from "@/services/meetings.analytics.service"
 import { getUserInvitedMeetings } from "@/services/meetings.listing.service"
 import { getUsersForReports, type ReportUserItem } from "@/services/user.service"
-import type { Meeting } from "@/types/meeting"
+import type { Meeting, MeetingParticipant } from "@/types/meeting"
 import { CalendarDays, ChevronRight, Search } from "lucide-react"
+import { get, ref } from "firebase/database"
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
@@ -104,7 +105,7 @@ function ReportIndividualPage() {
         const loadYears = async () => {
             try {
                 setIsLoadingYears(true)
-                const years = await getTrainingYearsForDatabase(database)
+                const years = await getMeetingYearsForDatabase(database)
 
                 if (cancelled) {
                     return
@@ -125,7 +126,7 @@ function ReportIndividualPage() {
                     return years.includes(currentYear) ? currentYear : years[0]
                 })
             } catch (error) {
-                console.error("No fue posible cargar los años de capacitación:", error)
+                console.error("No fue posible cargar los años de actividades:", error)
                 if (!cancelled) {
                     setAvailableYears([])
                     setSelectedYear(null)
@@ -194,23 +195,45 @@ function ReportIndividualPage() {
                     return true
                 })
 
+                const attendedTrainings: Array<{ meeting: Meeting; hours: number }> = []
                 let totalHours = 0
+
                 for (const meeting of meetingsInPeriod) {
-                    const durationMs = Math.max(0, meeting.endTime - meeting.startTime)
-                    const hours = durationMs / (1000 * 60 * 60)
-                    totalHours += hours
+                    try {
+                        const participantSnap = await get(ref(database, `meetingParticipants/${meeting.id}/${selectedUserId}`))
+                        if (!participantSnap.exists()) {
+                            continue
+                        }
+
+                        const participant = participantSnap.val() as MeetingParticipant
+                        const attendance = participant.attendance ?? null
+                        const isPresentOrLate = attendance === "present" || attendance === "late"
+                        const isNoShow = Boolean(participant.noShow)
+
+                        if (!isPresentOrLate || isNoShow) {
+                            continue
+                        }
+
+                        const durationMs = Math.max(0, meeting.endTime - meeting.startTime)
+                        const hours = durationMs / (1000 * 60 * 60)
+
+                        attendedTrainings.push({
+                            meeting,
+                            hours,
+                        })
+                        totalHours += hours
+                    } catch (readError) {
+                        console.error("No fue posible leer la asistencia individual para el reporte:", readError)
+                    }
                 }
 
                 setMetrics({
                     totalHours,
-                    coursesDone: meetingsInPeriod.length,
-                    trainings: meetingsInPeriod.map((meeting) => ({
-                        meeting,
-                        hours: Math.max(0, meeting.endTime - meeting.startTime) / (1000 * 60 * 60),
-                    })),
+                    coursesDone: attendedTrainings.length,
+                    trainings: attendedTrainings,
                 })
             } catch (error) {
-                console.error("No fue posible calcular las métricas individuales de capacitación:", error)
+                console.error("No fue posible calcular las métricas individuales de actividades:", error)
                 if (!cancelled) {
                     setMetrics({ totalHours: 0, coursesDone: 0, trainings: [] })
                 }
@@ -428,7 +451,7 @@ function ReportIndividualPage() {
                                                 ? "Selecciona un año para ver el estado."
                                                 : metrics.coursesDone > 0
                                                     ? "Con participación activa en el periodo."
-                                                    : "Sin registros de capacitación en el periodo."}
+                                                    : "Sin registros de actividades en el periodo."}
                                         </p>
                                         <p className="mt-2 text-[11px] text-[#7a837a]">
                                             Resumen cualitativo basado en la participación.
