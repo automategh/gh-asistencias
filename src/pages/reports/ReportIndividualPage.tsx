@@ -9,6 +9,21 @@ import { CalendarDays, ChevronRight, Search } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
+const MONTH_LABELS: readonly string[] = [
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+]
+
 function ReportIndividualPage() {
 
     const navigate = useNavigate()
@@ -24,6 +39,7 @@ function ReportIndividualPage() {
     const [availableYears, setAvailableYears] = useState<number[]>([])
     const [selectedYear, setSelectedYear] = useState<number | null>(null)
     const [isLoadingYears, setIsLoadingYears] = useState<boolean>(false)
+    const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
 
     const [isLoadingMetrics, setIsLoadingMetrics] = useState<boolean>(false)
     const [metrics, setMetrics] = useState<{
@@ -162,13 +178,24 @@ function ReportIndividualPage() {
                     return
                 }
 
-                const meetingsInYear = invited.filter((item) => {
-                    const year = new Date(item.startTime).getFullYear()
-                    return year === selectedYear
+                const meetingsInPeriod = invited.filter((item) => {
+                    const date = new Date(item.startTime)
+                    const year = date.getFullYear()
+                    const month = date.getMonth() + 1
+
+                    if (year !== selectedYear) {
+                        return false
+                    }
+
+                    if (selectedMonth && month !== selectedMonth) {
+                        return false
+                    }
+
+                    return true
                 })
 
                 let totalHours = 0
-                for (const meeting of meetingsInYear) {
+                for (const meeting of meetingsInPeriod) {
                     const durationMs = Math.max(0, meeting.endTime - meeting.startTime)
                     const hours = durationMs / (1000 * 60 * 60)
                     totalHours += hours
@@ -176,8 +203,8 @@ function ReportIndividualPage() {
 
                 setMetrics({
                     totalHours,
-                    coursesDone: meetingsInYear.length,
-                    trainings: meetingsInYear.map((meeting) => ({
+                    coursesDone: meetingsInPeriod.length,
+                    trainings: meetingsInPeriod.map((meeting) => ({
                         meeting,
                         hours: Math.max(0, meeting.endTime - meeting.startTime) / (1000 * 60 * 60),
                     })),
@@ -199,7 +226,7 @@ function ReportIndividualPage() {
         return () => {
             cancelled = true
         }
-    }, [database, selectedUserId, selectedYear])
+    }, [database, selectedUserId, selectedYear, selectedMonth])
 
     const selectedUser = useMemo(
         () => users.find((item) => item.uid === selectedUserId) ?? null,
@@ -238,7 +265,7 @@ function ReportIndividualPage() {
                                     onChange={(event) => setSearch(event.target.value)}
                                 />
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 flex-wrap justify-end">
                                 <div className="flex items-center gap-2 rounded-full bg-white border border-[#e3e5e3] px-3 py-1.5 shadow-xs">
                                     <CalendarDays className="w-4 h-4 text-[#7a837a]" />
                                     <select
@@ -255,6 +282,25 @@ function ReportIndividualPage() {
                                         {availableYears.map((year) => (
                                             <option key={year} value={year}>
                                                 {year}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex items-center gap-2 rounded-full bg-white border border-[#e3e5e3] px-3 py-1.5 shadow-xs">
+                                    <span className="text-[10px] font-semibold text-[#7a837a]">Mes</span>
+                                    <select
+                                        className="bg-transparent text-xs font-semibold text-[#191c1c] focus:outline-none"
+                                        value={selectedMonth ?? ""}
+                                        onChange={(event) => {
+                                            const value = event.target.value
+                                            setSelectedMonth(value ? Number(value) : null)
+                                        }}
+                                        disabled={!selectedYear}
+                                    >
+                                        <option value="">Todos</option>
+                                        {MONTH_LABELS.map((label, index) => (
+                                            <option key={label} value={index + 1}>
+                                                {label}
                                             </option>
                                         ))}
                                     </select>
@@ -359,18 +405,18 @@ function ReportIndividualPage() {
                                             </p>
                                         </div>
                                         <p className="mt-2 text-[11px] text-emerald-100">
-                                            Horas acumuladas en capacitaciones del año seleccionado.
+                                            Horas acumuladas del periodo seleccionado.
                                         </p>
                                     </div>
                                     <div className="bg-white rounded-2xl border border-[#edeeed] p-5">
                                         <p className="text-[10px] uppercase tracking-[0.18em] text-outline font-bold mb-1">
-                                            Reuniones registradas
+                                            Actividades registradas
                                         </p>
                                         <p className="text-3xl font-extrabold text-[#191c1c]">
                                             {isLoadingMetrics || !selectedYear ? "--" : metrics.coursesDone}
                                         </p>
                                         <p className="mt-2 text-[11px] text-[#7a837a]">
-                                            Reuniones y capacitaciones cerradas o completadas en el año.
+                                            Actividades cerradas o completadas en el periodo.
                                         </p>
                                     </div>
                                     <div className="bg-white rounded-2xl border border-[#edeeed] p-5">
@@ -385,7 +431,7 @@ function ReportIndividualPage() {
                                                     : "Sin registros de capacitación en el periodo."}
                                         </p>
                                         <p className="mt-2 text-[11px] text-[#7a837a]">
-                                            Resumen cualitativo basado en la participación en capacitaciones.
+                                            Resumen cualitativo basado en la participación.
                                         </p>
                                     </div>
                                 </div>
@@ -394,10 +440,10 @@ function ReportIndividualPage() {
                                     <div className="flex items-center justify-between mb-3">
                                         <div>
                                             <p className="text-[10px] uppercase tracking-[0.18em] text-outline font-bold">
-                                                Historial de reuniones
+                                                Historial de Actividades
                                             </p>
                                             <p className="text-xs text-[#5a665a]">
-                                                Reuniones y capacitaciones del año seleccionado en las que el colaborador fue participante.
+                                                Actividades del periodo seleccionado en las que el colaborador fue participante.
                                             </p>
                                         </div>
                                     </div>
