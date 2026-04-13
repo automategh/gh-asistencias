@@ -1,24 +1,29 @@
 import Layout from "@/components/layouts/layout"
 import { useAuth } from "@/context/AuthContext"
 import { useDatabase } from "@/context/DatabaseContext"
-import { getTrainingYearsForDatabase } from "@/services/meetings.analytics.service"
-import { getUserInvitedMeetings } from "@/services/meetings.listing.service"
+import { getMeetingYearsForDatabase } from "@/services/meetings.analytics.service"
 import { getUsersForReports, type ReportUserItem } from "@/services/user.service"
-import type { Meeting } from "@/types/meeting"
-import { CalendarDays, ChevronRight, LucideBarChart, Search, Users as UsersIcon, Clock } from "lucide-react"
+import type { Meeting, MeetingParticipant } from "@/types/meeting"
+import { CalendarDays, ChevronRight, LucideBarChart, Search, Users as UsersIcon, Clock, X } from "lucide-react"
+import { get, ref } from "firebase/database"
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
-interface UserGroupStats {
-    readonly user: ReportUserItem
+interface ActivityGroupStats {
+    readonly meeting: Meeting
     readonly totalHours: number
-    readonly meetingsCount: number
+    readonly attendeesCount: number
 }
 
 interface GroupAggregate {
     readonly totalHours: number
     readonly totalMeetings: number
     readonly peopleCount: number
+}
+
+interface ActivityDetailAttendee {
+    readonly participant: MeetingParticipant
+    readonly user: ReportUserItem | null
 }
 
 function ReportGroupPage() {
@@ -37,12 +42,17 @@ function ReportGroupPage() {
     const [search, setSearch] = useState<string>("")
 
     const [isLoadingStats, setIsLoadingStats] = useState<boolean>(false)
-    const [stats, setStats] = useState<UserGroupStats[]>([])
+    const [stats, setStats] = useState<ActivityGroupStats[]>([])
     const [aggregate, setAggregate] = useState<GroupAggregate>({
         totalHours: 0,
         totalMeetings: 0,
         peopleCount: 0,
     })
+
+    const [selectedActivity, setSelectedActivity] = useState<Meeting | null>(null)
+    const [activityAttendees, setActivityAttendees] = useState<ActivityDetailAttendee[]>([])
+    const [isLoadingActivityDetail, setIsLoadingActivityDetail] = useState<boolean>(false)
+    const [activityDetailError, setActivityDetailError] = useState<string | null>(null)
 
     useEffect(() => {
         if (!database || !user) {
@@ -97,7 +107,7 @@ function ReportGroupPage() {
         const loadYears = async () => {
             try {
                 setIsLoadingYears(true)
-                const years = await getTrainingYearsForDatabase(database)
+                const years = await getMeetingYearsForDatabase(database)
 
                 if (cancelled) {
                     return
@@ -154,86 +164,110 @@ function ReportGroupPage() {
             try {
                 setIsLoadingStats(true)
 
-                const uniqueMeetingHours = new Map<string, number>()
+                const allowedUids = new Set(allUsers.map((item) => item.uid))
+                const attendeesUniverse = new Set<string>()
+                const activityStats: ActivityGroupStats[] = []
 
-                const now = Date.now()
-                const lookbackMs = 3 * 365 * 24 * 60 * 60 * 1000
+                const meetingsSnapshot = await get(ref(database, "meetings"))
+                if (!meetingsSnapshot.exists()) {
+                    if (!cancelled) {
+                        setStats([])
+                        setAggregate({
+                            totalHours: 0,
+                            totalMeetings: 0,
+                            peopleCount: 0,
+                        })
+                    }
+                    return
+                }
 
-                const tasks = allUsers.map(async (item) => {
-                    const invited = await getUserInvitedMeetings(database, item.uid, now, lookbackMs, ["completed", "closed"])
+                const meetingsValue = meetingsSnapshot.val() as Record<string, Meeting> | null
+                if (!meetingsValue) {
+                    if (!cancelled) {
+                        setStats([])
+                        setAggregate({
+                            totalHours: 0,
+                            totalMeetings: 0,
+                            peopleCount: 0,
+                        })
+                    }
+                    return
+                }
 
+                const candidateMeetings = Object.values(meetingsValue).filter((meeting) => {
+                    const year = new Date(meeting.startTime).getFullYear()
+                    const isStatusValid =
+                        meeting.status === "completed"
+                        || meeting.status === "closed"
+                        || meeting.status === "scheduled"
+                    return year === selectedYear && isStatusValid
+                })
+
+                let totalHours = 0
+                let totalMeetings = 0
+
+                for (const meeting of candidateMeetings) {
                     if (cancelled) {
-                        return null
+                        return
                     }
 
-                    const meetingsInYear = invited.filter((meeting: Meeting) => {
-                        const year = new Date(meeting.startTime).getFullYear()
-                        return year === selectedYear
-                    })
+                    const participantsSnapshot = await get(ref(database, `meetingParticipants/${meeting.id}`))
+                    if (!participantsSnapshot.exists()) {
+                        continue
+                    }
 
-                    if (meetingsInYear.length === 0) {
-                        return {
-                            user: item,
-                            totalHours: 0,
-                            meetingsCount: 0,
+                    const participantsValue = participantsSnapshot.val() as Record<string, MeetingParticipant> | null
+                    const attendeesForMeeting: MeetingParticipant[] = []
+
+                    if (participantsValue) {
+                        for (const participant of Object.values(participantsValue)) {
+                        const isAllowed = allowedUids.has(participant.uid)
+                        const attendance = participant.attendance ?? null
+                        const isPresentOrLate = attendance === "present" || attendance === "late"
+                        const isNoShow = Boolean(participant.noShow)
+
+                        if (!isAllowed || !isPresentOrLate || isNoShow) {
+                            continue
+                        }
+
+                        attendeesForMeeting.push(participant)
+                        attendeesUniverse.add(participant.uid)
                         }
                     }
 
-                    let totalHours = 0
-                    for (const meeting of meetingsInYear) {
-                        const durationMs = Math.max(0, meeting.endTime - meeting.startTime)
-                        const hours = durationMs / (1000 * 60 * 60)
-                        totalHours += hours
-                        uniqueMeetingHours.set(meeting.id, hours)
-                    }
+                    const durationMs = Math.max(0, meeting.endTime - meeting.startTime)
+                    const hours = durationMs / (1000 * 60 * 60)
 
-                    return {
-                        user: item,
-                        totalHours,
-                        meetingsCount: meetingsInYear.length,
+                    activityStats.push({
+                        meeting,
+                        totalHours: hours,
+                        attendeesCount: attendeesForMeeting.length,
+                    })
+
+                    totalHours += hours
+                    totalMeetings += 1
+                }
+
+                activityStats.sort((first, second) => {
+                    if (second.totalHours !== first.totalHours) {
+                        return second.totalHours - first.totalHours
                     }
+                    if (second.attendeesCount !== first.attendeesCount) {
+                        return second.attendeesCount - first.attendeesCount
+                    }
+                    return second.meeting.startTime - first.meeting.startTime
                 })
-
-                const results = await Promise.all(tasks)
 
                 if (cancelled) {
                     return
                 }
 
-                const compact: UserGroupStats[] = results
-                    .filter((item): item is UserGroupStats => Boolean(item))
-                    .filter((item) => item.meetingsCount > 0 || item.totalHours > 0)
-
-                compact.sort((first, second) => {
-                    if (second.totalHours !== first.totalHours) {
-                        return second.totalHours - first.totalHours
-                    }
-                    return second.meetingsCount - first.meetingsCount
+                setStats(activityStats)
+                setAggregate({
+                    totalHours,
+                    totalMeetings,
+                    peopleCount: attendeesUniverse.size,
                 })
-
-                setStats(compact)
-
-                if (compact.length === 0) {
-                    setAggregate({
-                        totalHours: 0,
-                        totalMeetings: 0,
-                        peopleCount: 0,
-                    })
-                } else {
-                    let totalUniqueHours = 0
-                    let totalUniqueMeetings = 0
-
-                    for (const hours of uniqueMeetingHours.values()) {
-                        totalUniqueHours += hours
-                        totalUniqueMeetings += 1
-                    }
-
-                    setAggregate({
-                        totalHours: totalUniqueHours,
-                        totalMeetings: totalUniqueMeetings,
-                        peopleCount: compact.length,
-                    })
-                }
             } catch (error) {
                 console.error("No fue posible calcular el reporte General:", error)
                 if (!cancelled) {
@@ -265,16 +299,17 @@ function ReportGroupPage() {
         }
 
         return stats.filter((item) => {
-            const { user: u } = item
-            const name = u.name.toLowerCase()
-            const email = u.email.toLowerCase()
-            const department = (u.department ?? "").toLowerCase()
-            const cargo = (u.cargo ?? "").toLowerCase()
+            const title = item.meeting.title.toLowerCase()
+            const location = item.meeting.location.toLowerCase()
+            const typeLabel = item.meeting.type.toLowerCase()
+            const creatorName = (item.meeting.createdByName ?? "").toLowerCase()
+            const customType = (item.meeting.customType ?? "").toLowerCase()
             return (
-                name.includes(term)
-                || email.includes(term)
-                || department.includes(term)
-                || cargo.includes(term)
+                title.includes(term)
+                || location.includes(term)
+                || typeLabel.includes(term)
+                || creatorName.includes(term)
+                || customType.includes(term)
             )
         })
     }, [search, stats])
@@ -288,6 +323,74 @@ function ReportGroupPage() {
             })
         }
     }, [isLoadingStats, stats.length])
+
+    /**
+     * Abre el detalle de asistentes para una actividad específica,
+     * mostrando únicamente quienes marcaron asistencia real (present o late, sin noShow).
+     */
+    const handleOpenActivityDetail = async (meeting: Meeting): Promise<void> => {
+        if (!database) {
+            return
+        }
+
+        setSelectedActivity(meeting)
+        setActivityAttendees([])
+        setActivityDetailError(null)
+        setIsLoadingActivityDetail(true)
+
+        try {
+            const allowedUids = new Set(allUsers.map((item) => item.uid))
+
+            const participantsSnapshot = await get(ref(database, `meetingParticipants/${meeting.id}`))
+            if (!participantsSnapshot.exists()) {
+                setActivityAttendees([])
+                return
+            }
+
+            const participantsValue = participantsSnapshot.val() as Record<string, MeetingParticipant> | null
+            if (!participantsValue) {
+                setActivityAttendees([])
+                return
+            }
+
+            const attendees: ActivityDetailAttendee[] = []
+
+            for (const participant of Object.values(participantsValue)) {
+                const isAllowed = allowedUids.has(participant.uid)
+                const attendance = participant.attendance ?? null
+                const isPresentOrLate = attendance === "present" || attendance === "late"
+                const isNoShow = Boolean(participant.noShow)
+
+                if (!isAllowed || !isPresentOrLate || isNoShow) {
+                    continue
+                }
+
+                const userMeta = allUsers.find((item) => item.uid === participant.uid) ?? null
+
+                attendees.push({
+                    participant,
+                    user: userMeta,
+                })
+            }
+
+            attendees.sort((first, second) => first.participant.name.localeCompare(second.participant.name, "es"))
+            setActivityAttendees(attendees)
+        } catch (error) {
+            console.error("No fue posible cargar los asistentes de la actividad:", error)
+            setActivityDetailError("No fue posible cargar los asistentes que marcaron asistencia en esta actividad.")
+        } finally {
+            setIsLoadingActivityDetail(false)
+        }
+    }
+
+    /**
+     * Cierra el panel de detalle de asistentes de la actividad.
+     */
+    const handleCloseActivityDetail = (): void => {
+        setSelectedActivity(null)
+        setActivityAttendees([])
+        setActivityDetailError(null)
+    }
 
     return (
         <Layout>
@@ -328,7 +431,7 @@ function ReportGroupPage() {
                                 <input
                                     type="text"
                                     className="flex-1 bg-transparent text-sm text-[#191c1c] placeholder:text-[#9aa29a] focus:outline-none disabled:text-[#b3bab3]"
-                                    placeholder="Buscar colaboradores por nombre, correo, cargo o departamento..."
+                                    placeholder="Buscar actividades por título, lugar, tipo o responsable..."
                                     value={search}
                                     onChange={(event) => setSearch(event.target.value)}
                                     disabled={isLoadingUsers}
@@ -389,7 +492,7 @@ function ReportGroupPage() {
                                     <LucideBarChart className="w-9 h-9 text-emerald-700" />
                                 </div>
                                 <p className="text-[11px] text-[#7a837a]">
-                                    Número total de actividades cerradas o completadas en las que participaron los colaboradores.
+                                    Número total de actividades programadas, cerradas o completadas en el año seleccionado.
                                 </p>
                             </div>
                             <div className="bg-white rounded-3xl border border-[#edeeed] p-6 shadow-sm flex flex-col justify-between">
@@ -414,75 +517,161 @@ function ReportGroupPage() {
                             <div className="flex items-center justify-between mb-4">
                                 <div>
                                     <p className="text-[10px] uppercase tracking-[0.18em] text-outline font-bold">
-                                        Distribución por colaborador
+                                        Actividades del año
                                     </p>
                                     <p className="text-xs text-[#5a665a]">
-                                        Ordenado por horas acumuladas. Ideal para detectar equipos con mayor carga de actividades.
+                                        Listado de actividades programadas, cerradas o completadas durante el año seleccionado.
                                     </p>
                                 </div>
                             </div>
 
-                            {isLoadingStats ? (
+                                    {isLoadingStats ? (
                                 <p className="text-xs text-[#5a665a]">Calculando métricas Generales...</p>
                             ) : !selectedYear ? (
                                 <p className="text-xs text-[#5a665a]">Selecciona un año para ver el detalle General.</p>
                             ) : filteredStats.length === 0 ? (
                                 <p className="text-xs text-[#5a665a]">
-                                    No se encontraron actividades para los colaboradores seleccionados en el año indicado.
+                                            No se encontraron actividades con asistencia registrada para el año indicado.
                                 </p>
                             ) : (
                                 <div className="mt-3 space-y-2 max-h-130 overflow-y-auto pr-1">
-                                    {filteredStats.map((item) => {
-                                        const initials = item.user.name
-                                            .split(" ")
-                                            .filter((part) => part.length > 0)
-                                            .slice(0, 2)
-                                            .map((part) => part[0]?.toUpperCase() ?? "")
-                                            .join("")
+                                            {filteredStats.map((item) => {
+                                                const avatarLabel = item.meeting.type === "training" ? "C" : item.meeting.type === "meeting" ? "R" : "A"
+                                                const dateLabel = new Date(item.meeting.startTime).toLocaleDateString("es-ES", {
+                                                    day: "2-digit",
+                                                    month: "short",
+                                                    year: "numeric",
+                                                })
+                                                const timeLabel = new Date(item.meeting.startTime).toLocaleTimeString("es-ES", {
+                                                    hour: "2-digit",
+                                                    minute: "2-digit",
+                                                })
+                                                const typeLabel =
+                                                    item.meeting.type === "training"
+                                                        ? "Capacitación"
+                                                    : item.meeting.type === "meeting"
+                                                            ? "Reunión"
+                                                            : item.meeting.customType ?? "Actividad"
 
-                                        const departmentLabel = item.user.department ?? "Sin departamento"
-                                        const cargoLabel = item.user.cargo ?? "Sin cargo"
-
-                                        return (
-                                            <article
-                                                key={item.user.uid}
-                                                className="flex items-center justify-between rounded-2xl border border-[#edeeed] bg-[#fafbfa] px-4 py-3 text-xs"
-                                            >
-                                                <div className="flex items-center gap-3 min-w-0 flex-1">
-                                                    <div className="w-9 h-9 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[11px] font-semibold">
-                                                        {initials || "?"}
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <p className="font-semibold text-[#191c1c] truncate">{item.user.name}</p>
-                                                        <p className="text-[11px] text-[#7a837a] truncate">{item.user.email}</p>
-                                                        <p className="mt-0.5 text-[10px] text-[#7a837a] truncate">
-                                                            {departmentLabel} · {cargoLabel}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-6 pl-4">
-                                                    <div className="text-right">
-                                                        <p className="text-[11px] text-[#7a837a]">Horas</p>
-                                                        <p className="text-sm font-semibold text-[#191c1c]">
-                                                            {item.totalHours.toFixed(1)}
-                                                        </p>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-[11px] text-[#7a837a]">Actividades</p>
-                                                        <p className="text-sm font-semibold text-[#191c1c]">
-                                                            {item.meetingsCount}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </article>
-                                        )
-                                    })}
+                                                return (
+                                                    <article
+                                                        key={item.meeting.id}
+                                                        className="flex items-center justify-between rounded-2xl border border-[#edeeed] bg-[#fafbfa] px-4 py-3 text-xs cursor-pointer hover:bg-[#f3f4f3]"
+                                                        onClick={() => {
+                                                            void handleOpenActivityDetail(item.meeting)
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                            <div className="w-9 h-9 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[11px] font-semibold">
+                                                                {avatarLabel}
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="font-semibold text-[#191c1c] truncate">{item.meeting.title}</p>
+                                                                <p className="text-[11px] text-[#7a837a] truncate">{item.meeting.location}</p>
+                                                                <p className="mt-0.5 text-[10px] text-[#7a837a] truncate">
+                                                                    {typeLabel} · {dateLabel} · {timeLabel}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-6 pl-4">
+                                                            <div className="text-right">
+                                                                <p className="text-[11px] text-[#7a837a]">Horas</p>
+                                                                <p className="text-sm font-semibold text-[#191c1c]">
+                                                                    {item.totalHours.toFixed(1)}
+                                                                </p>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="text-[11px] text-[#7a837a]">Asistentes</p>
+                                                                <p className="text-sm font-semibold text-[#191c1c]">
+                                                                    {item.attendeesCount}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </article>
+                                                )
+                                            })}
                                 </div>
                             )}
                         </section>
                     </div>
                 </div>
             </div>
+                    {selectedActivity && (
+                        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-xs">
+                            <div className="bg-white rounded-2xl shadow-[0_24px_40px_rgba(15,23,42,0.25)] w-full max-w-xl mx-4">
+                                <div className="flex items-start justify-between px-6 pt-5 pb-3 border-b border-[#edeeed]">
+                                    <div>
+                                        <p className="text-[10px] uppercase tracking-widest text-outline font-bold mb-1">
+                                            Asistentes de la actividad
+                                        </p>
+                                        <h2 className="text-lg font-bold text-[#191c1c] leading-snug">
+                                            {selectedActivity.title}
+                                        </h2>
+                                        {selectedYear && (
+                                            <p className="text-[11px] text-slate-500 mt-1">Año {selectedYear}</p>
+                                        )}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleCloseActivityDetail}
+                                        className="p-1.5 rounded-full hover:bg-[#edeeed] text-outline hover:text-[#191c1c] transition-colors"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <div className="px-6 pt-4 pb-5 max-h-80 overflow-y-auto">
+                                    {isLoadingActivityDetail ? (
+                                        <p className="text-xs text-[#5a665a]">Cargando asistentes con marcación de asistencia...</p>
+                                    ) : activityDetailError ? (
+                                        <p className="text-xs text-red-600">{activityDetailError}</p>
+                                    ) : activityAttendees.length === 0 ? (
+                                        <p className="text-xs text-[#5a665a]">
+                                            No se encontraron asistentes que hayan marcado asistencia real en esta actividad.
+                                        </p>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {activityAttendees.map((item) => {
+                                                const displayName = item.user?.name ?? item.participant.name
+                                                const displayEmail = item.user?.email ?? item.participant.email
+                                                const departmentLabel = item.user?.department ?? "Sin departamento"
+                                                const cargoLabel = item.user?.cargo ?? "Sin cargo"
+                                                const initials = displayName
+                                                    .split(" ")
+                                                    .filter((part) => part.length > 0)
+                                                    .slice(0, 2)
+                                                    .map((part) => part[0]?.toUpperCase() ?? "")
+                                                    .join("")
+                                                const attendanceLabel = item.participant.attendance === "late" ? "Tarde" : "Presente"
+
+                                                return (
+                                                    <div
+                                                        key={item.participant.uid}
+                                                        className="flex items-center justify-between rounded-xl bg-[#fafbfa] border border-[#edeeed] px-4 py-3 text-xs"
+                                                    >
+                                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                            <div className="w-9 h-9 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[11px] font-semibold">
+                                                                {initials || "?"}
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <p className="font-semibold text-[#191c1c] truncate">{displayName}</p>
+                                                                <p className="text-[11px] text-[#7a837a] truncate">{displayEmail}</p>
+                                                                <p className="mt-0.5 text-[10px] text-[#7a837a] truncate">
+                                                                    {departmentLabel} · {cargoLabel}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="w-28 text-right">
+                                                            <p className="text-[11px] text-[#7a837a]">{attendanceLabel}</p>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
         </Layout>
     )
 }

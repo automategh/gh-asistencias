@@ -441,6 +441,37 @@ export async function getTrainingYearsForDatabase(database: Database): Promise<n
 }
 
 /**
+ * Obtiene el listado de años calendario en los que existen
+ * reuniones de cualquier tipo registradas en la base de datos.
+ *
+ * Se utiliza en el reporte general, donde se analizan
+ * tanto capacitaciones como otros tipos de actividades.
+ */
+export async function getMeetingYearsForDatabase(database: Database): Promise<number[]> {
+  const meetingsRef = ref(database, "meetings")
+  const snapshot = await get(meetingsRef)
+  const values = snapshot.val() as Record<string, Meeting> | null
+
+  if (!values) {
+    return []
+  }
+
+  const yearsSet = new Set<number>()
+
+  Object.values(values).forEach((meeting) => {
+    if (typeof meeting.startTime !== "number") {
+      return
+    }
+    const year = new Date(meeting.startTime).getFullYear()
+    yearsSet.add(year)
+  })
+
+  const years = Array.from(yearsSet)
+  years.sort((a, b) => b - a)
+  return years
+}
+
+/**
  * Obtiene, para un año específico, cuántas capacitaciones
  * (reuniones de tipo `training`) ha tenido cada departamento.
  *

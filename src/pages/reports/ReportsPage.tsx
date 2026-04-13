@@ -109,7 +109,7 @@ function ReportsPage() {
                                     <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-900 flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-500">
                                         <Users className='w-8 h-8' />
                                     </div>
-                                    <h4 className="text-3xl font-headline font-bold mb-4">Reporte Grupal</h4>
+                                    <h4 className="text-3xl font-headline font-bold mb-4">Reporte General</h4>
                                     <p className="font-body text-lg text-on-surface-variant leading-relaxed max-w-md">Análisis profundo de asistencia por grupo.</p>
                                 </div>
                                 <div className="mt-6 flex items-center justify-between px-2">
