@@ -66,7 +66,7 @@ function ReportGroupPage() {
 
                 setAllUsers(list)
             } catch (error) {
-                console.error("No fue posible cargar los usuarios para el reporte grupal:", error)
+                console.error("No fue posible cargar los usuarios para el reporte General:", error)
                 if (!cancelled) {
                     setAllUsers([])
                     setUsersError("No fue posible cargar la lista de colaboradores.")
@@ -118,7 +118,7 @@ function ReportGroupPage() {
                     return years.includes(currentYear) ? currentYear : years[0]
                 })
             } catch (error) {
-                console.error("No fue posible cargar los años para el reporte grupal:", error)
+                console.error("No fue posible cargar los años para el reporte General:", error)
                 if (!cancelled) {
                     setAvailableYears([])
                     setSelectedYear(null)
@@ -235,7 +235,7 @@ function ReportGroupPage() {
                     })
                 }
             } catch (error) {
-                console.error("No fue posible calcular el reporte grupal:", error)
+                console.error("No fue posible calcular el reporte General:", error)
                 if (!cancelled) {
                     setStats([])
                     setAggregate({
@@ -303,11 +303,11 @@ function ReportGroupPage() {
                                     Reportes
                                 </span>
                                 <ChevronRight className="w-4 h-4" />
-                                <span>Grupal</span>
+                                <span>General</span>
                             </div>
-                            <h1 className="text-3xl font-bold tracking-tight">Reporte Grupal</h1>
+                            <h1 className="text-3xl font-bold tracking-tight">Reporte General</h1>
                             <p className="font-body text-[#434843] text-sm mt-1 max-w-xl">
-                                Visualiza cómo se distribuyen las horas y reuniones entre los colaboradores de tu organización
+                                Visualiza cómo se distribuyen las horas y actividades entre los colaboradores de tu organización
                                 durante el año seleccionado.
                             </p>
                         </div>
@@ -373,14 +373,14 @@ function ReportGroupPage() {
                                     <Clock className="w-9 h-9 text-emerald-100" />
                                 </div>
                                 <p className="text-[11px] text-emerald-100">
-                                    Suma de horas en todas las reuniones y capacitaciones del año seleccionado.
+                                    Suma de horas en todas las actividades y capacitaciones del año seleccionado.
                                 </p>
                             </div>
                             <div className="bg-white rounded-3xl border border-[#edeeed] p-6 shadow-sm flex flex-col justify-between">
                                 <div className="flex items-center justify-between mb-4">
                                     <div>
                                         <p className="text-[10px] uppercase tracking-[0.18em] text-outline font-bold mb-1">
-                                            Reuniones registradas
+                                            Actividades registradas
                                         </p>
                                         <p className="text-3xl font-extrabold text-[#191c1c]">
                                             {selectedYear && !isLoadingStats ? aggregate.totalMeetings : "--"}
@@ -389,7 +389,7 @@ function ReportGroupPage() {
                                     <LucideBarChart className="w-9 h-9 text-emerald-700" />
                                 </div>
                                 <p className="text-[11px] text-[#7a837a]">
-                                    Número total de reuniones cerradas o completadas en las que participaron los colaboradores.
+                                    Número total de actividades cerradas o completadas en las que participaron los colaboradores.
                                 </p>
                             </div>
                             <div className="bg-white rounded-3xl border border-[#edeeed] p-6 shadow-sm flex flex-col justify-between">
@@ -405,7 +405,7 @@ function ReportGroupPage() {
                                     <UsersIcon className="w-9 h-9 text-emerald-700" />
                                 </div>
                                 <p className="text-[11px] text-[#7a837a]">
-                                    Colaboradores con al menos una reunión registrada en el año.
+                                    Colaboradores con al menos una actividad registrada en el año.
                                 </p>
                             </div>
                         </section>
@@ -417,18 +417,18 @@ function ReportGroupPage() {
                                         Distribución por colaborador
                                     </p>
                                     <p className="text-xs text-[#5a665a]">
-                                        Ordenado por horas acumuladas. Ideal para detectar equipos con mayor carga de reuniones.
+                                        Ordenado por horas acumuladas. Ideal para detectar equipos con mayor carga de actividades.
                                     </p>
                                 </div>
                             </div>
 
                             {isLoadingStats ? (
-                                <p className="text-xs text-[#5a665a]">Calculando métricas grupales...</p>
+                                <p className="text-xs text-[#5a665a]">Calculando métricas Generales...</p>
                             ) : !selectedYear ? (
-                                <p className="text-xs text-[#5a665a]">Selecciona un año para ver el detalle grupal.</p>
+                                <p className="text-xs text-[#5a665a]">Selecciona un año para ver el detalle General.</p>
                             ) : filteredStats.length === 0 ? (
                                 <p className="text-xs text-[#5a665a]">
-                                    No se encontraron reuniones para los colaboradores seleccionados en el año indicado.
+                                    No se encontraron actividades para los colaboradores seleccionados en el año indicado.
                                 </p>
                             ) : (
                                 <div className="mt-3 space-y-2 max-h-130 overflow-y-auto pr-1">
@@ -468,7 +468,7 @@ function ReportGroupPage() {
                                                         </p>
                                                     </div>
                                                     <div className="text-right">
-                                                        <p className="text-[11px] text-[#7a837a]">Reuniones</p>
+                                                        <p className="text-[11px] text-[#7a837a]">Actividades</p>
                                                         <p className="text-sm font-semibold text-[#191c1c]">
                                                             {item.meetingsCount}
                                                         </p>
