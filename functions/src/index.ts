@@ -15,6 +15,7 @@ interface CreateTeamsMeetingRequest {
 	readonly startTime: number;
 	readonly endTime: number;
 	readonly timeZone: string;
+	readonly location: string;
 	readonly attendees: readonly MeetingAttendeeRequest[];
 }
 
@@ -96,6 +97,7 @@ export const createTeamsMeeting = onCall<CreateTeamsMeetingRequest>(
 				startDateTime: formatDateTimeForTimeZone(data.startTime, data.timeZone),
 				endDateTime: formatDateTimeForTimeZone(data.endTime, data.timeZone),
 				timeZone: data.timeZone,
+				location: data.location,
 				attendees: sanitizedAttendees,
 			};
 

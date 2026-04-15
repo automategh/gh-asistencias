@@ -14,6 +14,7 @@ export interface CreateTeamsMeetingPayload {
   readonly startTime: number;
   readonly endTime: number;
   readonly timeZone: string;
+  readonly location: string;
   readonly attendees: readonly TeamsMeetingAttendeeInput[];
 }
 

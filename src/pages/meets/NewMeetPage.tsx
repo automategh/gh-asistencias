@@ -411,6 +411,7 @@ function NewMeetPage() {
                     startTime: meeting.startTime,
                     endTime: meeting.endTime,
                     timeZone,
+                    location: meeting.location,
                     attendees: selected.map(participant => ({
                         email: participant.email,
                         name: participant.name,

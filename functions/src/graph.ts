@@ -147,6 +147,9 @@ export class Graph {
                 },
                 type: attendee.type ?? "required",
             })),
+            location: {
+                displayName: options.location,
+            },
             isOnlineMeeting: true,
             onlineMeetingProvider: "teamsForBusiness",
         };
@@ -210,6 +213,7 @@ export interface CreateTeamsMeetingOptions {
      * Zona horaria compatible con Graph, por ejemplo "America/Bogota".
      */
     readonly timeZone: string;
+    readonly location: string;
     readonly attendees: readonly MeetingAttendee[];
 }
 
@@ -251,6 +255,9 @@ interface GraphCreateEventRequest {
         };
         readonly type: "required" | "optional";
     }[];
+    readonly location: {
+        readonly displayName: string;
+    };
     readonly isOnlineMeeting: true;
     readonly onlineMeetingProvider: "teamsForBusiness";
 }
