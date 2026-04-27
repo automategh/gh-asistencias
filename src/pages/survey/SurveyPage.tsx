@@ -13,6 +13,11 @@ import {
     type SurveyOption,
     type SurveyQuestion,
 } from "@/services/forms.service"
+import type { MeetingParticipant } from "@/types/meeting"
+import { getAllAvailableDatabases } from "@/lib/firebase/databaseResolver"
+import { getDatabaseForUrl } from "@/services/firebase"
+import { get, ref } from "firebase/database"
+import { AlertCircle } from "lucide-react"
 import { PencilLine } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useParams } from "react-router-dom"
@@ -28,6 +33,61 @@ function SurveyPage() {
     const [submitError, setSubmitError] = useState<string | null>(null)
     const [submitSuccess, setSubmitSuccess] = useState<boolean>(false)
     const [hasResponded, setHasResponded] = useState<boolean>(false)
+    const [hasAttendance, setHasAttendance] = useState<boolean>(false)
+    const [isCheckingAttendance, setIsCheckingAttendance] = useState<boolean>(true)
+
+    useEffect(() => {
+        if (!trainingId || !user) {
+            setHasAttendance(false)
+            setIsCheckingAttendance(false)
+            return
+        }
+
+        let cancelled = false
+
+        const checkAttendance = async () => {
+            try {
+                setIsCheckingAttendance(true)
+
+                const allDbs = getAllAvailableDatabases()
+
+                for (const dbInfo of allDbs) {
+                    if (cancelled) return
+
+                    const db = getDatabaseForUrl(dbInfo.url)
+                    if (!db) continue
+
+                    try {
+                        const snap = await get(ref(db, `meetingParticipants/${trainingId}/${user.uid}`))
+                        if (cancelled) return
+
+                        if (snap.exists()) {
+                            const participant = snap.val() as MeetingParticipant
+                            const attendance = participant.attendance ?? null
+                            const isNoShow = Boolean(participant.noShow)
+                            const valid = (attendance === "present" || attendance === "late") && !isNoShow
+                            if (valid) {
+                                setHasAttendance(true)
+                                return
+                            }
+                        }
+                    } catch {
+                        // Continuar con la siguiente base de datos si falla la consulta
+                    }
+                }
+
+                if (!cancelled) {
+                    setHasAttendance(false)
+                }
+            } finally {
+                if (!cancelled) setIsCheckingAttendance(false)
+            }
+        }
+
+        void checkAttendance()
+
+        return () => { cancelled = true }
+    }, [trainingId, user])
 
     useEffect(() => {
         if (!id) {
@@ -246,7 +306,21 @@ function SurveyPage() {
 
                 <div className='px-4 md:px-12 py-10 md:py-16 space-y-10'>
                     <div className="mx-auto max-w-7xl space-y-8">
-                        <div className="bg-[#1b3022] text-white p-8 rounded-3xl flex flex-col md:flex-row items-center gap-8 shadow-lg overflow-hidden relative">
+                        {isCheckingAttendance ? (
+                            <div className="rounded-2xl bg-white border border-[#edeeed] px-6 py-8 text-center shadow-sm">
+                                <p className="text-sm text-[#5a665a]">Verificando tu asistencia a la capacitación...</p>
+                            </div>
+                        ) : !hasAttendance ? (
+                            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-6 py-8 flex flex-col items-center gap-3 text-center shadow-sm">
+                                <AlertCircle className="w-10 h-10 text-amber-500" />
+                                <p className="text-base font-semibold text-amber-800">Asistencia requerida</p>
+                                <p className="text-sm text-amber-700 max-w-md">
+                                    Para responder esta encuesta debes tener la asistencia registrada en la capacitación correspondiente.
+                                    Si crees que esto es un error, comunícate con el organizador del evento.
+                                </p>
+                            </div>
+                        ) : (
+                        <><div className="bg-[#1b3022] text-white p-8 rounded-3xl flex flex-col md:flex-row items-center gap-8 shadow-lg overflow-hidden relative">
                             <div className="relative z-10">
                                 <h2 className="text-2xl font-bold mb-3">Tu experiencia nos ayuda a mejorar</h2>
                                 <p className="text-[#819986] leading-relaxed">
@@ -374,6 +448,8 @@ function SurveyPage() {
                                 </div>
                             )}
                         </div>
+                        </>
+                        )}
                     </div>
                 </div>
             </div>
