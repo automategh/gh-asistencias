@@ -1,6 +1,8 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { onValueUpdated } from "firebase-functions/v2/database";
 import * as admin from "firebase-admin";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import PDFDocument from "pdfkit";
 import { Graph, type CreateTeamsMeetingOptions, type GraphEvent, type MeetingAttendee } from "./graph";
 
@@ -131,8 +133,47 @@ interface CertificateParticipant {
 	readonly uid: string;
 	readonly name: string;
 	readonly email: string;
+	readonly cargo?: string | null;
 	readonly attendance?: string | null;
 	readonly noShow?: boolean | null;
+}
+
+interface CertificateUserProfile {
+	readonly cargo?: string | null;
+}
+
+interface CertificateTextLayout {
+	readonly x: number;
+	readonly y: number;
+	readonly width: number;
+	readonly height: number;
+	readonly color: string;
+	readonly maxFontSize: number;
+	readonly minFontSize: number;
+	readonly maxLines?: number;
+}
+
+let certificateTemplateCache: Buffer | null = null;
+const CERTIFICATE_TEXT_COLOR = "#9fb4ac";
+
+function loadCertificateTemplate(): Buffer {
+	if (certificateTemplateCache) {
+		return certificateTemplateCache;
+	}
+
+	const candidatePaths = [
+		path.resolve(__dirname, "../src/assets/certificate-template.png"),
+		path.resolve(process.cwd(), "src/assets/certificate-template.png"),
+	];
+
+	for (const templatePath of candidatePaths) {
+		if (fs.existsSync(templatePath)) {
+			certificateTemplateCache = fs.readFileSync(templatePath);
+			return certificateTemplateCache;
+		}
+	}
+
+	throw new Error("No fue posible encontrar la plantilla del certificado (certificate-template.png)");
 }
 
 function formatDate(epochMs: number): string {
@@ -144,17 +185,66 @@ function formatDate(epochMs: number): string {
 	});
 }
 
-function formatTime(epochMs: number): string {
-	const date = new Date(epochMs);
-	return date.toLocaleTimeString("es-CO", {
-		hour: "2-digit",
-		minute: "2-digit",
+function drawCenteredFittedText(
+	document: PDFKit.PDFDocument,
+	text: string,
+	layout: CertificateTextLayout,
+): void {
+	const normalizedText = text.trim();
+	let fontSize = layout.maxFontSize;
+	const maxLines = layout.maxLines ?? 1;
+	const lineGap = 0;
+
+	document.font("Helvetica");
+
+	while (fontSize > layout.minFontSize) {
+		document.fontSize(fontSize);
+
+		if (maxLines <= 1) {
+			const textWidth = document.widthOfString(normalizedText);
+			if (textWidth <= layout.width) {
+				break;
+			}
+			fontSize -= 1;
+			continue;
+		}
+
+		const measuredHeight = document.heightOfString(normalizedText, {
+			width: layout.width,
+			align: "center",
+			lineGap,
+		});
+		const maxAllowedHeight = layout.height;
+		if (measuredHeight <= maxAllowedHeight) {
+			break;
+		}
+		fontSize -= 1;
+	}
+
+	document.fontSize(fontSize);
+	const measuredHeight = document.heightOfString(normalizedText, {
+		width: layout.width,
+		align: "center",
+		lineGap,
 	});
+	const verticalOffset = Math.max(0, (layout.height - measuredHeight) / 2);
+
+	document
+		.fillColor(layout.color)
+		.fontSize(fontSize)
+		.text(normalizedText, layout.x, layout.y + verticalOffset, {
+			width: layout.width,
+			height: layout.height,
+			align: "center",
+			lineGap,
+			lineBreak: maxLines > 1,
+			ellipsis: maxLines > 1,
+		});
 }
 
 async function buildCertificatePdf(meeting: CertificateMeeting, participant: CertificateParticipant): Promise<Buffer> {
 	return await new Promise<Buffer>((resolve, reject) => {
-		const document = new PDFDocument({ size: "A4", margin: 50 });
+		const document = new PDFDocument({ size: "A4", layout: "landscape", margin: 0 });
 		const chunks: Buffer[] = [];
 
 		document.on("data", (chunk: Buffer) => {
@@ -169,52 +259,59 @@ async function buildCertificatePdf(meeting: CertificateMeeting, participant: Cer
 			reject(error);
 		});
 
-		document.fontSize(18).fillColor("#1b3022").text("CERTIFICADO DE ASISTENCIA", {
-			align: "center",
+		const pageWidth = document.page.width;
+		const pageHeight = document.page.height;
+		const templateBuffer = loadCertificateTemplate();
+
+		document.image(templateBuffer, 0, 0, {
+			width: pageWidth,
+			height: pageHeight,
 		});
 
-		document.moveDown(2);
+		const participantName = participant.name?.trim() || "Colaborador";
+		const participantRole = participant.cargo?.trim() || "Cargo";
+		const courseName = meeting.title?.trim() || "Capacitación";
+		const meetingDate = formatDate(meeting.startTime);
 
-		document.fontSize(12).fillColor("#000000").text("Se certifica que:", {
-			align: "left",
+		drawCenteredFittedText(document, participantName, {
+			x: 120,
+			y: 217,
+			width: 602,
+			height: 82,
+			color: CERTIFICATE_TEXT_COLOR,
+			maxFontSize: 34,
+			minFontSize: 22,
+			maxLines: 2,
 		});
 
-		document.moveDown(1);
+		drawCenteredFittedText(document, participantRole, {
+			x: 250,
+			y: 303,
+			width: 342,
+			height: 34,
+			color: CERTIFICATE_TEXT_COLOR,
+			maxFontSize: 20,
+			minFontSize: 16,
+		});
 
-		document
-			.fontSize(16)
-			.fillColor("#1b3022")
-			.text(participant.name, {
-				align: "center",
-			});
+		drawCenteredFittedText(document, courseName, {
+			x: 150,
+			y: 399,
+			width: 542,
+			height: 40,
+			color: CERTIFICATE_TEXT_COLOR,
+			maxFontSize: 24,
+			minFontSize: 18,
+		});
 
-		document.moveDown(2);
-
-		const startDate = formatDate(meeting.startTime);
-		const endDate = formatDate(meeting.endTime);
-		const startTime = formatTime(meeting.startTime);
-		const endTime = formatTime(meeting.endTime);
-
-		const isSameDay = startDate === endDate;
-
-		const dateText = isSameDay
-			? `${startDate}, de ${startTime} a ${endTime}`
-			: `desde el ${startDate} (${startTime}) hasta el ${endDate} (${endTime})`;
-
-		document
-			.fontSize(12)
-			.fillColor("#000000")
-			.text(
-				`Asistió a la capacitación "${meeting.title}" realizada en ${meeting.location}, ${dateText}.`,
-				{
-					align: "justify",
-				},
-			);
-
-		document.moveDown(3);
-
-		document.fontSize(10).fillColor("#555555").text("Este certificado ha sido generado automáticamente por el sistema de asistencias.", {
-			align: "center",
+		drawCenteredFittedText(document, meetingDate, {
+			x: 275,
+			y: 455,
+			width: 292,
+			height: 34,
+			color: CERTIFICATE_TEXT_COLOR,
+			maxFontSize: 18,
+			minFontSize: 16,
 		});
 
 		document.end();
@@ -282,12 +379,21 @@ export const onTrainingCompletedSendCertificates = onValueUpdated(
 			return;
 		}
 
+		const usersSnap = await database.ref("users").get();
+		const usersMap = usersSnap.val() as Record<string, CertificateUserProfile> | null;
+
 		const graph = new Graph();
 
 		await Promise.all(
 			participants.map(async (participant) => {
 				try {
-					const pdfBuffer = await buildCertificatePdf(meeting, participant);
+					const participantProfile = usersMap?.[participant.uid] ?? null;
+					const participantWithCargo: CertificateParticipant = {
+						...participant,
+						cargo: participant.cargo ?? participantProfile?.cargo ?? null,
+					};
+
+					const pdfBuffer = await buildCertificatePdf(meeting, participantWithCargo);
 
 					const attachmentName = `Certificado-${participant.name.replace(/\s+/g, "-")}.pdf`;
 					const attachmentBase64 = pdfBuffer.toString("base64");
