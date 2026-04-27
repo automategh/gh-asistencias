@@ -4,6 +4,7 @@ import type { CrossDbUserItem } from "@/types/user"
 import { listAllUsersAcrossDatabases, filterUsers, assignRoleInUserDatabase, activateUserInUserDatabase, deactivateUserInUserDatabase } from "@/services/roles.service"
 import { getAllAvailableDatabases, type RecintoKey } from "@/lib/firebase/databaseResolver"
 import type { AppRole } from "@/types/permissions"
+import { ChevronRight, ShieldCheck, Users } from "lucide-react"
 
 /**
  * Página de gestión de permisos y roles.
@@ -25,6 +26,7 @@ export default function PermissionsPage() {
     const [activatingDepartment, setActivatingDepartment] = useState<Record<string, boolean>>({})
 
     const availableRecintos = useMemo(() => getAllAvailableDatabases(), [])
+    const fieldClassName = "w-full bg-white border-none rounded-xl py-3 px-4 text-sm font-semibold text-[#191c1c] placeholder:text-[#8b918d] appearance-none focus:ring-2 focus:ring-primary-container"
 
     useEffect(() => {
         let cancelled = false
@@ -147,70 +149,122 @@ export default function PermissionsPage() {
 
     return (
         <Layout>
-            <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
-                <header className="bg-card border-b border-border sticky top-0 z-20 backdrop-blur-xl">
-                    <nav className="max-w-6xl mx-auto px-6 py-4">
-                        <h1 className="text-3xl font-bold mt-4 text-foreground">Asignación de Roles</h1>
-                        <p className="text-sm text-muted-foreground">Gestiona roles de usuarios en todas las bases de datos.</p>
+            <div className="bg-linear-to-br from-background via-muted/5 to-background min-h-screen">
+                <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs border-b border-[#edeeed]">
+                    <nav className="px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto">
+                        <div className="flex items-center gap-2 text-xs text-outline mb-1 font-label tracking-wide uppercase">
+                            <span>Configuración</span>
+                            <ChevronRight className="w-4 h-4" />
+                            <span>Permisos</span>
+                        </div>
+                        <h1 className="text-3xl font-bold tracking-tight text-[#191c1c] flex items-center gap-3">
+                            <ShieldCheck className="w-7 h-7 text-[#1b3022]" />
+                            Asignación de Roles
+                        </h1>
+                        <p className="text-sm text-[#5f6560] mt-1">Gestiona roles, activación y estado de usuarios en todas las bases de datos.</p>
                     </nav>
                 </header>
-                <div className="max-w-6xl mx-auto p-6 mt-8 space-y-8">
-                    {loading && (<div className="p-3 text-sm text-muted-foreground">Cargando…</div>)}
-                    {error && (<div className="p-3 text-sm text-red-600 border border-red-300 rounded">{error}</div>)}
 
-                    {/* Filtros */}
-                    <section className="bg-card rounded-2xl border border-border p-6">
-                        <div className="flex flex-wrap items-center gap-3">
-                            <input
-                                type="text"
-                                value={searchText}
-                                placeholder="Buscar por nombre o correo"
-                                onChange={(e) => setSearchText(e.target.value)}
-                                className="px-3 py-2 bg-input border border-border rounded"
-                            />
-                            <select value={recintoFilter} onChange={(e) => setRecintoFilter(e.target.value as RecintoKey | "ALL")} className="px-3 py-2 bg-input border border-border rounded">
-                                <option value="ALL">Todos los recintos</option>
-                                {availableRecintos.map(r => (<option key={r.key} value={r.key}>{r.name}</option>))}
-                            </select>
-                            <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as AppRole | "ALL")} className="px-3 py-2 bg-input border border-border rounded">
-                                <option value="ALL">Todos los roles</option>
-                                <option value="Admin">Admin</option>
-                                <option value="Lider">Lider</option>
-                                <option value="HR">HR</option>
-                                <option value="Instructor">Instructor</option>
-                                <option value="User">User</option>
-                            </select>
-                            <select
-                                value={activeFilter === "ALL" ? "ALL" : String(activeFilter)}
-                                onChange={(e) => {
-                                    const v = e.target.value
-                                    setActiveFilter(v === "ALL" ? "ALL" : v === "true")
-                                }}
-                                className="px-3 py-2 bg-input border border-border rounded"
-                            >
-                                <option value="ALL">Todos los estados</option>
-                                <option value="true">Activos</option>
-                                <option value="false">Inactivos</option>
-                            </select>
+                <div className="px-4 md:px-12 py-10 md:py-10 space-y-10 max-w-7xl mx-auto">
+                    {loading && (
+                        <div className="bg-white rounded-2xl p-6 text-sm text-[#5f6560] shadow-[0_20px_20px_rgba(25,28,28,0.04)]">
+                            Cargando usuarios...
+                        </div>
+                    )}
+                    {error && (
+                        <div className="bg-[#fff6f5] border border-[#f0c7c2] rounded-2xl p-6 text-sm text-[#8c1d18] shadow-[0_20px_20px_rgba(25,28,28,0.04)]">
+                            {error}
+                        </div>
+                    )}
+
+                    <section className="bg-[#f3f4f3] p-6 rounded-xl space-y-4">
+                        <div className="flex flex-wrap items-end gap-6">
+                            <div className="flex-2 min-w-64">
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Buscar</label>
+                                <input
+                                    type="text"
+                                    value={searchText}
+                                    placeholder="Buscar por nombre o correo"
+                                    onChange={(e) => setSearchText(e.target.value)}
+                                    className={fieldClassName}
+                                />
+                            </div>
+                            <div className="flex-1 min-w-44">
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Recinto</label>
+                                <select value={recintoFilter} onChange={(e) => setRecintoFilter(e.target.value as RecintoKey | "ALL")} className={fieldClassName}>
+                                    <option value="ALL">Todos los recintos</option>
+                                    {availableRecintos.map(r => (<option key={r.key} value={r.key}>{r.name}</option>))}
+                                </select>
+                            </div>
+                            <div className="flex-1 min-w-40">
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Rol</label>
+                                <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as AppRole | "ALL")} className={fieldClassName}>
+                                    <option value="ALL">Todos los roles</option>
+                                    <option value="Admin">Admin</option>
+                                    <option value="Lider">Lider</option>
+                                    <option value="HR">Talento Humano</option>
+                                    <option value="Instructor">Instructor</option>
+                                    <option value="User">User</option>
+                                </select>
+                            </div>
+                            <div className="flex-1 min-w-40">
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Estado</label>
+                                <select
+                                    value={activeFilter === "ALL" ? "ALL" : String(activeFilter)}
+                                    onChange={(e) => {
+                                        const v = e.target.value
+                                        setActiveFilter(v === "ALL" ? "ALL" : v === "true")
+                                    }}
+                                    className={fieldClassName}
+                                >
+                                    <option value="ALL">Todos los estados</option>
+                                    <option value="true">Activos</option>
+                                    <option value="false">Inactivos</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-[#5f6560]">
+                            <Users className="w-4 h-4" />
+                            <span>
+                                Mostrando <span className="font-semibold text-[#191c1c]">{visible.length}</span> usuario{visible.length === 1 ? "" : "s"} con los filtros aplicados.
+                            </span>
                         </div>
                     </section>
 
-                    {/* Usuarios */}
-                    <section className="bg-card rounded-2xl border border-border p-6">
-                        <h2 className="text-xl font-bold text-foreground mb-4">Usuarios ({visible.length})</h2>
+                    <section className="bg-white rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] overflow-hidden">
+                        <div className="p-8 border-b border-[#edeeed] flex items-center justify-between gap-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-emerald-950">Usuarios</h2>
+                                <p className="text-xs text-outline font-medium mt-1">Administra activación y roles por base de datos.</p>
+                            </div>
+                            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-[#d0e9d4] text-[#1b3022]">
+                                {visible.length} registro{visible.length === 1 ? "" : "s"}
+                            </span>
+                        </div>
+                        <div className="p-8 space-y-4">
+                            {!loading && visible.length === 0 && (
+                                <div className="bg-[#fcfcfb] border border-[#edeeed] rounded-2xl p-8 text-center">
+                                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#f3f4f3] flex items-center justify-center">
+                                        <Users className="w-8 h-8 text-[#5f6560]" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-[#191c1c] mb-2">Sin resultados</h3>
+                                    <p className="text-sm text-[#5f6560]">No hay usuarios que coincidan con los filtros seleccionados.</p>
+                                </div>
+                            )}
+
                         <div className="space-y-4">
                             {/* Vista agrupada por departamento cuando se están viendo inactivos */}
                             {!loading && activeFilter === false && Object.keys(inactiveGroupsByDepartment).length > 0 ? (
                                 Object.entries(inactiveGroupsByDepartment).map(([dept, users]) => (
-                                    <div key={dept} className="border border-border rounded-lg p-4 space-y-3">
+                                    <div key={dept} className="border border-[#edeeed] rounded-2xl p-5 space-y-4 bg-[#fcfcfb] shadow-[0_12px_24px_rgba(25,28,28,0.03)]">
                                         <div className="flex items-center justify-between mb-2">
                                             <div>
-                                                <p className="text-sm font-semibold text-foreground">Departamento: {dept}</p>
-                                                <p className="text-xs text-muted-foreground">Estos son los de {dept.toLowerCase()} inactivos.</p>
+                                                <p className="text-sm font-bold text-[#191c1c]">Departamento: {dept}</p>
+                                                <p className="text-xs text-[#5f6560]">Estos son los de {dept.toLowerCase()} inactivos.</p>
                                             </div>
                                             <button
                                                 type="button"
-                                                className="px-3 py-2 rounded text-sm border border-primary text-primary hover:bg-primary/10"
+                                                className="px-3 py-2 rounded-lg text-sm font-semibold border border-[#1b3022] text-[#1b3022] hover:bg-[#d0e9d4] transition-colors"
                                                 disabled={activatingDepartment[dept]}
                                                 onClick={() => activateDepartment(dept)}
                                             >
@@ -219,25 +273,25 @@ export default function PermissionsPage() {
                                         </div>
                                         <div className="space-y-2">
                                             {users.map((u) => (
-                                                <div key={`${u.databaseUrl}-${u.uid}`} className="border border-border rounded-lg p-3">
+                                                <div key={`${u.databaseUrl}-${u.uid}`} className="border border-[#edeeed] rounded-xl p-4 bg-white">
                                                     <div className="flex items-center justify-between">
                                                         <div>
-                                                            <p className="text-sm font-semibold text-foreground">{u.name}</p>
-                                                            <p className="text-xs text-muted-foreground">{u.email}</p>
-                                                            <p className="text-xs text-muted-foreground mt-1">Recinto: <span className="font-medium">{u.recinto}</span></p>
-                                                            <p className="text-xs mt-1">Estado: <span className={u.active ? "text-green-600" : "text-red-600"}>{u.active ? "Activo" : "Inactivo"}</span></p>
+                                                            <p className="text-sm font-bold text-[#191c1c]">{u.name}</p>
+                                                            <p className="text-xs text-[#5f6560]">{u.email}</p>
+                                                            <p className="text-xs text-[#5f6560] mt-1">Recinto: <span className="font-semibold text-[#191c1c]">{u.recinto}</span></p>
+                                                            <p className="text-xs mt-1">Estado: <span className={u.active ? "text-[#1b5e20]" : "text-[#8c1d18]"}>{u.active ? "Activo" : "Inactivo"}</span></p>
                                                         </div>
                                                         <div className="flex items-center gap-2">
-                                                            <span className="text-sm text-muted-foreground">Rol</span>
-                                                            <select value={u.role ?? "User"} onChange={(e) => assignRole(u, e.target.value as AppRole)} className="px-2 py-2 bg-input border border-border rounded text-sm capitalize">
+                                                            <span className="text-sm text-[#5f6560]">Rol</span>
+                                                            <select value={u.role ?? "User"} onChange={(e) => assignRole(u, e.target.value as AppRole)} className="px-3 py-2 bg-[#fcfcfb] border border-[#edeeed] rounded-lg text-sm font-medium text-[#191c1c] capitalize">
                                                                 <option value="Admin">Admin</option>
                                                                 <option value="Lider">Lider</option>
-                                                                <option value="HR">HR</option>
+                                                                <option value="HR">Talento Humano</option>
                                                                 <option value="Instructor">Instructor</option>
                                                                 <option value="User">User</option>
                                                             </select>
                                                             <button
-                                                                className={`px-3 py-2 rounded text-sm border border-primary text-primary hover:bg-primary/10`}
+                                                                className={`px-3 py-2 rounded-lg text-sm font-semibold border border-[#1b3022] text-[#1b3022] hover:bg-[#d0e9d4] transition-colors`}
                                                                 disabled={activating[`${u.databaseUrl}-${u.uid}`]}
                                                                 onClick={() => activateUser(u)}
                                                                 title="Activar usuario"
@@ -254,26 +308,26 @@ export default function PermissionsPage() {
                             ) : (
                                 <>
                                     {visible.map(u => (
-                                        <div key={`${u.databaseUrl}-${u.uid}`} className="border border-border rounded-lg p-4">
+                                        <div key={`${u.databaseUrl}-${u.uid}`} className="border border-[#edeeed] rounded-2xl p-5 bg-[#fcfcfb] shadow-[0_12px_24px_rgba(25,28,28,0.03)]">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <p className="text-sm font-semibold text-foreground">{u.name}</p>
-                                                    <p className="text-xs text-muted-foreground">{u.email}</p>
-                                                    <p className="text-xs text-muted-foreground mt-1">Recinto: <span className="font-medium">{u.recinto}</span></p>
-                                                    <p className="text-xs mt-1">Estado: <span className={u.active ? "text-green-600" : "text-red-600"}>{u.active ? "Activo" : "Inactivo"}</span></p>
+                                                    <p className="text-sm font-bold text-[#191c1c]">{u.name}</p>
+                                                    <p className="text-xs text-[#5f6560]">{u.email}</p>
+                                                    <p className="text-xs text-[#5f6560] mt-1">Recinto: <span className="font-semibold text-[#191c1c]">{u.recinto}</span></p>
+                                                    <p className="text-xs mt-1">Estado: <span className={u.active ? "text-[#1b5e20]" : "text-[#8c1d18]"}>{u.active ? "Activo" : "Inactivo"}</span></p>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-sm text-muted-foreground">Rol</span>
-                                                    <select value={u.role ?? "User"} onChange={(e) => assignRole(u, e.target.value as AppRole)} className="px-2 py-2 bg-input border border-border rounded text-sm capitalize">
+                                                    <span className="text-sm text-[#5f6560]">Rol</span>
+                                                    <select value={u.role ?? "User"} onChange={(e) => assignRole(u, e.target.value as AppRole)} className="px-3 py-2 bg-white border border-[#edeeed] rounded-lg text-sm font-medium text-[#191c1c] capitalize">
                                                         <option value="Admin">Admin</option>
                                                         <option value="Lider">Lider</option>
-                                                        <option value="HR">HR</option>
+                                                        <option value="HR">Talento Humano</option>
                                                         <option value="Instructor">Instructor</option>
                                                         <option value="User">User</option>
                                                     </select>
                                                     {u.active ? (
                                                         <button
-                                                            className={`px-3 py-2 rounded text-sm border border-red-600 text-red-600 hover:bg-red-600/10`}
+                                                            className={`px-3 py-2 rounded-lg text-sm font-semibold border border-[#8c1d18] text-[#8c1d18] hover:bg-[#fff6f5] transition-colors`}
                                                             disabled={activating[`${u.databaseUrl}-${u.uid}`]}
                                                             onClick={() => deactivateUser(u)}
                                                             title="Desactivar usuario"
@@ -282,7 +336,7 @@ export default function PermissionsPage() {
                                                         </button>
                                                     ) : (
                                                         <button
-                                                            className={`px-3 py-2 rounded text-sm border border-primary text-primary hover:bg-primary/10`}
+                                                            className={`px-3 py-2 rounded-lg text-sm font-semibold border border-[#1b3022] text-[#1b3022] hover:bg-[#d0e9d4] transition-colors`}
                                                             disabled={activating[`${u.databaseUrl}-${u.uid}`]}
                                                             onClick={() => activateUser(u)}
                                                             title="Activar usuario"
@@ -296,7 +350,7 @@ export default function PermissionsPage() {
                                     ))}
                                 </>
                             )}
-                            {!loading && visible.length === 0 && (<div className="text-sm text-muted-foreground">Sin resultados</div>)}
+                        </div>
                         </div>
                     </section>
                 </div>
