@@ -9,6 +9,11 @@ import { get, ref } from "firebase/database"
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
+const MONTH_LABELS: readonly string[] = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+]
+
 interface ActivityGroupStats {
     readonly meeting: Meeting
     readonly totalHours: number
@@ -37,6 +42,7 @@ function ReportGroupPage() {
 
     const [availableYears, setAvailableYears] = useState<number[]>([])
     const [selectedYear, setSelectedYear] = useState<number | null>(null)
+    const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
     const [isLoadingYears, setIsLoadingYears] = useState<boolean>(false)
 
     const [search, setSearch] = useState<string>("")
@@ -195,12 +201,20 @@ function ReportGroupPage() {
                 }
 
                 const candidateMeetings = Object.values(meetingsValue).filter((meeting) => {
-                    const year = new Date(meeting.startTime).getFullYear()
+                    const date = new Date(meeting.startTime)
+                    const year = date.getFullYear()
+                    const month = date.getMonth() + 1
                     const isStatusValid =
                         meeting.status === "completed"
                         || meeting.status === "closed"
                         || meeting.status === "scheduled"
-                    return year === selectedYear && isStatusValid
+                    if (year !== selectedYear || !isStatusValid) {
+                        return false
+                    }
+                    if (selectedMonth && month !== selectedMonth) {
+                        return false
+                    }
+                    return true
                 })
 
                 let totalHours = 0
@@ -290,7 +304,7 @@ function ReportGroupPage() {
         return () => {
             cancelled = true
         }
-    }, [allUsers, database, selectedYear])
+    }, [allUsers, database, selectedYear, selectedMonth])
 
     const filteredStats = useMemo(() => {
         const term = search.trim().toLowerCase()
@@ -437,7 +451,7 @@ function ReportGroupPage() {
                                     disabled={isLoadingUsers}
                                 />
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 flex-wrap justify-end">
                                 <div className="flex items-center gap-2 rounded-full bg-white border border-[#e3e5e3] px-3 py-1.5 shadow-xs">
                                     <CalendarDays className="w-4 h-4 text-[#7a837a]" />
                                     <select
@@ -446,6 +460,7 @@ function ReportGroupPage() {
                                         onChange={(event) => {
                                             const value = event.target.value
                                             setSelectedYear(value ? Number(value) : null)
+                                            setSelectedMonth(null)
                                         }}
                                         disabled={isLoadingYears || isLoadingUsers}
                                     >
@@ -455,6 +470,25 @@ function ReportGroupPage() {
                                         {availableYears.map((year) => (
                                             <option key={year} value={year}>
                                                 {year}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex items-center gap-2 rounded-full bg-white border border-[#e3e5e3] px-3 py-1.5 shadow-xs">
+                                    <span className="text-[10px] font-semibold text-[#7a837a]">Mes</span>
+                                    <select
+                                        className="bg-transparent text-xs font-semibold text-[#191c1c] focus:outline-none disabled:text-[#b3bab3]"
+                                        value={selectedMonth ?? ""}
+                                        onChange={(event) => {
+                                            const value = event.target.value
+                                            setSelectedMonth(value ? Number(value) : null)
+                                        }}
+                                        disabled={!selectedYear}
+                                    >
+                                        <option value="">Todos</option>
+                                        {MONTH_LABELS.map((label, index) => (
+                                            <option key={label} value={index + 1}>
+                                                {label}
                                             </option>
                                         ))}
                                     </select>
