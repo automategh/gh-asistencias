@@ -37,6 +37,15 @@ const MONTH_LABELS: readonly string[] = [
     "Diciembre",
 ]
 
+function getTrainingHours(startTime: number, endTime: number): number {
+    const durationMs = Math.max(0, endTime - startTime)
+    return durationMs / (1000 * 60 * 60)
+}
+
+function formatHours(hours: number): string {
+    return hours.toFixed(2)
+}
+
 async function computeAverageSatisfaction(
     database: Database,
     trainings: TrainingWithParticipants[],
@@ -323,7 +332,7 @@ function ReportTrainingPlanPage() {
 
         for (const { meeting, trainer, participants, areas } of trainings) {
             const areaStr = areas.length > 0 ? areas.join(", ") : "-"
-            const hours = Math.round((meeting.endTime - meeting.startTime) / (1000 * 60 * 60))
+            const hours = getTrainingHours(meeting.startTime, meeting.endTime)
             const dateStr = new Date(meeting.startTime).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })
             const asistentes = participants.filter((participant) =>
                 (participant.attendance === "present" || participant.attendance === "late")
@@ -618,8 +627,8 @@ function ReportTrainingPlanPage() {
             }
 
             if (tableSortField === "hours") {
-                const firstHours = Math.round((first.meeting.endTime - first.meeting.startTime) / (1000 * 60 * 60))
-                const secondHours = Math.round((second.meeting.endTime - second.meeting.startTime) / (1000 * 60 * 60))
+                const firstHours = getTrainingHours(first.meeting.startTime, first.meeting.endTime)
+                const secondHours = getTrainingHours(second.meeting.startTime, second.meeting.endTime)
                 return (firstHours - secondHours) * multiplier
             }
 
@@ -834,7 +843,7 @@ function ReportTrainingPlanPage() {
                                     {isGenerating ? (
                                         <span className="inline-block h-7 w-24 bg-zinc-200 rounded-md animate-pulse" />
                                     ) : (
-                                        Math.round(totalHours)
+                                        formatHours(totalHours)
                                     )}
                                 </p>
                                 <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Total de Horas</p>
@@ -1013,7 +1022,7 @@ function ReportTrainingPlanPage() {
                                                             <div key={item.role} className="space-y-1">
                                                                 <div className="flex justify-between text-[11px] font-medium text-[#e2efe4]">
                                                                     <span>{item.role}</span>
-                                                                    <span>{item.hours.toFixed(0)} h</span>
+                                                                    <span>{formatHours(item.hours)} h</span>
                                                                 </div>
                                                                 <div className="h-2.5 w-full bg-[#243a2c] rounded-full overflow-hidden">
                                                                     <div
@@ -1145,7 +1154,7 @@ function ReportTrainingPlanPage() {
                                                 const date = new Date(meeting.startTime)
                                                 const dateStr = date.toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })
                                                 // Horas
-                                                const hours = Math.round((meeting.endTime - meeting.startTime) / (1000 * 60 * 60))
+                                                const hours = getTrainingHours(meeting.startTime, meeting.endTime)
                                                 // Asistentes: solo los presentes o tarde que no estén marcados como noShow
                                                 const attendees = participants.filter((participant) =>
                                                     (participant.attendance === "present" || participant.attendance === "late")
@@ -1163,7 +1172,7 @@ function ReportTrainingPlanPage() {
                                                             <span className="text-xs font-semibold text-[#5a665a] bg-[#d6e3d5] px-3 py-1 rounded-full">{area}</span>
                                                         </td>
                                                         <td className="px-8 py-5 text-sm font-medium text-[#191c1c]">{dateStr}</td>
-                                                        <td className="px-8 py-5 text-sm font-bold text-emerald-900">{hours} hrs</td>
+                                                        <td className="px-8 py-5 text-sm font-bold text-emerald-900">{formatHours(hours)} hrs</td>
                                                         <td className="px-8 py-5 text-sm font-medium text-[#191c1c] text-center">{attendees}</td>
                                                         <td className="px-8 py-5 text-center">
                                                             <button
@@ -1200,9 +1209,11 @@ function ReportTrainingPlanPage() {
                                             year: "numeric",
                                         })}
                                         {" · "}
-                                        {Math.round(
-                                            (selectedTrainingForModal.meeting.endTime - selectedTrainingForModal.meeting.startTime)
-                                            / (1000 * 60 * 60),
+                                        {formatHours(
+                                            getTrainingHours(
+                                                selectedTrainingForModal.meeting.startTime,
+                                                selectedTrainingForModal.meeting.endTime,
+                                            ),
                                         )}
                                         {" hrs"}
                                     </p>
