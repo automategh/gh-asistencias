@@ -51,7 +51,7 @@ export default function MeetingCard({
     return (
         <div className="bg-card rounded-2xl border border-border p-6 transition-all duration-300 hover:shadow-lg hover:scale-105 cursor-pointer group relative overflow-hidden">
             <div className="absolute -right-8 -top-8 w-32 h-32 bg-linear-to-br from-secondary/20 to-accent/20 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-            <div className="relative z-10">
+            <div className="relative">
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
