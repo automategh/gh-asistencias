@@ -1,7 +1,7 @@
 import { useAuth } from "@/context/AuthContext"
 import { useDatabase } from "@/context/DatabaseContext"
 import { cn } from "@/lib/utils"
-import { Calendar, ChevronLeft, ChevronRight, LogOut, Menu, UserCircle, UserCog, X, LayoutDashboard, User, PlusCircleIcon, ChartColumnBig, Building2Icon, ClipboardList, GroupIcon } from "lucide-react"
+import { Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, LogOut, Menu, UserCircle, UserCog, X, LayoutDashboard, User, PlusCircleIcon, ChartColumnBig, Building2Icon, ClipboardList, GroupIcon } from "lucide-react"
 import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 
@@ -18,13 +18,15 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
     // Estado móvil del sidebar
     const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false)
 
-    const [showDbModal, setShowDbModal] = useState<boolean>(false)
+    const [showDbDropdown, setShowDbDropdown] = useState<boolean>(false)
 
     const { availableDatabases, isCorporateUser, setSelectedDatabase, recinto } = useDatabase()
 
+    const currentDatabase = availableDatabases.find((db) => db.key === recinto)
+
     const handleDbChange = (url: string, key: typeof recinto) => {
         setSelectedDatabase(url, key);
-        setShowDbModal(false);
+        setShowDbDropdown(false);
     };
 
     // Persistencia de colapso en localStorage para evitar “abrirse” en cada navegación
@@ -110,6 +112,7 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                                         to={link.path}
                                         onClick={() => {
                                             setIsMobileOpen(false)
+                                            setShowDbDropdown(false)
 
                                         }}
                                         className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group relative ${isActive ? "bg-primary text-primary-foreground shadow-md" : "text-foreground hover:bg-muted/50"
@@ -136,9 +139,9 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
 
                 {/* User Info */}
                 <div className="p-4">
+                    <div className="relative">
                     <div
-                        className={`flex items-center gap-3 p-3 bg-muted/30 rounded-lg ${isCollapsed ? "lg:justify-center lg:p-3" : ""} cursor-pointer`}
-                        onClick={() => setShowDbModal(true)}
+                        className={`flex items-center gap-3 p-3 bg-muted/30 rounded-lg ${isCollapsed ? "lg:justify-center lg:p-3" : ""} ${isCorporateUser && !isCollapsed ? "cursor-pointer" : ""}`}
                     >
                         <div className="w-10 h-10 rounded-full overflow-hidden border border-border bg-muted flex items-center justify-center shrink-0">
                             {profilePhotoUrl ? (
@@ -155,9 +158,24 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                         <div
                             className={`flex-1 min-w-0 transition-all duration-300 overflow-hidden ${isCollapsed ? "lg:hidden" : "lg:block"}`}
                         >
-                            <p className="font-semibold text-sm text-foreground truncate whitespace-nowrap">{user?.displayName || "Usuario"}</p>
-                            <p className="text-xs text-muted-foreground whitespace-nowrap">En línea</p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (!isCorporateUser) return
+                                    setShowDbDropdown((previous) => !previous)
+                                }}
+                                className={`w-full flex items-center justify-between gap-2 text-left ${isCorporateUser ? "cursor-pointer" : "cursor-default"}`}
+                            >
+                                <span className="font-semibold text-sm text-foreground truncate whitespace-nowrap">{user?.displayName || "Usuario"}</span>
+                                {isCorporateUser && (
+                                    <ChevronDown className={`w-4 h-4 shrink-0 text-muted-foreground transition-transform ${showDbDropdown ? "rotate-180" : ""}`} />
+                                )}
+                            </button>
+                            <p className="text-xs text-muted-foreground whitespace-nowrap truncate">
+                                {isCorporateUser ? (currentDatabase?.name ?? "Seleccionar base de datos") : "En línea"}
+                            </p>
                         </div>
+                    </div>
                     </div>
                 </div>
 
@@ -178,45 +196,46 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                     </button>
                 </div>
             </aside>
-
-            {/* Modal de selección de base de datos para usuarios corporativos  */}
-            {isCorporateUser && showDbModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-100">
-                    <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-bold text-[#273c2a]">Cambiar de recinto</h2>
+            {isCorporateUser && showDbDropdown && (
+                <div className="fixed inset-0 z-120 bg-black/45 backdrop-blur-[2px] flex items-center justify-center px-4" onClick={() => setShowDbDropdown(false)}>
+                    <div className="w-full max-w-md rounded-3xl border border-[#edeeed] bg-white shadow-[0_24px_48px_rgba(15,23,42,0.18)] overflow-hidden" onClick={(event) => event.stopPropagation()}>
+                        <div className="px-6 py-5 border-b border-[#edeeed] bg-[#f8f9f8] flex items-start justify-between gap-4">
+                            <div>
+                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Cambiar base de datos</p>
+                                <h2 className="text-xl font-bold text-[#191c1c] mt-1">Selecciona un recinto</h2>
+                                <p className="text-sm text-[#5f6560] mt-1">Disponible solo para usuarios corporativos.</p>
+                            </div>
                             <button
-                                onClick={() => setShowDbModal(false)}
-                                className="text-gray-400 hover:text-gray-600"
+                                type="button"
+                                onClick={() => setShowDbDropdown(false)}
+                                className="w-9 h-9 rounded-full hover:bg-[#edeeed] transition-colors flex items-center justify-center text-[#5f6560]"
                             >
-                                ✕
+                                <X className="w-4 h-4" />
                             </button>
                         </div>
-                        <p className="text-sm text-gray-600 mb-6">
-                            Selecciona el recinto que deseas visualizar:
-                        </p>
-                        <div className="space-y-3">
+                        <div className="p-3 max-h-96 overflow-y-auto">
                             {availableDatabases.map((db) => (
                                 <button
                                     key={db.key}
+                                    type="button"
                                     onClick={() => handleDbChange(db.url, db.key)}
                                     className={cn(
-                                        "w-full px-4 py-3 text-left border rounded-lg transition-colors",
+                                        "w-full px-4 py-4 rounded-2xl text-left transition-colors flex items-center justify-between gap-3",
                                         db.key === recinto
-                                            ? "border-[#F2B05F] bg-[#F2B05F]/10 font-semibold"
-                                            : "border-[#B0B3B2] hover:bg-[#F2B05F]/10 hover:border-[#F2B05F]"
+                                            ? "bg-[#d0e9d4] text-[#1b3022]"
+                                            : "hover:bg-[#f3f4f3] text-[#191c1c]"
                                     )}
                                 >
-                                    <span className="text-[#273c2a]">{db.name}</span>
-                                    {db.key === recinto && (
-                                        <span className="ml-2 text-xs text-[#F2B05F]">(Actual)</span>
-                                    )}
+                                    <div>
+                                        <p className="text-sm font-semibold">{db.name}</p>
+                                        <p className="text-[11px] text-[#5f6560]">{db.key}</p>
+                                    </div>
+                                    {db.key === recinto && <Check className="w-4 h-4 shrink-0" />}
                                 </button>
                             ))}
                         </div>
                     </div>
                 </div>
-
             )}
         </>
     )
