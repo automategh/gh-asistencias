@@ -65,7 +65,7 @@ function DetailMeetPage() {
                 const fallbackSurvey = surveys.find((item) => item.category === 'training' && item.isActive && Boolean(item.predetermined)) ?? null
                 setSatisfactionSurvey(fallbackSurvey)
             } catch (error) {
-                console.error('Error al cargar la reunión o la encuesta de satisfacción:', error)
+                console.error('Error al cargar la actividad o la encuesta de satisfacción:', error)
             }
         }
 
@@ -182,7 +182,7 @@ function DetailMeetPage() {
             const updated = await closeMeeting(database, meeting.id, user.uid)
             setMeeting(updated)
         } catch (error) {
-            console.error('No fue posible cerrar la reunión:', error)
+            console.error('No fue posible cerrar la actividad:', error)
         } finally {
             setClosing(false)
         }
@@ -209,7 +209,7 @@ function DetailMeetPage() {
             const updated = await completeMeeting(database, meeting.id, user.uid)
             setMeeting(updated)
         } catch (error) {
-            console.error('No fue posible completar la reunión:', error)
+            console.error('No fue posible completar la actividad:', error)
         } finally {
             setCompleting(false)
         }
@@ -224,7 +224,7 @@ function DetailMeetPage() {
             const updated = await cancelMeeting(database, meeting.id, user.uid)
             setMeeting(updated)
         } catch (error) {
-            console.error('No fue posible cancelar la reunión:', error)
+            console.error('No fue posible cancelar la actividad:', error)
         } finally {
             setCancel(false)
         }
@@ -237,7 +237,7 @@ function DetailMeetPage() {
             const updated = await reopenMeeting(database, meeting.id, user.uid)
             setMeeting(updated)
         } catch (error) {
-            console.error('No fue posible reabrir la reunión:', error)
+            console.error('No fue posible reabrir la actividad:', error)
         } finally {
             setReopening(false)
         }
@@ -258,7 +258,7 @@ function DetailMeetPage() {
                         <div className="md:col-span-2 bg-card rounded-2xl border border-border p-6">
                             <h2 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
                                 <FileText className="w-5 h-5 text-secondary" />
-                                Detalles de la Reunión
+                                Detalles de la Actividad
                             </h2>
 
                             <div className="space-y-6">
@@ -343,7 +343,7 @@ function DetailMeetPage() {
                                                     onClick={handleCloseMeeting}
                                                     className="inline-flex items-center gap-2 px-6 py-3 bg-amber-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-amber-700 disabled:opacity-50"
                                                 >
-                                                    {closing ? 'Cerrando…' : 'Cerrar reunión'}
+                                                    {closing ? 'Cerrando…' : 'Cerrar actividad'}
                                                 </button>
                                             )}
                                             {canReopen && (
@@ -353,7 +353,7 @@ function DetailMeetPage() {
                                                     onClick={handleReopenMeeting}
                                                     className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-blue-700 disabled:opacity-50"
                                                 >
-                                                    {reopening ? 'Reabriendo…' : 'Volver a abrir reunión'}
+                                                    {reopening ? 'Reabriendo…' : 'Volver a abrir actividad'}
                                                 </button>
                                             )}
                                         </div>
@@ -365,7 +365,7 @@ function DetailMeetPage() {
                                                     onClick={handleCancelMeeting}
                                                     className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-red-700 disabled:opacity-50"
                                                 >
-                                                    {cancel ? 'Cancelando…' : 'Cancelar reunión'}
+                                                    {cancel ? 'Cancelando…' : 'Cancelar actividad'}
                                                 </button>
                                             )}
                                             {role === 'Admin' || role === 'HR' || role === 'Lider' || role === 'Instructor' ? (

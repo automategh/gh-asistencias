@@ -238,7 +238,7 @@ function MeetsPage() {
             setInvitedRaw((prev) => prev.map((currentMeeting) => (currentMeeting.id === meetingId ? { ...currentMeeting, status: updated.status } : currentMeeting)))
             setCreated((prev) => prev.map((currentMeeting) => (currentMeeting.id === meetingId ? { ...currentMeeting, status: updated.status } : currentMeeting)))
         } catch (exception) {
-            console.error('No fue posible completar la reunión:', exception)
+            console.error('No fue posible completar la actividad:', exception)
         } finally {
             setCompleting((prev) => ({ ...prev, [meetingId]: false }))
         }
@@ -250,12 +250,12 @@ function MeetsPage() {
                 <Calendar className="w-8 h-8 text-muted-foreground" />
             </div>
             <h3 className="text-lg font-semibold text-foreground mb-2">No hay actividades</h3>
-            <p className="text-muted-foreground mb-6">Comienza creando tu primera reunión</p>
+            <p className="text-muted-foreground mb-6">Comienza creando tu primera actividad</p>
             <Link
                 to="/new-meeting"
                 className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:shadow-md inline-block"
             >
-                Crear Primera Reunión
+                Crear Primera Actividad
             </Link>
         </div>
     )
