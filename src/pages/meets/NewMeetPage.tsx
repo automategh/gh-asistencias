@@ -20,6 +20,7 @@ import { getSurveys, type Survey } from '@/services/forms.service'
 import { createTeamsMeetingViaCloudFunction } from '@/services/teams.service'
 import { buildUserGroups, buildUserGroupsByField, getUserGroupingDefinitions, type GroupingFieldKey, type UserGroupingId } from '@/lib/userGrouping'
 import { getUserGroupingConfig, type UserGroupingConfig } from '@/services/user-grouping.service'
+import { ChevronRight, Users } from 'lucide-react'
 
 /**
  * Convierte un valor `datetime-local` a epoch ms, interpretándolo en zona local
@@ -440,49 +441,65 @@ function NewMeetPage() {
         }
     }
 
+    const fieldClassName = 'w-full bg-white border-none rounded-xl py-3 px-4 text-sm font-semibold text-[#191c1c] placeholder:text-[#8b918d] appearance-none focus:ring-2 focus:ring-primary-container'
+    const helperFieldClassName = 'w-full bg-[#fcfcfb] border border-[#edeeed] rounded-xl py-3 px-4 text-sm text-[#191c1c] placeholder:text-[#8b918d] focus:outline-none focus:ring-2 focus:ring-primary-container'
+    const listContainerClassName = 'mt-3 h-80 overflow-y-auto border border-[#edeeed] rounded-2xl bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]'
+
     return (
         <Layout>
-            <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
-                <header className="bg-card border-b border-border sticky top-0 z-10 backdrop-blur-xl">
-                    <nav className="max-w-4xl mx-auto px-6 py-4">
-                        <h1 className="text-3xl font-bold mt-4 text-foreground">Nueva Actividad</h1>
+            <div className="bg-linear-to-br from-background via-muted/5 to-background min-h-screen">
+                <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs border-b border-[#edeeed]">
+                    <nav className="px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto">
+                        <div className="flex items-center gap-2 text-xs text-outline mb-1 font-label tracking-wide uppercase">
+                            <span>Actividades</span>
+                            <ChevronRight className="w-4 h-4" />
+                            <span>Nueva actividad</span>
+                        </div>
+                        <h1 className="text-3xl font-bold tracking-tight text-[#191c1c]">Nueva Actividad</h1>
+                        <p className="text-sm text-[#5f6560] mt-1">
+                            Crea reuniones, capacitaciones o actividades personalizadas con sus participantes.
+                        </p>
                     </nav>
                 </header>
 
-                <div className="max-w-4xl mx-auto p-6 mt-8">
-                    <form className="bg-card rounded-2xl border border-border p-6" onSubmit={handleSubmit}>
-                        <div className="grid md:grid-cols-2 gap-6 mb-6">
+                <div className="px-4 md:px-12 py-10 md:py-10 max-w-7xl mx-auto">
+                    <form className="space-y-8" onSubmit={handleSubmit}>
+                        <section className="bg-[#f3f4f3] p-6 rounded-xl space-y-6">
                             <div>
-                                <label className="block text-sm font-semibold text-foreground mb-2">Título *</label>
+                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold mb-2">Datos de la actividad</p>
+                            </div>
+                            <div className="grid md:grid-cols-2 gap-6">
+                            <div>
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Título *</label>
                                 <input
                                     type="text"
                                     name="title"
                                     value={form.title}
                                     onChange={handleChange}
                                     placeholder="Título de la reunión"
-                                    className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 focus:border-transparent hover:bg-white dark:hover:bg-slate-800"
+                                    className={fieldClassName}
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-semibold text-foreground mb-2">Tipo *</label>
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Tipo *</label>
                                 <select
                                     name="type"
                                     value={form.type}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 focus:border-transparent hover:bg-white dark:hover:bg-slate-800"
+                                    className={fieldClassName}
                                 >
                                     <option value="meeting">Reunión</option>
                                     <option value="training">Capacitación</option>
                                     <option value="custom">Personalizado</option>
                                 </select>
                             </div>
-                        </div>
+                            </div>
 
                         {form.type === 'training' && (
-                            <div className="mb-6">
-                                <label className="block text-sm font-semibold text-foreground mb-2">Encuesta de satisfacción</label>
+                            <div>
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Encuesta de satisfacción</label>
                                 {trainingSurveys.length === 0 ? (
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="text-sm text-[#5f6560] bg-white rounded-xl px-4 py-3">
                                         No hay encuestas de capacitación configuradas en esta base de datos.
                                     </p>
                                 ) : (
@@ -490,7 +507,7 @@ function NewMeetPage() {
                                         name="satisfactionSurveyId"
                                         value={form.satisfactionSurveyId}
                                         onChange={handleChange}
-                                        className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 focus:border-transparent hover:bg-white dark:hover:bg-slate-800"
+                                        className={fieldClassName}
                                     >
                                         {trainingSurveys.map(survey => (
                                             <option key={survey.id} value={survey.id}>
@@ -503,70 +520,82 @@ function NewMeetPage() {
                         )}
 
                         {form.type === 'custom' && (
-                            <div className="mb-6">
-                                <label className="block text-sm font-semibold text-foreground mb-2">Tipo personalizado *</label>
+                            <div>
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Tipo personalizado *</label>
                                 <input
                                     type="text"
                                     name="customType"
                                     value={form.customType}
                                     onChange={handleChange}
                                     placeholder="Ej. Taller, Charla"
-                                    className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary"
+                                    className={fieldClassName}
                                 />
                             </div>
                         )}
 
-                        <div className="mb-6">
-                            <label className="block text-sm font-semibold text-foreground mb-2">Descripción</label>
+                        <div>
+                            <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Descripción</label>
                             <textarea
                                 name="description"
                                 value={form.description}
                                 onChange={handleChange}
                                 placeholder="Descripción de la reunión"
                                 rows={4}
-                                className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 focus:border-transparent hover:bg-white dark:hover:bg-slate-800"
+                                className={fieldClassName}
                             />
                         </div>
 
-                        <div className="mb-6">
-                            <label className="block text-sm font-semibold text-foreground mb-2">Ubicación *</label>
+                        <div>
+                            <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Ubicación *</label>
                             <input
                                 type="text"
                                 name="location"
                                 value={form.location}
                                 onChange={handleChange}
                                 placeholder="Sala de conferencias o ubicación"
-                                className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 focus:border-transparent hover:bg-white dark:hover:bg-slate-800"
+                                className={fieldClassName}
                             />
                         </div>
 
-                        <div className="grid md:grid-cols-2 gap-6 mb-6">
+                        <div className="grid md:grid-cols-2 gap-6">
                             <div>
-                                <label className="block text-sm font-semibold text-foreground mb-2">Hora de Inicio *</label>
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Hora de Inicio *</label>
                                 <input
                                     type="datetime-local"
                                     name="startTime"
                                     value={form.startTime}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 focus:border-transparent hover:bg-white dark:hover:bg-slate-800"
+                                    className={fieldClassName}
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-semibold text-foreground mb-2">Hora de Fin *</label>
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Hora de Fin *</label>
                                 <input
                                     type="datetime-local"
                                     name="endTime"
                                     value={form.endTime}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 focus:border-transparent hover:bg-white dark:hover:bg-slate-800"
+                                    className={fieldClassName}
                                 />
                             </div>
                         </div>
+                        </section>
 
-                        <div className="mb-6">
-                            <label className="block text-sm font-semibold text-foreground mb-2">Participantes</label>
-                            <div className="grid md:grid-cols-2 gap-6">
+                        <section className="bg-white rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] overflow-hidden">
+                            <div className="p-8 border-b border-[#edeeed] flex items-center justify-between gap-4">
+                                <div>
+                                    <h2 className="text-xl font-bold text-emerald-950 flex items-center gap-2">
+                                        <Users className="w-5 h-5" />
+                                        Participantes
+                                    </h2>
+                                    <p className="text-xs text-outline font-medium mt-1">Busca, agrupa y asigna roles a los asistentes de la actividad.</p>
+                                </div>
+                                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-[#d0e9d4] text-[#1b3022]">
+                                    {selected.length} seleccionado{selected.length === 1 ? '' : 's'}
+                                </span>
+                            </div>
+                            <div className="p-8 grid md:grid-cols-2 gap-6">
                                 <div>
                                     <div className="flex flex-col gap-3">
                                         <input
@@ -575,14 +604,14 @@ function NewMeetPage() {
                                             value={search}
                                             onChange={(e) => setSearch(e.target.value)}
                                             placeholder="Buscar por nombre o correo"
-                                            className="w-full px-4 py-3 bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                                            className={helperFieldClassName}
                                         />
-                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                            <span>Agrupar por</span>
+                                        <div className="flex items-center gap-2 text-xs text-[#5f6560]">
+                                            <span className="font-semibold uppercase tracking-widest">Agrupar por</span>
                                             <select
                                                 value={groupBy}
                                                 onChange={(e) => setGroupBy(e.target.value as UserGroupingId)}
-                                                className="px-3 py-1.5 bg-input border border-border rounded text-xs"
+                                                className="px-3 py-2 bg-[#fcfcfb] border border-[#edeeed] rounded-lg text-xs font-medium text-[#191c1c]"
                                             >
                                                 {availableGroupings.map(grouping => (
                                                     <option key={grouping.id} value={grouping.id}>
@@ -592,32 +621,32 @@ function NewMeetPage() {
                                             </select>
                                         </div>
                                     </div>
-                                    <div className="mt-3 h-80 overflow-y-auto border border-border rounded">
+                                    <div className={listContainerClassName}>
                                         {filteredUsers.length === 0 ? (
-                                            <div className="p-3 text-sm text-muted-foreground">Sin resultados</div>
+                                            <div className="p-4 text-sm text-[#5f6560]">Sin resultados</div>
                                         ) : groupBy === 'none' || userGroups.length === 0 ? (
                                             <ul>
                                                 {filteredUsers.map(u => (
-                                                    <li key={u.uid} className="flex items-center justify-between px-3 py-2 border-b border-border last:border-b-0">
+                                                    <li key={u.uid} className="flex items-center justify-between px-4 py-3 border-b border-[#edeeed] last:border-b-0 hover:bg-[#f8f9f8] transition-colors">
                                                         <div>
-                                                            <p className="text-sm font-medium text-foreground">{u.name}</p>
-                                                            <p className="text-xs text-muted-foreground">{u.email}</p>
+                                                            <p className="text-sm font-semibold text-[#191c1c]">{u.name}</p>
+                                                            <p className="text-xs text-[#5f6560]">{u.email}</p>
                                                         </div>
-                                                        <button type="button" onClick={() => addUser(u)} className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary-light">Añadir</button>
+                                                        <button type="button" onClick={() => addUser(u)} className="px-3 py-2 text-xs font-semibold bg-[#1b3022] text-white rounded-lg hover:bg-primary transition-colors">Añadir</button>
                                                     </li>
                                                 ))}
                                             </ul>
                                         ) : (
                                             <div className="space-y-3">
                                                 {userGroups.map(group => (
-                                                    <div key={group.key} className="border-b border-border last:border-b-0 pb-2">
-                                                        <div className="flex items-center justify-between px-3 py-2">
+                                                    <div key={group.key} className="border-b border-[#edeeed] last:border-b-0 pb-2">
+                                                        <div className="flex items-center justify-between px-4 py-3">
                                                             <div>
-                                                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                                                <p className="text-xs font-semibold text-[#5f6560] uppercase tracking-wider">
                                                                     {group.header}
                                                                 </p>
                                                                 {group.helperText && (
-                                                                    <p className="text-[11px] text-muted-foreground">
+                                                                    <p className="text-[11px] text-[#5f6560]">
                                                                         {group.helperText}
                                                                     </p>
                                                                 )}
@@ -625,22 +654,22 @@ function NewMeetPage() {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => addUsersBulk(group.users as UserItem[])}
-                                                                className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary-light"
+                                                                className="px-3 py-2 text-xs font-semibold bg-[#1b3022] text-white rounded-lg hover:bg-primary transition-colors"
                                                             >
                                                                 Agregar todos
                                                             </button>
                                                         </div>
                                                         <ul>
                                                             {group.users.map(u => (
-                                                                <li key={u.uid} className="flex items-center justify-between px-3 py-1.5">
+                                                                <li key={u.uid} className="flex items-center justify-between px-4 py-2 hover:bg-[#f8f9f8] transition-colors">
                                                                     <div>
-                                                                        <p className="text-sm font-medium text-foreground">{u.name}</p>
-                                                                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                                                                        <p className="text-sm font-semibold text-[#191c1c]">{u.name}</p>
+                                                                        <p className="text-xs text-[#5f6560]">{u.email}</p>
                                                                     </div>
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => addUser(u as UserItem)}
-                                                                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary-light"
+                                                                        className="px-3 py-2 text-xs font-semibold bg-[#1b3022] text-white rounded-lg hover:bg-primary transition-colors"
                                                                     >
                                                                         Añadir
                                                                     </button>
@@ -654,26 +683,26 @@ function NewMeetPage() {
                                     </div>
                                 </div>
                                 <div>
-                                    <p className="text-sm text-muted-foreground mb-2">Seleccionados</p>
+                                    <p className="text-sm font-semibold text-[#191c1c] mb-2">Seleccionados</p>
                                     {selected.length === 0 ? (
-                                        <div className="p-3 text-sm text-muted-foreground border border-border rounded">Aún no hay participantes</div>
+                                        <div className="p-4 text-sm text-[#5f6560] border border-[#edeeed] rounded-2xl bg-[#fcfcfb]">Aún no hay participantes</div>
                                     ) : (
-                                        <ul className="h-80 overflow-y-auto border border-border rounded">
+                                        <ul className="h-80 overflow-y-auto border border-[#edeeed] rounded-2xl bg-[#fcfcfb]">
                                             {selected.map(p => (
-                                                <li key={p.uid} className="grid grid-cols-5 items-center gap-2 px-3 py-2 border-b border-border last:border-b-0">
+                                                <li key={p.uid} className="grid grid-cols-5 items-center gap-3 px-4 py-3 border-b border-[#edeeed] last:border-b-0">
                                                     <div className="col-span-3">
-                                                        <p className="text-sm font-medium text-foreground">{p.name}</p>
-                                                        <p className="text-xs text-muted-foreground">{p.email}</p>
+                                                        <p className="text-sm font-semibold text-[#191c1c]">{p.name}</p>
+                                                        <p className="text-xs text-[#5f6560]">{p.email}</p>
                                                     </div>
                                                     <div>
-                                                        <select value={p.role} onChange={(e) => changeRole(p.uid, e.target.value as ParticipantRole)} className="w-full px-2 py-2 bg-input border border-border rounded text-sm">
+                                                        <select value={p.role} onChange={(e) => changeRole(p.uid, e.target.value as ParticipantRole)} className="w-full px-3 py-2 bg-white border border-[#edeeed] rounded-lg text-sm font-medium text-[#191c1c]">
                                                             <option value="attendee">Asistente</option>
                                                             <option value="speaker">Ponente</option>
                                                             <option value="host">Anfitrión</option>
                                                         </select>
                                                     </div>
                                                     <div className="text-right">
-                                                        <button type="button" onClick={() => removeUser(p.uid)} className="px-2 py-1 text-sm border border-border rounded hover:bg-muted">Quitar</button>
+                                                        <button type="button" onClick={() => removeUser(p.uid)} className="px-3 py-2 text-xs font-semibold border border-[#d7d9d8] rounded-lg text-[#434843] hover:bg-[#edeeed] transition-colors">Quitar</button>
                                                     </div>
                                                 </li>
                                             ))}
@@ -681,13 +710,13 @@ function NewMeetPage() {
                                     )}
                                 </div>
                             </div>
-                        </div>
+                        </section>
 
                         {error && (
-                            <div className="mb-4 p-3 border border-red-300 text-red-700 rounded">{error}</div>
+                            <div className="p-4 border border-[#f0c7c2] text-[#8c1d18] rounded-2xl bg-[#fff6f5]">{error}</div>
                         )}
                         {success && (
-                            <div className="mb-4 p-3 border border-green-300 text-green-700 rounded">{success}</div>
+                            <div className="p-4 border border-[#b7d6be] text-[#1b5e20] rounded-2xl bg-[#f3fbf4]">{success}</div>
                         )}
 
                         <div className='flex justify-center items-center'>
@@ -695,7 +724,7 @@ function NewMeetPage() {
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="flex-1 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:shadow-md disabled:opacity-50"
+                                    className="px-8 py-3 bg-[#1b3022] text-white font-bold rounded-xl transition-all shadow-md hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {submitting || creatingTeams ? 'Creando…' : 'Crear Reunión'}
                                 </button>
