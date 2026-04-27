@@ -53,6 +53,7 @@ const MONTH_LABELS = [
 function DashboardPage() {
     const { logout, user } = useAuth()
     const { database, availableDatabases, recinto, loading: dbLoading } = useDatabase()
+    const emptySummary = useMemo(() => getEmptyAttendanceSummary(), [])
 
     const now = useMemo(() => new Date(), [])
     const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear())
@@ -60,7 +61,7 @@ function DashboardPage() {
     const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL')
     const [recintoFilter, setRecintoFilter] = useState<RecintoFilter>('ALL')
 
-    const [summary, setSummary] = useState<AttendanceSummary | null>(null)
+    const [summary, setSummary] = useState<AttendanceSummary>(emptySummary)
     const [loading, setLoading] = useState<boolean>(false)
     const [error, setError] = useState<string | null>(null)
 
@@ -87,7 +88,10 @@ function DashboardPage() {
          * del resumen (`summary`).
          */
         async function loadMetrics(): Promise<void> {
-            if (dbLoading) return
+            if (dbLoading) {
+                setLoading(true)
+                return
+            }
 
             setLoading(true)
             setError(null)
@@ -162,10 +166,13 @@ function DashboardPage() {
         typeFilter,
     ])
 
-    const totalInvited = summary?.totalInvited ?? 0
-    const totalPresent = (summary?.totalPresent ?? 0) + (summary?.totalLate ?? 0)
-    const totalMeetings = summary?.totalMeetings ?? 0
+    const isLoadingMetrics = dbLoading || loading
+
+    const totalInvited = summary.totalInvited
+    const totalPresent = summary.totalPresent + summary.totalLate
+    const totalMeetings = summary.totalMeetings
     const attendanceRate = totalInvited > 0 ? Math.round((totalPresent * 100) / totalInvited) : 0
+    const hasMetrics = totalMeetings > 0 || totalInvited > 0 || totalPresent > 0 || summary.totalAbsent > 0
 
     /**
      * Etiqueta legible del recinto actualmente aplicado en el dashboard.
@@ -182,30 +189,56 @@ function DashboardPage() {
         return match?.name ?? recinto
     }, [availableDatabases, recinto, recintoFilter, canFilterRecintos])
 
-    const byType = summary?.byType ?? getEmptyAttendanceSummary().byType
+    const byType = summary.byType
+
+    const detailCards = [
+        {
+            title: 'Reuniones',
+            subtitle: 'Tipo meeting',
+            accentClass: 'bg-[#dce8f8] text-[#123a68]',
+            stats: byType.meeting,
+        },
+        {
+            title: 'Capacitaciones',
+            subtitle: 'Tipo training',
+            accentClass: 'bg-[#d0e9d4] text-[#1b3022]',
+            stats: byType.training,
+        },
+        {
+            title: 'Personalizados',
+            subtitle: 'Tipo custom',
+            accentClass: 'bg-[#ffefc2] text-[#5b4300]',
+            stats: byType.custom,
+        },
+    ]
 
     return (
         <Layout>
-            <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
-                <header className="bg-card border-b border-border sticky top-0 z-20 backdrop-blur-xl">
-                    <nav className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
+            <div className="bg-linear-to-br from-background via-muted/5 to-background min-h-screen">
+                <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs border-b border-[#edeeed]">
+                    <nav className="px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto flex justify-between items-center gap-6">
                         <div>
-                            <h1 className="text-3xl font-bold mt-4 text-foreground flex items-center gap-3">
-                                <BarChart3 className="w-7 h-7 text-primary" />
+                            <div className="flex items-center gap-2 text-xs text-outline mb-1 font-label tracking-wide uppercase">
+                                <span>Inicio</span>
+                                <span>/</span>
+                                <span>Dashboard</span>
+                            </div>
+                            <h1 className="text-3xl font-bold tracking-tight text-[#191c1c] flex items-center gap-3">
+                                <BarChart3 className="w-7 h-7 text-[#1b3022]" />
                                 Dashboard de Asistencias
                             </h1>
-                            <p className="text-sm text-muted-foreground mt-1">
+                            <p className="text-sm text-[#5f6560] mt-1">
                                 Resumen mensual de actividades: asistencias vs citados.
                             </p>
                         </div>
                         <div className="flex flex-col items-end gap-2">
                             {user?.displayName && (
-                                <span className="text-sm text-muted-foreground">{user.displayName}</span>
+                                <span className="text-sm text-[#5f6560]">{user.displayName}</span>
                             )}
                             <button
                                 type="button"
                                 onClick={logout}
-                                className="px-3 py-1.5 text-xs bg-muted text-foreground rounded-lg border border-border hover:bg-muted/70 transition-colors"
+                                className="px-4 py-2.5 bg-zinc-300 rounded-2xl cursor-pointer text-sm font-medium text-foreground hover:bg-zinc-200 transition-colors"
                             >
                                 Cerrar sesión
                             </button>
@@ -213,25 +246,16 @@ function DashboardPage() {
                     </nav>
                 </header>
 
-                <div className="max-w-6xl mx-auto p-6 mt-8 space-y-8">
-                    <section className="bg-card rounded-2xl border border-border p-4 md:p-6">
-                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Calendar className="w-4 h-4" />
-                                <span>
-                                    Mes seleccionado:{' '}
-                                    <strong>
-                                        {MONTH_LABELS[selectedMonth - 1]} {selectedYear}
-                                    </strong>
-                                </span>
-                            </div>
-                            <div className="flex flex-wrap gap-3">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs text-muted-foreground">Mes</span>
+                <div className="px-4 md:px-12 py-10 md:py-10 space-y-10 max-w-7xl mx-auto">
+                    <section className="bg-[#f3f4f3] p-6 rounded-xl space-y-4">
+                        <div className="flex flex-wrap items-end gap-6">
+                            <div className="flex-1 min-w-40">
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Mes</label>
+                                <div className="relative">
                                     <select
                                         value={selectedMonth}
                                         onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                                        className="px-3 py-1.5 bg-input border border-border rounded text-xs"
+                                        className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-[#191c1c] appearance-none focus:ring-2 focus:ring-primary-container"
                                     >
                                         {MONTH_LABELS.map((label, index) => (
                                             <option key={label} value={index + 1}>
@@ -240,12 +264,14 @@ function DashboardPage() {
                                         ))}
                                     </select>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs text-muted-foreground">Año</span>
+                            </div>
+                            <div className="flex-1 min-w-32">
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Año</label>
+                                <div className="relative">
                                     <select
                                         value={selectedYear}
                                         onChange={(e) => setSelectedYear(Number(e.target.value))}
-                                        className="px-3 py-1.5 bg-input border border-border rounded text-xs"
+                                        className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-[#191c1c] appearance-none focus:ring-2 focus:ring-primary-container"
                                     >
                                         {years.map((year) => (
                                             <option key={year} value={year}>
@@ -254,12 +280,14 @@ function DashboardPage() {
                                         ))}
                                     </select>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs text-muted-foreground">Tipo</span>
+                            </div>
+                            <div className="flex-1 min-w-40">
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Tipo</label>
+                                <div className="relative">
                                     <select
                                         value={typeFilter}
                                         onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-                                        className="px-3 py-1.5 bg-input border border-border rounded text-xs"
+                                        className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-[#191c1c] appearance-none focus:ring-2 focus:ring-primary-container"
                                     >
                                         <option value="ALL">Todos</option>
                                         <option value="meeting">Reuniones</option>
@@ -267,13 +295,15 @@ function DashboardPage() {
                                         <option value="custom">Personalizado</option>
                                     </select>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs text-muted-foreground">Recinto</span>
-                                    {canFilterRecintos ? (
+                            </div>
+                            <div className="flex-1 min-w-48">
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Recinto</label>
+                                {canFilterRecintos ? (
+                                    <div className="relative">
                                         <select
                                             value={recintoFilter}
                                             onChange={(e) => setRecintoFilter(e.target.value as RecintoFilter)}
-                                            className="px-3 py-1.5 bg-input border border-border rounded text-xs"
+                                            className="w-full bg-white border-none rounded-xl py-3 pl-4 pr-10 text-sm font-semibold text-[#191c1c] appearance-none focus:ring-2 focus:ring-primary-container"
                                         >
                                             <option value="ALL">Todos</option>
                                             {availableDatabases.map((db) => (
@@ -282,100 +312,141 @@ function DashboardPage() {
                                                 </option>
                                             ))}
                                         </select>
-                                    ) : (
-                                        <span className="px-3 py-1.5 bg-muted border border-border rounded text-xs flex items-center gap-1">
-                                            <Users className="w-3 h-3" />
-                                            {currentRecintoLabel}
-                                        </span>
-                                    )}
-                                </div>
+                                    </div>
+                                ) : (
+                                    <div className="w-full bg-white rounded-xl py-3 px-4 text-sm font-semibold text-[#191c1c] flex items-center gap-2">
+                                        <Users className="w-4 h-4 text-[#5f6560]" />
+                                        {currentRecintoLabel}
+                                    </div>
+                                )}
                             </div>
                         </div>
-                        <p className="text-xs text-muted-foreground flex items-center gap-2">
-                            <Users className="w-3 h-3" />
-                            Mostrando métricas para: <span className="font-medium">{currentRecintoLabel}</span>
-                        </p>
+                        <div className="flex items-center gap-2 text-[11px] text-[#5f6560]">
+                            <Calendar className="w-4 h-4" />
+                            <span>
+                                Mostrando métricas de <span className="font-semibold text-[#191c1c]">{MONTH_LABELS[selectedMonth - 1]} {selectedYear}</span> para <span className="font-semibold text-[#191c1c]">{currentRecintoLabel}</span>
+                            </span>
+                        </div>
                     </section>
 
-                    {loading && (
-                        <div className="p-3 text-sm text-muted-foreground">Cargando métricas…</div>
+                    {isLoadingMetrics && (
+                        <div className="bg-white rounded-2xl p-6 text-sm text-[#5f6560] shadow-[0_20px_20px_rgba(25,28,28,0.04)]">
+                            Cargando métricas...
+                        </div>
                     )}
                     {error && (
-                        <div className="p-3 text-sm text-red-600 border border-red-300 rounded">{error}</div>
+                        <div className="bg-[#fff6f5] border border-[#f0c7c2] rounded-2xl p-6 text-sm text-[#8c1d18] shadow-[0_20px_20px_rgba(25,28,28,0.04)]">
+                            {error}
+                        </div>
                     )}
 
-                    {!loading && summary && (
+                    {!isLoadingMetrics && !hasMetrics && !error && (
+                        <div className="bg-white rounded-2xl p-8 text-center shadow-[0_20px_20px_rgba(25,28,28,0.04)] border border-[#edeeed]">
+                            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#f3f4f3] flex items-center justify-center">
+                                <Calendar className="w-8 h-8 text-[#5f6560]" />
+                            </div>
+                            <h2 className="text-lg font-bold text-[#191c1c] mb-2">No hay métricas para este periodo</h2>
+                            <p className="text-sm text-[#5f6560] max-w-xl mx-auto">
+                                No se encontraron actividades ni registros de asistencia para los filtros seleccionados.
+                                Cambia el mes, año, tipo o recinto para consultar otro periodo.
+                            </p>
+                        </div>
+                    )}
+
+                    {!isLoadingMetrics && hasMetrics && (
                         <>
-                            <section className="grid md:grid-cols-4 gap-6">
-                                <div className="bg-card rounded-2xl border border-border p-6 transition-all duration-300 hover:shadow-lg">
-                                    <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">
-                                        Actividades
-                                    </p>
-                                    <p className="text-4xl font-bold text-primary">{totalMeetings}</p>
-                                    <p className="text-xs text-muted-foreground mt-1">Eventos programados en el mes filtrado.</p>
+                            <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                                <div className="bg-white p-6 rounded-xl shadow-[0_20px_20px_rgba(25,28,28,0.02)] border border-[#e1e3e2]/20 group hover:border-emerald-900/30 transition-all">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="p-3 rounded-xl bg-[#dce8f8] text-[#123a68]">
+                                            <Calendar className="w-5 h-5" />
+                                        </div>
+                                    </div>
+                                    <p className="text-3xl font-extrabold text-[#191c1c]">{totalMeetings}</p>
+                                    <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Actividades</p>
+                                    <p className="text-xs text-[#5f6560] mt-3">Eventos programados en el mes filtrado.</p>
                                 </div>
-                                <div className="bg-card rounded-2xl border border-border p-6 transition-all duration-300 hover:shadow-lg">
-                                    <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">Citados</p>
-                                    <p className="text-4xl font-bold text-foreground">{totalInvited}</p>
-                                    <p className="text-xs text-muted-foreground mt-1">Personas invitadas a estas actividades.</p>
+                                <div className="bg-white p-6 rounded-xl shadow-[0_20px_20px_rgba(25,28,28,0.02)] border border-[#e1e3e2]/20 group hover:border-emerald-900/30 transition-all">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="p-3 rounded-xl bg-[#ede7d3] text-[#534520]">
+                                            <Users className="w-5 h-5" />
+                                        </div>
+                                    </div>
+                                    <p className="text-3xl font-extrabold text-[#191c1c]">{totalInvited}</p>
+                                    <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Citados</p>
+                                    <p className="text-xs text-[#5f6560] mt-3">Personas invitadas a las actividades del periodo.</p>
                                 </div>
-                                <div className="bg-card rounded-2xl border border-border p-6 transition-all duration-300 hover:shadow-lg">
-                                    <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">
-                                        Asistencias (incluye tarde)
-                                    </p>
-                                    <p className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">{totalPresent}</p>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        Presentes en las actividades del mes.
-                                    </p>
+                                <div className="bg-white p-6 rounded-xl shadow-[0_20px_20px_rgba(25,28,28,0.02)] border border-[#e1e3e2]/20 group hover:border-emerald-900/30 transition-all">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="p-3 rounded-xl bg-[#d0e9d4] text-[#1b3022]">
+                                            <Users className="w-5 h-5" />
+                                        </div>
+                                    </div>
+                                    <p className="text-3xl font-extrabold text-[#191c1c]">{totalPresent}</p>
+                                    <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Asistencias</p>
+                                    <p className="text-xs text-[#5f6560] mt-3">Presentes y llegadas tarde registradas.</p>
                                 </div>
-                                <div className="bg-card rounded-2xl border border-border p-6 transition-all duration-300 hover:shadow-lg">
-                                    <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">
-                                        % Asistencia
-                                    </p>
-                                    <p className="text-4xl font-bold text-amber-600 dark:text-amber-400">{attendanceRate}%</p>
-                                    <div className="mt-3 h-2 w-full bg-muted rounded-full overflow-hidden">
+                                <div className="bg-white p-6 rounded-xl shadow-[0_20px_20px_rgba(25,28,28,0.02)] border border-[#e1e3e2]/20 group hover:border-emerald-900/30 transition-all">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="p-3 rounded-xl bg-[#ffefc2] text-[#5b4300]">
+                                            <BarChart3 className="w-5 h-5" />
+                                        </div>
+                                        <span className="text-xs font-bold text-[#7b5c00] bg-[#fff8df] px-2 py-1 rounded">{attendanceRate}%</span>
+                                    </div>
+                                    <p className="text-3xl font-extrabold text-[#191c1c]">{attendanceRate}%</p>
+                                    <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Asistencia</p>
+                                    <div className="mt-3 h-2.5 w-full bg-[#edeeed] rounded-full overflow-hidden">
                                         <div
-                                            className="h-full bg-primary transition-all duration-500"
+                                            className="h-full bg-[#1b3022] transition-all duration-500"
                                             style={{ width: `${attendanceRate}%` }}
                                         />
                                     </div>
-                                    <p className="text-xs text-muted-foreground mt-1">Relación asistencias vs citados del periodo.</p>
+                                    <p className="text-xs text-[#5f6560] mt-3">Relación de asistentes reales frente a citados.</p>
                                 </div>
                             </section>
 
-                            <section className="bg-card rounded-2xl border border-border p-6">
-                                <h2 className="text-xl font-bold text-foreground mb-4 flex items-center gap-2">
-                                    <BarChart3 className="w-5 h-5" />
-                                    Detalle por tipo de evento
-                                </h2>
-                                <div className="grid md:grid-cols-3 gap-6">
-                                    <div className="border border-border rounded-xl p-4">
-                                        <p className="text-sm font-semibold text-foreground mb-1">Reuniones</p>
-                                        <p className="text-xs text-muted-foreground mb-3">Tipo "meeting"</p>
-                                        <p className="text-xs text-muted-foreground">Eventos: {byType.meeting.meetings}</p>
-                                        <p className="text-xs text-muted-foreground">Citados: {byType.meeting.invited}</p>
-                                        <p className="text-xs text-muted-foreground">Presentes: {byType.meeting.present}</p>
-                                        <p className="text-xs text-muted-foreground">Tarde: {byType.meeting.late}</p>
-                                        <p className="text-xs text-muted-foreground">Ausentes: {byType.meeting.absent}</p>
+                            <section className="bg-white rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] overflow-hidden">
+                                <div className="p-8 border-b border-[#edeeed] flex items-center justify-between gap-4">
+                                    <div>
+                                        <h2 className="text-xl font-bold text-emerald-950 flex items-center gap-2">
+                                            <BarChart3 className="w-5 h-5" />
+                                            Detalle por tipo de evento
+                                        </h2>
+                                        <p className="text-xs text-outline font-medium mt-1">Distribución de citados y asistencias por categoría.</p>
                                     </div>
-                                    <div className="border border-border rounded-xl p-4">
-                                        <p className="text-sm font-semibold text-foreground mb-1">Capacitaciones</p>
-                                        <p className="text-xs text-muted-foreground mb-3">Tipo "training"</p>
-                                        <p className="text-xs text-muted-foreground">Eventos: {byType.training.meetings}</p>
-                                        <p className="text-xs text-muted-foreground">Citados: {byType.training.invited}</p>
-                                        <p className="text-xs text-muted-foreground">Presentes: {byType.training.present}</p>
-                                        <p className="text-xs text-muted-foreground">Tarde: {byType.training.late}</p>
-                                        <p className="text-xs text-muted-foreground">Ausentes: {byType.training.absent}</p>
-                                    </div>
-                                    <div className="border border-border rounded-xl p-4">
-                                        <p className="text-sm font-semibold text-foreground mb-1">Personalizados</p>
-                                        <p className="text-xs text-muted-foreground mb-3">Tipo "custom"</p>
-                                        <p className="text-xs text-muted-foreground">Eventos: {byType.custom.meetings}</p>
-                                        <p className="text-xs text-muted-foreground">Citados: {byType.custom.invited}</p>
-                                        <p className="text-xs text-muted-foreground">Presentes: {byType.custom.present}</p>
-                                        <p className="text-xs text-muted-foreground">Tarde: {byType.custom.late}</p>
-                                        <p className="text-xs text-muted-foreground">Ausentes: {byType.custom.absent}</p>
-                                    </div>
+                                </div>
+                                <div className="p-8 grid md:grid-cols-3 gap-6">
+                                    {detailCards.map((card) => (
+                                        <div key={card.title} className="rounded-2xl border border-[#edeeed] p-6 bg-[#fcfcfb] shadow-[0_12px_24px_rgba(25,28,28,0.03)]">
+                                            <div className="flex items-center justify-between gap-3 mb-5">
+                                                <div>
+                                                    <p className="text-lg font-bold text-[#191c1c]">{card.title}</p>
+                                                    <p className="text-[11px] uppercase tracking-widest text-outline font-bold mt-1">{card.subtitle}</p>
+                                                </div>
+                                                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${card.accentClass}`}>
+                                                    {card.stats.meetings} eventos
+                                                </span>
+                                            </div>
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between text-sm text-[#434843]">
+                                                    <span>Citados</span>
+                                                    <span className="font-bold text-[#191c1c]">{card.stats.invited}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between text-sm text-[#434843]">
+                                                    <span>Presentes</span>
+                                                    <span className="font-bold text-[#191c1c]">{card.stats.present}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between text-sm text-[#434843]">
+                                                    <span>Tarde</span>
+                                                    <span className="font-bold text-[#191c1c]">{card.stats.late}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between text-sm text-[#434843]">
+                                                    <span>Ausentes</span>
+                                                    <span className="font-bold text-[#191c1c]">{card.stats.absent}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </section>
                         </>
