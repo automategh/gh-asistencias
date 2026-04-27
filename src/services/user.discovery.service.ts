@@ -12,8 +12,28 @@ export interface FoundDb {
     readonly key: RecintoKey
 }
 
+interface DiscoverableUserProfile {
+    readonly identify?: string | null
+    readonly department?: string | null
+    readonly immediateBoss?: string | null
+    readonly cargo?: string | null
+}
+
+function isProfileComplete(profile: DiscoverableUserProfile | null): boolean {
+    if (!profile) {
+        return false
+    }
+
+    return [
+        profile.identify,
+        profile.department,
+        profile.immediateBoss,
+        profile.cargo,
+    ].every((value) => typeof value === 'string' && value.trim().length > 0)
+}
+
 /**
- * Busca en qué base de datos existe el perfil del usuario (users/{uid}/identify).
+ * Busca en qué base de datos existe el perfil completo del usuario.
  * Retorna la primera coincidencia encontrada o null si no existe en ninguna.
  */
 export async function findUserDatabaseByUid(
@@ -23,14 +43,15 @@ export async function findUserDatabaseByUid(
     for (const c of candidates) {
         const db = getDatabaseForUrl(c.url)
         if (!db) continue
-        const exists = await userIdentifyExists(db, uid)
+        const exists = await userProfileIsComplete(db, uid)
         if (exists) return { url: c.url, key: c.key }
     }
     return null
 }
 
-async function userIdentifyExists(database: Database, uid: string): Promise<boolean> {
-    const identifyRef = ref(database, `users/${uid}/identify`)
-    const snapshot = await get(identifyRef)
-    return snapshot.exists()
+async function userProfileIsComplete(database: Database, uid: string): Promise<boolean> {
+    const profileRef = ref(database, `users/${uid}`)
+    const snapshot = await get(profileRef)
+    const data = snapshot.val() as DiscoverableUserProfile | null
+    return isProfileComplete(data)
 }

@@ -5,11 +5,33 @@ import { useEffect, useState, type JSX } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { findUserDatabaseByUid } from '@/services/user.discovery.service'
 
+interface ProfileCompletionPayload {
+    readonly identify?: string | null
+    readonly department?: string | null
+    readonly immediateBoss?: string | null
+    readonly cargo?: string | null
+}
+
+function isProfileComplete(payload: ProfileCompletionPayload | null): boolean {
+    if (!payload) {
+        return false
+    }
+
+    const requiredFields = [
+        payload.identify,
+        payload.department,
+        payload.immediateBoss,
+        payload.cargo,
+    ]
+
+    return requiredFields.every((value) => typeof value === 'string' && value.trim().length > 0)
+}
+
 
 /**
  * Protección de rutas al estilo "middleware".
  * - Requiere sesión.
- * - Verifica perfil en RTDB (campo users/{uid}/identify).
+ * - Verifica perfil en RTDB (identify, department, immediateBoss y cargo).
  * - Si el perfil está incompleto, redirige a /configure-profile,
  *   excepto cuando ya estás en esa ruta (evita bucles).
  */
@@ -44,9 +66,10 @@ export default function ProtectedRoute(): JSX.Element {
             // 1) Si hay DB actual, intenta validar ahí
             if (database) {
                 try {
-                    const identifyRef = ref(database, `users/${uid}/identify`)
-                    const snapshot = await get(identifyRef)
-                    const isComplete = snapshot.exists()
+                    const profileRef = ref(database, `users/${uid}`)
+                    const snapshot = await get(profileRef)
+                    const data = snapshot.val() as ProfileCompletionPayload | null
+                    const isComplete = isProfileComplete(data)
                     if (!cancelled && isComplete) {
                         setProfileComplete(true)
                         return

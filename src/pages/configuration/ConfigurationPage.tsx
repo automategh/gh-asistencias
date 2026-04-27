@@ -1,9 +1,9 @@
 import { useAuth } from '@/context/AuthContext';
 import { get, ref } from 'firebase/database';
-import { Eye, EyeOff, Lock, Save, Loader2, IdCard, LucideFolderTree, AtSign, KeyRound, PenLine } from 'lucide-react';
+import { Eye, EyeOff, Lock, Save, Loader2, IdCard, LucideFolderTree, AtSign, KeyRound, PenLine, AlertCircle } from 'lucide-react';
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import type { UserProfile } from '@/types/user'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { getDepartaments } from '@/services/departaments/departments.service';
 import type { Departament } from '@/types/departament';
@@ -33,6 +33,7 @@ function ConfigurationProfilePage() {
         cargo: '',
     })
     const [leaders, setLeaders] = useState<string[]>([]);
+    const [showIncompleteProfileModal, setShowIncompleteProfileModal] = useState<boolean>(false);
     const [passwordForm, setPasswordForm] = useState<{ current: string; next: string; confirm: string }>({ current: '', next: '', confirm: '' });
     const [showPwd, setShowPwd] = useState<{ current: boolean; next: boolean; confirm: boolean }>({ current: false, next: false, confirm: false });
     const [savingProfile, setSavingProfile] = useState<boolean>(false);
@@ -40,6 +41,29 @@ function ConfigurationProfilePage() {
 
     const [isMyDatabase, setIsMyDatabase] = useState<boolean | null>(null);
     const isLocked = isMyDatabase === false;
+
+    const missingProfileFields = useMemo<string[]>(() => {
+        if (!user) {
+            return []
+        }
+
+        const missing: string[] = []
+
+        if (!user.identify || user.identify.trim().length === 0) {
+            missing.push('Identificación')
+        }
+        if (!user.department || user.department.trim().length === 0) {
+            missing.push('Área')
+        }
+        if (!user.cargo || user.cargo.trim().length === 0) {
+            missing.push('Cargo')
+        }
+        if (!user.immediateBoss || user.immediateBoss.trim().length === 0) {
+            missing.push('Jefe inmediato')
+        }
+
+        return missing
+    }, [user])
 
 
     useEffect(() => {
@@ -88,6 +112,34 @@ function ConfigurationProfilePage() {
 
         fetchUserData();
     }, [database, firebaseUser, isCorporateUser, databaseUrl]);
+
+    useEffect(() => {
+        if (!firebaseUser?.uid || !user || isLocked) {
+            return
+        }
+
+        if (missingProfileFields.length === 0) {
+            setShowIncompleteProfileModal(false)
+            return
+        }
+
+        const storageKey = `profile-incomplete-modal:${firebaseUser.uid}`
+        const alreadyShown = window.sessionStorage.getItem(storageKey)
+        if (alreadyShown === '1') {
+            return
+        }
+
+        setFormData({
+            name: user.name || '',
+            department: user.department || '',
+            identify: user.identify || '',
+            immediateBoss: user.immediateBoss || '',
+            cargo: user.cargo || '',
+        })
+        setIsEditing(true)
+        setShowIncompleteProfileModal(true)
+        window.sessionStorage.setItem(storageKey, '1')
+    }, [firebaseUser?.uid, user, isLocked, missingProfileFields])
 
 
     /**
@@ -228,6 +280,44 @@ function ConfigurationProfilePage() {
     return (
         <Layout>
             <div className="bg-linear-to-br from-background via-muted/5 to-background">
+                {showIncompleteProfileModal && missingProfileFields.length > 0 && (
+                    <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px] flex items-center justify-center px-4">
+                        <div className="w-full max-w-xl rounded-3xl bg-white shadow-[0_24px_48px_rgba(15,23,42,0.18)] border border-[#edeeed] overflow-hidden">
+                            <div className="p-6 border-b border-[#edeeed] flex items-start gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-[#fff4db] text-[#7b5c00] flex items-center justify-center shrink-0">
+                                    <AlertCircle className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-[#191c1c]">Completa tu perfil</h2>
+                                    <p className="text-sm text-[#5f6560] mt-1">
+                                        Antes de continuar, necesitamos que completes los datos faltantes de tu perfil.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <div className="rounded-2xl bg-[#f8f9f8] border border-[#edeeed] p-4">
+                                    <p className="text-xs font-bold uppercase tracking-widest text-outline mb-3">Campos pendientes</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {missingProfileFields.map((field) => (
+                                            <span key={field} className="px-3 py-1 rounded-full text-xs font-semibold bg-[#ffefc2] text-[#5b4300]">
+                                                {field}
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowIncompleteProfileModal(false)}
+                                        className="px-5 py-2.5 rounded-xl bg-[#1b3022] text-white text-sm font-semibold hover:bg-primary transition-colors"
+                                    >
+                                        Entendido
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
                 <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs">
                     <nav className='px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto'>
                         <h1 className="text-3xl font-bold tracking-tight">Configuración del perfil</h1>
