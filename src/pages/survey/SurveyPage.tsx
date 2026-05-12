@@ -2,7 +2,7 @@ import Layout from "@/components/layouts/layout"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/context/AuthContext"
 import {
-    findSurveyDatabaseById,
+    findSurveyDatabaseDescriptorById,
     getSurveyById,
     getSurveyOptionsByQuestionIds,
     getSurveyQuestionsBySurveyId,
@@ -258,19 +258,20 @@ function SurveyPage() {
         setIsSubmitting(true)
 
         try {
-            const database = await findSurveyDatabaseById(id)
+            const surveyDatabase = await findSurveyDatabaseDescriptorById(id)
 
-            if (!database) {
+            if (!surveyDatabase) {
                 setSubmitError("No se encontró la base de datos de la encuesta.")
                 return
             }
 
-            await saveSurveyResponse(database, {
+            await saveSurveyResponse(surveyDatabase.database, {
                 surveyId: id,
                 trainingId,
                 userId: user.uid,
                 userName: user.displayName ?? null,
                 userEmail: user.email ?? null,
+                recinto: surveyDatabase.recinto,
                 answers,
             })
 

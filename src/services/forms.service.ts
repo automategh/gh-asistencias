@@ -1,5 +1,5 @@
 import { get, push, ref, set, type Database } from "firebase/database"
-import { getAllAvailableDatabases } from "@/lib/firebase/databaseResolver"
+import { getAllAvailableDatabases, type RecintoKey } from "@/lib/firebase/databaseResolver"
 import { getDatabaseForUrl } from "@/services/firebase"
 
 /**
@@ -75,10 +75,17 @@ export type SurveyResponse = {
     userName?: string | null
     /** Email del colaborador (snapshot para UI) */
     userEmail?: string | null
+    /** Recinto/base de datos donde se almacenó la respuesta */
+    recinto?: RecintoKey | null
     /** Fecha de creación en formato ISO 8601 */
     createdAt: string
     /** Respuestas por id de pregunta */
     answers: Record<string, SurveyAnswerValue>
+}
+
+export interface SurveyDatabaseDescriptor {
+    readonly database: Database
+    readonly recinto: RecintoKey
 }
 
 
@@ -92,6 +99,11 @@ export type SurveyResponse = {
  * Si no se encuentra la encuesta en ninguna base de datos, devuelve `null`.
  */
 export async function findSurveyDatabaseById(surveyId: string): Promise<Database | null> {
+    const descriptor = await findSurveyDatabaseDescriptorById(surveyId)
+    return descriptor?.database ?? null
+}
+
+export async function findSurveyDatabaseDescriptorById(surveyId: string): Promise<SurveyDatabaseDescriptor | null> {
     const cleanId = surveyId.trim()
     if (!cleanId) {
         return null
@@ -109,7 +121,10 @@ export async function findSurveyDatabaseById(surveyId: string): Promise<Database
         const snapshot = await get(surveyRef)
 
         if (snapshot.exists()) {
-            return db
+            return {
+                database: db,
+                recinto: dbInfo.key,
+            }
         }
     }
 
@@ -422,6 +437,7 @@ export async function saveSurveyResponse(
         userId: string
         userName?: string | null
         userEmail?: string | null
+        recinto?: RecintoKey | null
         answers: Record<string, SurveyAnswerValue | null | undefined>
     },
 ): Promise<SurveyResponse> {
@@ -464,6 +480,7 @@ export async function saveSurveyResponse(
         userId: trimmedUserId,
         userName: params.userName ?? null,
         userEmail: params.userEmail ?? null,
+        recinto: params.recinto ?? null,
         createdAt,
         answers: normalizedAnswers,
     }
