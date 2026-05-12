@@ -45,6 +45,7 @@ export async function createMeeting(
         location: input.location.trim(),
         startTime: input.startTime,
         endTime: input.endTime,
+        trainerName: input.trainerName?.trim() || null,
         status: "scheduled",
         createdBy: creator.uid,
         createdByName: creator.displayName ?? null,

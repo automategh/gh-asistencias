@@ -49,6 +49,8 @@ export interface Meeting {
   readonly createdByName?: string | null
   /** Email del creador (solo para conveniencia en UI) */
   readonly createdByEmail?: string | null
+  /** Nombre explícito del capacitador cuando aplica, incluso si no está registrado en la app */
+  readonly trainerName?: string | null
   /** UIDs con permisos de gestión adicionales al creador */
   readonly managers?: readonly string[] | null
   /** Fecha de creación (epoch ms) */
@@ -117,6 +119,8 @@ export interface MeetingCreateInput {
   readonly startTime: number
   /** Fin epoch ms */
   readonly endTime: number
+  /** Nombre explícito del capacitador para actividades de tipo capacitación */
+  readonly trainerName?: string | null
   /** UIDs con permiso de gestión */
   readonly managers?: readonly string[] | null
 }

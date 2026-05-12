@@ -64,6 +64,7 @@ function NewMeetPage() {
         type: MeetingKind
         customType: string
         satisfactionSurveyId: string
+        trainerName: string
         description: string
         location: string
         startTime: string
@@ -75,6 +76,7 @@ function NewMeetPage() {
         type: 'meeting',
         customType: '',
         satisfactionSurveyId: '',
+        trainerName: '',
         description: '',
         location: '',
         startTime: '',
@@ -375,6 +377,11 @@ function NewMeetPage() {
             if (Number.isNaN(startMs) || Number.isNaN(endMs)) throw new Error('Fechas inválidas')
             if (startMs >= endMs) throw new Error('La hora de inicio debe ser menor que la de fin')
 
+            const selectedTrainer = selected.find((participant) => participant.role === 'speaker')
+            const resolvedTrainerName = form.type === 'training'
+                ? (form.trainerName.trim() || selectedTrainer?.name?.trim() || null)
+                : null
+
             const meeting = await createMeeting(database, {
                 uid: user.uid,
                 displayName: user.displayName,
@@ -390,6 +397,7 @@ function NewMeetPage() {
                 location: form.location,
                 startTime: startMs,
                 endTime: endMs,
+                trainerName: resolvedTrainerName,
                 managers: null,
             })
 
@@ -430,7 +438,7 @@ function NewMeetPage() {
                 setCreatingTeams(false)
             }
             setForm({
-                title: '', type: 'meeting', customType: '', satisfactionSurveyId: '', description: '', location: '', startTime: '', endTime: '',
+                title: '', type: 'meeting', customType: '', satisfactionSurveyId: '', trainerName: '', description: '', location: '', startTime: '', endTime: '',
             })
             setSelected([])
         } catch (err) {
@@ -496,26 +504,43 @@ function NewMeetPage() {
                             </div>
 
                         {form.type === 'training' && (
-                            <div>
-                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Encuesta de satisfacción</label>
-                                {trainingSurveys.length === 0 ? (
-                                    <p className="text-sm text-[#5f6560] bg-white rounded-xl px-4 py-3">
-                                        No hay encuestas de capacitación configuradas en esta base de datos.
-                                    </p>
-                                ) : (
-                                    <select
-                                        name="satisfactionSurveyId"
-                                        value={form.satisfactionSurveyId}
+                            <div className="grid md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Encuesta de satisfacción</label>
+                                    {trainingSurveys.length === 0 ? (
+                                        <p className="text-sm text-[#5f6560] bg-white rounded-xl px-4 py-3">
+                                            No hay encuestas de capacitación configuradas en esta base de datos.
+                                        </p>
+                                    ) : (
+                                        <select
+                                            name="satisfactionSurveyId"
+                                            value={form.satisfactionSurveyId}
+                                            onChange={handleChange}
+                                            className={fieldClassName}
+                                        >
+                                            {trainingSurveys.map(survey => (
+                                                <option key={survey.id} value={survey.id}>
+                                                    {survey.name}{survey.predetermined ? ' (Predeterminada)' : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Capacitador</label>
+                                    <input
+                                        type="text"
+                                        name="trainerName"
+                                        value={form.trainerName}
                                         onChange={handleChange}
+                                        placeholder="Nombre del capacitador si no está registrado"
                                         className={fieldClassName}
-                                    >
-                                        {trainingSurveys.map(survey => (
-                                            <option key={survey.id} value={survey.id}>
-                                                {survey.name}{survey.predetermined ? ' (Predeterminada)' : ''}
-                                            </option>
-                                        ))}
-                                    </select>
-                                )}
+                                    />
+                                    <p className="text-[11px] text-[#5f6560] mt-2 px-1">
+                                        Si dejas este campo vacío, se usará automáticamente el participante marcado como ponente.
+                                    </p>
+                                </div>
                             </div>
                         )}
 

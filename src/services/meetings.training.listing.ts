@@ -95,7 +95,7 @@ export async function getTrainingsWithParticipants(
         }
         const areas = Array.from(areaSet)
 
-        const trainer = getTrainerNameFromParticipants(relevantParticipants)
+        const trainer = meeting.trainerName?.trim() || getTrainerNameFromParticipants(relevantParticipants)
         result.push({ meeting, participants: relevantParticipants, trainer, areas })
     }
 
