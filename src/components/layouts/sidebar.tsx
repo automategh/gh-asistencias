@@ -1,7 +1,7 @@
 import { useAuth } from "@/context/AuthContext"
 import { useDatabase } from "@/context/DatabaseContext"
 import { cn } from "@/lib/utils"
-import { Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, LogOut, Menu, UserCircle, UserCog, X, LayoutDashboard, User, PlusCircleIcon, ChartColumnBig, Building2Icon, ClipboardList, GroupIcon } from "lucide-react"
+import { Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, LogOut, Menu, UserCircle, UserCog, X, LayoutDashboard, User, PlusCircleIcon, ChartColumnBig, Building2Icon, ClipboardList, GroupIcon } from "lucide-react"
 import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 
@@ -19,14 +19,37 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
     const [isMobileOpen, setIsMobileOpen] = useState<boolean>(false)
 
     const [showDbDropdown, setShowDbDropdown] = useState<boolean>(false)
+    const [showUserDropdown, setShowUserDropdown] = useState<boolean>(false)
+    const [showVersionModal, setShowVersionModal] = useState<boolean>(false)
 
     const { availableDatabases, isCorporateUser, setSelectedDatabase, recinto } = useDatabase()
 
+    type SidebarAppEnv = ImportMetaEnv & {
+        readonly VITE_APP_VERSION?: string
+        readonly VITE_APP_PUBLISHED_AT?: string
+    }
+
+    const appEnv = import.meta.env as SidebarAppEnv
+
     const currentDatabase = availableDatabases.find((db) => db.key === recinto)
+    const appVersion = appEnv.VITE_APP_VERSION ?? "No disponible"
+    const publishedAtRaw = appEnv.VITE_APP_PUBLISHED_AT ?? ""
+
+    const publishedAtDate = publishedAtRaw ? new Date(publishedAtRaw) : null
+    const publishedAtLabel = publishedAtDate && !Number.isNaN(publishedAtDate.getTime())
+        ? publishedAtDate.toLocaleString("es-ES", {
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        })
+        : "No disponible"
 
     const handleDbChange = (url: string, key: typeof recinto) => {
         setSelectedDatabase(url, key);
         setShowDbDropdown(false);
+        setShowUserDropdown(false);
     };
 
     // Persistencia de colapso en localStorage para evitar “abrirse” en cada navegación
@@ -93,7 +116,7 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                         <div className={`transition-all duration-300 overflow-hidden ${isCollapsed ? "lg:hidden" : "lg:block"}`}>
                             <h1 className="font-bold text-xl text-foreground whitespace-nowrap">Asistencias</h1>
                         </div>
-                        
+
                     </div>
                 </div>
 
@@ -113,6 +136,8 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                                         onClick={() => {
                                             setIsMobileOpen(false)
                                             setShowDbDropdown(false)
+                                            setShowUserDropdown(false)
+                                            setShowVersionModal(false)
 
                                         }}
                                         className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group relative ${isActive ? "bg-primary text-primary-foreground shadow-md" : "text-foreground hover:bg-muted/50"
@@ -137,63 +162,88 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                     </ul>
                 </nav>
 
-                {/* User Info */}
-                <div className="p-4">
-                    <div className="relative">
-                    <div
-                        className={`flex items-center gap-3 p-3 bg-muted/30 rounded-lg ${isCollapsed ? "lg:justify-center lg:p-3" : ""} ${isCorporateUser && !isCollapsed ? "cursor-pointer" : ""}`}
-                    >
-                        <div className="w-10 h-10 rounded-full overflow-hidden border border-border bg-muted flex items-center justify-center shrink-0">
-                            {profilePhotoUrl ? (
-                                <img
-                                    src={profilePhotoUrl}
-                                    alt={user?.displayName ?? user?.email ?? "Foto de perfil"}
-                                    className="w-full h-full object-cover"
-                                    referrerPolicy="no-referrer"
-                                />
-                            ) : (
-                                <UserCircle className="w-5 h-5 text-secondary-foreground" />
-                            )}
-                        </div>
-                        <div
-                            className={`flex-1 min-w-0 transition-all duration-300 overflow-hidden ${isCollapsed ? "lg:hidden" : "lg:block"}`}
-                        >
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    if (!isCorporateUser) return
-                                    setShowDbDropdown((previous) => !previous)
-                                }}
-                                className={`w-full flex items-center justify-between gap-2 text-left ${isCorporateUser ? "cursor-pointer" : "cursor-default"}`}
-                            >
-                                <span className="font-semibold text-sm text-foreground truncate whitespace-nowrap">{user?.displayName || "Usuario"}</span>
-                                {isCorporateUser && (
-                                    <ChevronDown className={`w-4 h-4 shrink-0 text-muted-foreground transition-transform ${showDbDropdown ? "rotate-180" : ""}`} />
-                                )}
-                            </button>
-                            <p className="text-xs text-muted-foreground whitespace-nowrap truncate">
-                                {isCorporateUser ? (currentDatabase?.name ?? "Seleccionar base de datos") : "En línea"}
-                            </p>
-                        </div>
-                    </div>
-                    </div>
-                </div>
 
-                {/* Logout Button */}
-                <div className="p-4">
-                    <button
-                        onClick={logout}
-                        className={`w-full flex items-center gap-2 px-4 py-3 text-red-500 hover:bg-red-200 font-semibold rounded-lg transition-all duration-300 hover:cursor-pointer ${isCollapsed ? "lg:justify-center lg:px-0" : "justify-center"
-                            }`}
-                        title={isCollapsed ? "Cerrar Sesión" : undefined}
-                    >
-                        <LogOut className={`w-5 h-5 shrink-0 ${isCollapsed ? "lg:w-6 lg:h-6" : ""}`} />
-                        <span
-                            className={`whitespace-nowrap transition-all duration-300 overflow-hidden ${isCollapsed ? "lg:hidden" : "lg:block"}`}
+                {/* User Info */}
+                <div className="p-4 pt-0">
+                    <div className="relative">
+                        <button
+                            type="button"
+                            onClick={() => setShowUserDropdown((previous) => !previous)}
+                            className={`w-full flex items-center gap-3 p-3 bg-muted/30 rounded-lg hover:bg-muted/45 transition-colors ${isCollapsed ? "lg:justify-center lg:p-3" : ""}`}
+                            title={isCollapsed ? (user?.displayName || "Usuario") : undefined}
                         >
-                            Cerrar Sesión
-                        </span>
-                    </button>
+                            <div className="w-10 h-10 rounded-full overflow-hidden border border-border bg-muted flex items-center justify-center shrink-0">
+                                {profilePhotoUrl ? (
+                                    <img
+                                        src={profilePhotoUrl}
+                                        alt={user?.displayName ?? user?.email ?? "Foto de perfil"}
+                                        className="w-full h-full object-cover"
+                                        referrerPolicy="no-referrer"
+                                    />
+                                ) : (
+                                    <UserCircle className="w-5 h-5 text-secondary-foreground" />
+                                )}
+                            </div>
+                            <div
+                                className={`flex-1 min-w-0 transition-all duration-300 overflow-hidden ${isCollapsed ? "lg:hidden" : "lg:block"}`}
+                            >
+                                <div className="w-full flex items-center justify-between gap-2 text-left">
+                                    <span className="font-semibold text-sm text-foreground truncate whitespace-nowrap">{user?.displayName || "Usuario"}</span>
+                                    <ChevronDown className={`w-4 h-4 shrink-0 text-muted-foreground transition-transform ${showUserDropdown ? "rotate-180" : ""}`} />
+                                </div>
+                                <p className="text-xs text-muted-foreground whitespace-nowrap truncate">
+                                    {isCorporateUser ? (currentDatabase?.name ?? "Seleccionar base de datos") : "En línea"}
+                                </p>
+                            </div>
+
+                        </button>
+
+                        {showUserDropdown && (
+                            <div className={cn(
+                                "absolute bottom-full mb-3 rounded-2xl border border-border bg-white shadow-[0_20px_40px_rgba(15,23,42,0.18)] p-2 z-60",
+                                isCollapsed ? "left-0 w-56" : "left-0 right-0"
+                            )}>
+                                {isCorporateUser && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowDbDropdown(true)
+                                            setShowUserDropdown(false)
+                                        }}
+                                        className="w-full px-4 py-3 rounded-xl text-left text-sm font-medium text-[#191c1c] hover:bg-[#f3f4f3] transition-colors"
+                                    >
+                                        Cambiar base de datos
+                                        <span className="block text-[11px] font-normal text-[#5f6560] mt-1">
+                                            {currentDatabase?.name ?? "Seleccionar recinto"}
+                                        </span>
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowVersionModal(true)
+                                        setShowUserDropdown(false)
+                                    }}
+                                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-foreground hover:bg-muted/40 transition-all duration-300 ${isCollapsed ? "lg:justify-center lg:px-0" : ""}`}
+                                    title={isCollapsed ? "Versión de la aplicación" : undefined}
+                                >
+                                    <CircleHelp className={`w-5 h-5 shrink-0 text-muted-foreground ${isCollapsed ? "lg:w-6 lg:h-6" : ""}`} />
+                                    <span className={`font-medium text-sm whitespace-nowrap transition-all duration-300 overflow-hidden ${isCollapsed ? "lg:hidden" : "lg:block"}`}>
+                                        Versión de la app
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={logout}
+                                    className="w-full px-4 py-3 rounded-xl text-left text-sm font-medium text-[#93000a] hover:bg-[#fff1f0] transition-colors flex items-center gap-2"
+                                >
+                                    <LogOut className="w-4 h-4" />
+                                    <span>Cerrar sesión</span>
+                                </button>
+                                
+                            </div>
+                        )}
+                    </div>
                 </div>
             </aside>
             {isCorporateUser && showDbDropdown && (
@@ -233,6 +283,36 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                                     {db.key === recinto && <Check className="w-4 h-4 shrink-0" />}
                                 </button>
                             ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+            {showVersionModal && (
+                <div className="fixed inset-0 z-120 bg-black/45 backdrop-blur-[2px] flex items-center justify-center px-4" onClick={() => setShowVersionModal(false)}>
+                    <div className="w-full max-w-sm rounded-3xl border border-[#edeeed] bg-white shadow-[0_24px_48px_rgba(15,23,42,0.18)] overflow-hidden" onClick={(event) => event.stopPropagation()}>
+                        <div className="px-6 py-5 border-b border-[#edeeed] bg-[#f8f9f8] flex items-start justify-between gap-4">
+                            <div>
+                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Información de la app</p>
+                                <h2 className="text-xl font-bold text-[#191c1c] mt-1">Versión publicada</h2>
+                                <p className="text-sm text-[#5f6560] mt-1">Datos de despliegue del frontend actual.</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowVersionModal(false)}
+                                className="w-9 h-9 rounded-full hover:bg-[#edeeed] transition-colors flex items-center justify-center text-[#5f6560]"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="rounded-2xl bg-[#f3f4f3] px-4 py-4">
+                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Versión</p>
+                                <p className="text-lg font-bold text-[#191c1c] mt-2">{appVersion}</p>
+                            </div>
+                            <div className="rounded-2xl bg-[#f3f4f3] px-4 py-4">
+                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Fecha de publicación</p>
+                                <p className="text-sm font-semibold text-[#191c1c] mt-2">{publishedAtLabel}</p>
+                            </div>
                         </div>
                     </div>
                 </div>
