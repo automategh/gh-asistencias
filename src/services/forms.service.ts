@@ -1,4 +1,4 @@
-import { get, push, ref, set, type Database } from "firebase/database"
+import { get, push, ref, remove, set, type Database } from "firebase/database"
 import { getAllAvailableDatabases, type RecintoKey } from "@/lib/firebase/databaseResolver"
 import { getDatabaseForUrl } from "@/services/firebase"
 
@@ -200,6 +200,53 @@ export async function updateSurvey(
     }
 
     await set(surveyRef, updated)
+}
+
+/**
+ * Elimina una encuesta y todos sus datos dependientes dentro de la misma base:
+ * preguntas, opciones asociadas y respuestas registradas.
+ */
+export async function deleteSurveyCascade(database: Database, surveyId: string): Promise<void> {
+    const cleanSurveyId = surveyId.trim()
+
+    if (!cleanSurveyId) {
+        throw new Error("No se encontró el identificador de la encuesta a eliminar.")
+    }
+
+    const surveyRef = ref(database, `surveys/${cleanSurveyId}`)
+    const surveySnapshot = await get(surveyRef)
+
+    if (!surveySnapshot.exists()) {
+        throw new Error("La encuesta que intentas eliminar no existe.")
+    }
+
+    const questionsRef = ref(database, "surveyQuestions")
+    const questionsSnapshot = await get(questionsRef)
+    const questionsValue = questionsSnapshot.val() as Record<string, SurveyQuestionRecord> | null
+
+    const questionIds = Object.entries(questionsValue ?? {})
+        .filter(([, question]) => question.surveyId === cleanSurveyId)
+        .map(([questionId]) => questionId)
+
+    if (questionIds.length > 0) {
+        const optionsRef = ref(database, "surveyOptions")
+        const optionsSnapshot = await get(optionsRef)
+        const optionsValue = optionsSnapshot.val() as Record<string, SurveyOptionRecord> | null
+        const questionIdSet = new Set(questionIds)
+
+        for (const [optionId, option] of Object.entries(optionsValue ?? {})) {
+            if (questionIdSet.has(option.questionId)) {
+                await remove(ref(database, `surveyOptions/${optionId}`))
+            }
+        }
+
+        for (const questionId of questionIds) {
+            await remove(ref(database, `surveyQuestions/${questionId}`))
+        }
+    }
+
+    await remove(ref(database, `surveyResponses/${cleanSurveyId}`))
+    await remove(surveyRef)
 }
 
 /**

@@ -1,6 +1,6 @@
 import Layout from "@/components/layouts/layout"
 import { useDatabase } from "@/context/DatabaseContext"
-import { createOption, createQuestion, getSurveyById, getSurveyOptionsByQuestionIds, getSurveyQuestionsBySurveyId, updateSurvey, type QuestionType, type SurveyOption, type SurveyQuestion } from "@/services/forms.service"
+import { createOption, createQuestion, deleteSurveyCascade, getSurveyById, getSurveyOptionsByQuestionIds, getSurveyQuestionsBySurveyId, updateSurvey, type QuestionType, type SurveyOption, type SurveyQuestion } from "@/services/forms.service"
 import type { MeetingKind } from "@/types/meeting"
 
 import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, ChevronRight, Copy, PlusCircle, Trash } from "lucide-react"
@@ -51,6 +51,7 @@ function EditSurveyPage() {
     const [success, setSuccess] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [isLoading, setIsLoading] = useState<boolean>(true)
+    const [isDeleting, setIsDeleting] = useState<boolean>(false)
 
     const clearErrorForLabel = (label: string): void => {
         setError((previous) => (previous.label === label ? { label: "", message: "" } : previous))
@@ -480,6 +481,44 @@ function EditSurveyPage() {
         }
     }
 
+    const handleDeleteSurvey = async (): Promise<void> => {
+        if (isDeleting || isSubmitting) {
+            return
+        }
+
+        if (!surveyId) {
+            setError({ label: "General", message: "No se encontró el identificador de la encuesta." })
+            return
+        }
+
+        if (!database) {
+            setError({ label: "General", message: "No hay base de datos activa para eliminar la encuesta." })
+            return
+        }
+
+        const confirmed = window.confirm(
+            "Esta acción eliminará la encuesta, todas sus preguntas y todas las respuestas registradas. ¿Deseas continuar?",
+        )
+
+        if (!confirmed) {
+            return
+        }
+
+        try {
+            setIsDeleting(true)
+            setError({ label: "", message: "" })
+            await deleteSurveyCascade(database, surveyId)
+            navigate("/survey")
+        } catch (err) {
+            setError({
+                label: "General",
+                message: err instanceof Error ? err.message : "No fue posible eliminar la encuesta.",
+            })
+        } finally {
+            setIsDeleting(false)
+        }
+    }
+
     return (
         <Layout>
             <div className='bg-linear-to-br from-background via-muted/5 to-background'>
@@ -786,6 +825,18 @@ function EditSurveyPage() {
                                                 </div>
                                                 <ArrowRight className="w-5 h-5 text-[#1b3022] group-hover:text-white" />
                                             </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleDeleteSurvey}
+                                                disabled={isDeleting || isSubmitting}
+                                                className="w-full group bg-white p-4 rounded-xl flex items-center justify-between border border-[#ffd9d6] text-[#93000a] hover:bg-[#93000a] hover:text-white transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
+                                            >
+                                                <div className="flex items-center space-x-4">
+                                                    <Trash className="w-5 h-5 text-[#93000a] group-hover:text-white" />
+                                                    <span className="font-semibold">{isDeleting ? "Eliminando encuesta..." : "Eliminar Encuesta"}</span>
+                                                </div>
+                                                <ArrowRight className="w-5 h-5 text-[#93000a] group-hover:text-white" />
+                                            </button>
                                         </div>
                                         <div className="mt-8 pt-8 border-t border-[#e1e3e2]/50">
                                             <p className="text-xs font-label uppercase tracking-widest text-outline mb-4">Estadísticas de Estructura</p>
@@ -811,7 +862,7 @@ function EditSurveyPage() {
                                         <button
                                             onClick={handleSubmit}
                                             type="button"
-                                            disabled={isSubmitting}
+                                            disabled={isSubmitting || isDeleting}
                                             className="w-full px-6 py-4 bg-primary text-white font-semibold rounded-3xl transition-all duration-300 hover:bg-primary-light disabled:opacity-60 disabled:cursor-not-allowed"
                                         >
                                             {isSubmitting ? "Guardando encuesta..." : "Guardar Cambios"}
