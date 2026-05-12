@@ -98,7 +98,9 @@ function SurveyPage() {
 
         const loadSurvey = async () => {
             try {
-                const db = await findSurveyDatabaseById(id)
+                const surveyDatabase = await findSurveyDatabaseDescriptorById(id)
+                const db = surveyDatabase?.database ?? null
+
                 if (cancelled || !db) {
                     if (!cancelled) {
                         setSurvey(null)
