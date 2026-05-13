@@ -6,257 +6,32 @@ import {
     getSurveyQuestionsBySurveyId,
     getSurveyResponsesByTraining,
     type Survey,
-    type SurveyAnswerValue,
     type SurveyOption,
     type SurveyQuestion,
     type SurveyResponse,
 } from "@/services/forms.service"
 import { getMeetingById } from "@/services/meetings.service"
-import type { Meeting } from "@/types/meeting"
 import type { UserProfile } from "@/types/user"
 import { BarChart3, ChevronRight, Clock, MessageSquareText, Star, Users } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { get, ref } from "firebase/database"
-
-interface TrainingSurveySummary {
-    trainingId: string
-    meeting: Meeting | null
-    totalResponses: number
-    averageRating: number | null
-}
-
-interface RatingDistributionItem {
-    value: number
-    count: number
-    percentage: number
-}
-
-interface SelectionDistributionItem {
-    optionId: string
-    label: string
-    count: number
-    percentage: number
-}
-
-interface QuestionAnalytics {
-    question: SurveyQuestion
-    answeredCount: number
-    averageRating: number | null
-    ratingDistribution: RatingDistributionItem[]
-    selectionDistribution: SelectionDistributionItem[]
-    comments: string[]
-}
-
-type SurveyRespondentProfile = Pick<UserProfile, "name" | "department" | "cargo">
-
-const QUESTION_TYPE_LABELS: Record<SurveyQuestion["type"], string> = {
-    rating: "Escala de valoración",
-    single: "Selección única",
-    multiple: "Selección múltiple",
-    text: "Texto libre",
-}
-
-const SURVEY_CATEGORY_LABELS: Record<string, string> = {
-    training: "Capacitación",
-    meeting: "Reunión",
-    custom: "Personalizada",
-}
-
-const formatDateLabel = (value: number): string => {
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) {
-        return "Fecha no disponible"
-    }
-
-    return date.toLocaleDateString("es-ES", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-    })
-}
-
-const formatDateTimeLabel = (value: string): string => {
-    const date = new Date(value)
-    if (Number.isNaN(date.getTime())) {
-        return value
-    }
-
-    return date.toLocaleString("es-ES", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-    })
-}
-
-const computeResponseAverageRating = (
-    response: SurveyResponse,
-    ratingQuestionIds: readonly string[],
-): number | null => {
-    if (ratingQuestionIds.length === 0) {
-        return null
-    }
-
-    let sum = 0
-    let count = 0
-
-    for (const questionId of ratingQuestionIds) {
-        const value = response.answers[questionId]
-        if (typeof value === "number") {
-            sum += value
-            count += 1
-        }
-    }
-
-    if (count === 0) {
-        return null
-    }
-
-    return sum / count
-}
-
-const getQuestionOptions = (
-    questionId: string,
-    options: readonly SurveyOption[],
-): SurveyOption[] => options.filter((option) => option.questionId === questionId)
-
-const formatAnswerValue = (
-    question: SurveyQuestion,
-    value: SurveyAnswerValue,
-    options: readonly SurveyOption[],
-): string => {
-    if (question.type === "text") {
-        if (typeof value === "string") {
-            return value
-        }
-        return String(value)
-    }
-
-    if (question.type === "rating") {
-        if (typeof value === "number") {
-            return value.toString()
-        }
-        const numeric = Number(value)
-        return Number.isNaN(numeric) ? String(value) : numeric.toString()
-    }
-
-    if (question.type === "single") {
-        const option = options.find((candidate) => candidate.id === value)
-        if (option) {
-            return option.text
-        }
-        return typeof value === "string" ? value : String(value)
-    }
-
-    const valuesArray: string[] = Array.isArray(value)
-        ? value
-        : [typeof value === "string" ? value : String(value)]
-
-    const labels = valuesArray.map((optionId) => {
-        const option = options.find((candidate) => candidate.id === optionId)
-        return option ? option.text : optionId
-    })
-
-    return labels.join(", ")
-}
-
-const buildQuestionAnalytics = (
-    question: SurveyQuestion,
-    responses: readonly SurveyResponse[],
-    options: readonly SurveyOption[],
-): QuestionAnalytics => {
-    const questionOptions = getQuestionOptions(question.id, options)
-    let answeredCount = 0
-    let ratingTotal = 0
-    let ratingCount = 0
-    const ratingMap = new Map<number, number>()
-    const selectionMap = new Map<string, number>()
-    const comments: string[] = []
-
-    for (const response of responses) {
-        const rawValue = response.answers[question.id]
-
-        if (typeof rawValue === "undefined") {
-            continue
-        }
-
-        if (question.type === "text") {
-            const value = typeof rawValue === "string" ? rawValue.trim() : String(rawValue).trim()
-            if (value.length > 0) {
-                answeredCount += 1
-                comments.push(value)
-            }
-            continue
-        }
-
-        if (question.type === "rating") {
-            const numericValue = typeof rawValue === "number" ? rawValue : Number(rawValue)
-            if (!Number.isNaN(numericValue)) {
-                answeredCount += 1
-                ratingTotal += numericValue
-                ratingCount += 1
-                ratingMap.set(numericValue, (ratingMap.get(numericValue) ?? 0) + 1)
-            }
-            continue
-        }
-
-        if (question.type === "single") {
-            const optionId = typeof rawValue === "string" ? rawValue : String(rawValue)
-            if (optionId.trim().length > 0) {
-                answeredCount += 1
-                selectionMap.set(optionId, (selectionMap.get(optionId) ?? 0) + 1)
-            }
-            continue
-        }
-
-        const selectedOptionIds = Array.isArray(rawValue)
-            ? rawValue.map((value) => String(value)).filter((value) => value.trim().length > 0)
-            : [String(rawValue)].filter((value) => value.trim().length > 0)
-
-        if (selectedOptionIds.length > 0) {
-            answeredCount += 1
-            for (const optionId of selectedOptionIds) {
-                selectionMap.set(optionId, (selectionMap.get(optionId) ?? 0) + 1)
-            }
-        }
-    }
-
-    const ratingDistribution: RatingDistributionItem[] = question.type === "rating"
-        ? Array.from({ length: 10 }, (_, index) => {
-            const value = index + 1
-            const count = ratingMap.get(value) ?? 0
-            return {
-                value,
-                count,
-                percentage: answeredCount > 0 ? (count / answeredCount) * 100 : 0,
-            }
-        })
-        : []
-
-    const selectionDistribution: SelectionDistributionItem[] =
-        question.type === "single" || question.type === "multiple"
-            ? questionOptions.map((option) => {
-                const count = selectionMap.get(option.id) ?? 0
-                return {
-                    optionId: option.id,
-                    label: option.text,
-                    count,
-                    percentage: answeredCount > 0 ? (count / answeredCount) * 100 : 0,
-                }
-            })
-            : []
-
-    return {
-        question,
-        answeredCount,
-        averageRating: ratingCount > 0 ? ratingTotal / ratingCount : null,
-        ratingDistribution,
-        selectionDistribution,
-        comments,
-    }
-}
+import { DistributionDonutCard, RatingDistributionChart, SelectionDistributionChart } from "./components/SurveyResultsCharts"
+import { SurveyResponseCard } from "./components/SurveyResponseCard"
+import { SurveyResponseFilters } from "./components/SurveyResponseFilters"
+import type { ResultsTab, SurveyRespondentProfile, TrainingSurveySummary } from "./survey-results.types"
+import {
+    ALL_FILTER_VALUE,
+    buildDistribution,
+    buildFilterOptions,
+    buildQuestionAnalytics,
+    computeResponseAverageRating,
+    formatAnswerValue,
+    formatDateLabel,
+    QUESTION_TYPE_LABELS,
+    RESPONSES_PER_PAGE,
+    SURVEY_CATEGORY_LABELS,
+} from "./survey-results.utils"
 
 const loadRespondentProfiles = async (
     database: NonNullable<ReturnType<typeof useDatabase>["database"]>,
@@ -304,6 +79,12 @@ function SurveyResultsPage() {
     const [trainingSummaries, setTrainingSummaries] = useState<TrainingSurveySummary[]>([])
     const [selectedTrainingId, setSelectedTrainingId] = useState<string | null>(null)
     const [respondentProfiles, setRespondentProfiles] = useState<Record<string, SurveyRespondentProfile>>({})
+    const [activeTab, setActiveTab] = useState<ResultsTab>("summary")
+    const [responsesPage, setResponsesPage] = useState<number>(1)
+    const [responsesSearch, setResponsesSearch] = useState<string>("")
+    const [selectedRecintoFilter, setSelectedRecintoFilter] = useState<string>(ALL_FILTER_VALUE)
+    const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState<string>(ALL_FILTER_VALUE)
+    const [selectedCargoFilter, setSelectedCargoFilter] = useState<string>(ALL_FILTER_VALUE)
 
     const navigate = useNavigate()
 
@@ -493,11 +274,29 @@ function SurveyResultsPage() {
         }
     }, [database, selectedTrainingId, responsesByTraining])
 
+    useEffect(() => {
+        setResponsesPage(1)
+    }, [selectedTrainingId])
+
+    useEffect(() => {
+        setResponsesPage(1)
+    }, [responsesSearch, selectedRecintoFilter, selectedDepartmentFilter, selectedCargoFilter])
+
+    useEffect(() => {
+        setResponsesSearch("")
+        setSelectedRecintoFilter(ALL_FILTER_VALUE)
+        setSelectedDepartmentFilter(ALL_FILTER_VALUE)
+        setSelectedCargoFilter(ALL_FILTER_VALUE)
+    }, [selectedTrainingId])
+
     const selectedSummary = selectedTrainingId
         ? trainingSummaries.find((summary) => summary.trainingId === selectedTrainingId) ?? null
         : null
     const selectedMeeting = selectedSummary?.meeting ?? null
     const selectedResponses = selectedTrainingId ? responsesByTraining[selectedTrainingId] ?? [] : []
+    const orderedResponses = [...selectedResponses].sort((first, second) => {
+        return second.createdAt.localeCompare(first.createdAt)
+    })
     const selectedHours = selectedMeeting
         ? Math.max(0, selectedMeeting.endTime - selectedMeeting.startTime) / (1000 * 60 * 60)
         : null
@@ -506,11 +305,54 @@ function SurveyResultsPage() {
         ? questions.map((question) => buildQuestionAnalytics(question, selectedResponses, options))
         : questions.map((question) => buildQuestionAnalytics(question, [], options))
     const totalComments = questionAnalytics.reduce((sum, item) => sum + item.comments.length, 0)
-    const selectedRecinto = selectedResponses.find((response) => response.recinto)?.recinto ?? null
     const trainerLabel = selectedMeeting?.trainerName?.trim()
         || selectedMeeting?.createdByName?.trim()
         || selectedMeeting?.createdByEmail?.trim()
         || "No disponible"
+    const respondentAreaDistribution = buildDistribution(
+        selectedResponses.map((response) => respondentProfiles[response.userId]?.department),
+    )
+    const respondentRoleDistribution = buildDistribution(
+        selectedResponses.map((response) => respondentProfiles[response.userId]?.cargo),
+    )
+    const respondentRecintoDistribution = buildDistribution(
+        selectedResponses.map((response) => response.recinto),
+    )
+    const responseRecintoOptions = buildFilterOptions(selectedResponses.map((response) => response.recinto))
+    const responseDepartmentOptions = buildFilterOptions(
+        selectedResponses.map((response) => respondentProfiles[response.userId]?.department),
+    )
+    const responseCargoOptions = buildFilterOptions(
+        selectedResponses.map((response) => respondentProfiles[response.userId]?.cargo),
+    )
+    const normalizedSearch = responsesSearch.trim().toLocaleLowerCase("es-ES")
+    const filteredResponses = orderedResponses.filter((response) => {
+        const respondentProfile = respondentProfiles[response.userId]
+        const respondentName = respondentProfile?.name?.trim()
+            || response.userName?.trim()
+            || response.userEmail
+            || ""
+        const respondentDepartment = respondentProfile?.department?.trim() || ""
+        const respondentCargo = respondentProfile?.cargo?.trim() || ""
+        const respondentRecinto = response.recinto?.trim() || ""
+        const respondentEmail = response.userEmail?.trim() || ""
+
+        const matchesSearch = normalizedSearch.length === 0
+            || [respondentName, respondentEmail, respondentDepartment, respondentCargo, respondentRecinto]
+                .some((value) => value.toLocaleLowerCase("es-ES").includes(normalizedSearch))
+
+        const matchesRecinto = selectedRecintoFilter === ALL_FILTER_VALUE || respondentRecinto === selectedRecintoFilter
+        const matchesDepartment = selectedDepartmentFilter === ALL_FILTER_VALUE || respondentDepartment === selectedDepartmentFilter
+        const matchesCargo = selectedCargoFilter === ALL_FILTER_VALUE || respondentCargo === selectedCargoFilter
+
+        return matchesSearch && matchesRecinto && matchesDepartment && matchesCargo
+    })
+    const totalResponsePages = Math.max(1, Math.ceil(filteredResponses.length / RESPONSES_PER_PAGE))
+    const safeResponsesPage = Math.min(responsesPage, totalResponsePages)
+    const paginatedResponses = filteredResponses.slice(
+        (safeResponsesPage - 1) * RESPONSES_PER_PAGE,
+        safeResponsesPage * RESPONSES_PER_PAGE,
+    )
 
     return (
         <Layout>
@@ -537,7 +379,7 @@ function SurveyResultsPage() {
                 </header>
 
                 <div className="px-4 md:px-12 py-10 md:py-16 max-w-7xl mx-auto space-y-8">
-                    <section className="bg-white rounded-xl shadow-sm border border-[#edeeed] p-6">
+                    <section className="bg-white rounded-xl  p-6">
                         {isLoadingSurvey ? (
                             <p className="text-sm text-[#434843]">Cargando encuesta...</p>
                         ) : !survey ? (
@@ -563,7 +405,7 @@ function SurveyResultsPage() {
                         )}
                     </section>
 
-                    <section className="bg-white rounded-xl shadow-sm border border-[#edeeed] p-6 space-y-5">
+                    <section className="bg-white rounded-xl  p-6 space-y-5">
                         <div className="flex flex-wrap items-end justify-between gap-4">
                             <div>
                                 <h2 className="text-lg font-bold text-[#191c1c]">Capacitaciones con respuestas</h2>
@@ -596,7 +438,10 @@ function SurveyResultsPage() {
                                         <button
                                             key={summary.trainingId}
                                             type="button"
-                                            onClick={() => setSelectedTrainingId(summary.trainingId)}
+                                            onClick={() => {
+                                                setSelectedTrainingId(summary.trainingId)
+                                                setActiveTab("summary")
+                                            }}
                                             className={`rounded-2xl border p-5 text-left transition-all ${isSelected
                                                 ? "border-[#1b3022] bg-[#eef4ef] shadow-[0_18px_30px_rgba(27,48,34,0.08)]"
                                                 : "border-[#edeeed] bg-[#f9faf9] hover:border-[#cfd8cf] hover:shadow-sm"
@@ -633,257 +478,337 @@ function SurveyResultsPage() {
 
                     {selectedSummary && (
                         <>
-                            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                                <article className="bg-white rounded-xl shadow-sm border border-[#edeeed] p-5 space-y-2">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Respuestas</p>
-                                        <Users className="w-4 h-4 text-[#5a665a]" />
-                                    </div>
-                                    <p className="text-3xl font-extrabold text-[#191c1c]">{selectedSummary.totalResponses}</p>
-                                    <p className="text-xs text-[#5a665a]">Colaboradores que completaron la encuesta para esta capacitación.</p>
-                                </article>
-
-                                <article className="bg-white rounded-xl shadow-sm border border-[#edeeed] p-5 space-y-2">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Promedio general</p>
-                                        <Star className="w-4 h-4 text-[#5a665a]" />
-                                    </div>
-                                    <p className="text-3xl font-extrabold text-[#191c1c]">
-                                        {selectedSummary.averageRating !== null ? selectedSummary.averageRating.toFixed(1) : "—"}
-                                    </p>
-                                    <p className="text-xs text-[#5a665a]">Promedio calculado sobre todas las preguntas de rating respondidas.</p>
-                                </article>
-
-                                <article className="bg-white rounded-xl shadow-sm border border-[#edeeed] p-5 space-y-2">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Duración</p>
-                                        <Clock className="w-4 h-4 text-[#5a665a]" />
-                                    </div>
-                                    <p className="text-3xl font-extrabold text-[#191c1c]">
-                                        {selectedHours !== null ? selectedHours.toFixed(1) : "—"}
-                                    </p>
-                                    <p className="text-xs text-[#5a665a]">Horas programadas para la capacitación seleccionada.</p>
-                                </article>
-
-                                <article className="bg-white rounded-xl shadow-sm border border-[#edeeed] p-5 space-y-2">
-                                    <div className="flex items-center justify-between gap-3">
-                                        <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Comentarios abiertos</p>
-                                        <MessageSquareText className="w-4 h-4 text-[#5a665a]" />
-                                    </div>
-                                    <p className="text-3xl font-extrabold text-[#191c1c]">{totalComments}</p>
-                                    <p className="text-xs text-[#5a665a]">Total de respuestas de texto libre registradas para esta capacitación.</p>
-                                </article>
+                            <section className="bg-white rounded-xl p-3 sm:p-4">
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab("summary")}
+                                        className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${activeTab === "summary"
+                                            ? "bg-[#1b3022] text-white"
+                                            : "bg-[#f3f4f3] text-[#434843] hover:bg-[#e6e8e6]"
+                                            }`}
+                                    >
+                                        Resumen
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab("responses")}
+                                        className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${activeTab === "responses"
+                                            ? "bg-[#1b3022] text-white"
+                                            : "bg-[#f3f4f3] text-[#434843] hover:bg-[#e6e8e6]"
+                                            }`}
+                                    >
+                                        Respuestas individuales
+                                    </button>
+                                </div>
                             </section>
 
-                            <section className="bg-white rounded-xl shadow-sm border border-[#edeeed] p-6 space-y-6">
-                                <div className="flex flex-wrap items-start justify-between gap-4">
-                                    <div>
-                                        <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Capacitación seleccionada</p>
-                                        <h2 className="text-2xl font-bold text-[#191c1c] mt-2">
-                                            {selectedMeeting?.title ?? `Capacitación ${selectedSummary.trainingId}`}
-                                        </h2>
-                                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-[#5a665a]">
-                                            <span>{selectedMeeting ? formatDateLabel(selectedMeeting.startTime) : "Fecha no disponible"}</span>
-                                            {selectedLocation && <span>• {selectedLocation}</span>}
-                                        </div>
-                                    </div>
-                                    <div className="grid gap-3 sm:grid-cols-3">
-                                        <div className="rounded-2xl bg-[#f3f4f3] px-4 py-3">
-                                            <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Capacitador</p>
-                                            <p className="text-sm font-bold text-[#191c1c] mt-2">{trainerLabel}</p>
-                                        </div>
-                                        <div className="rounded-2xl bg-[#f3f4f3] px-4 py-3">
-                                            <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Recinto</p>
-                                            <p className="text-sm font-bold text-[#191c1c] mt-2">{selectedRecinto ?? "No disponible"}</p>
-                                        </div>
-                                        <div className="rounded-2xl bg-[#f3f4f3] px-4 py-3 text-right">
-                                            <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Preguntas analizadas</p>
-                                            <p className="text-2xl font-extrabold text-[#191c1c] mt-1">{questions.length}</p>
-                                        </div>
-                                    </div>
-                                </div>
+                            {activeTab === "summary" && (
+                                <>
+                                    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                        <article className="bg-white rounded-xl p-5 space-y-2">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Respuestas</p>
+                                                <Users className="w-4 h-4 text-[#5a665a]" />
+                                            </div>
+                                            <p className="text-3xl font-extrabold text-[#191c1c]">{selectedSummary.totalResponses}</p>
+                                            <p className="text-xs text-[#5a665a]">Colaboradores que completaron la encuesta para esta capacitación.</p>
+                                        </article>
 
-                                <div className="space-y-5">
-                                    <div className="flex items-center justify-between gap-4">
+                                        <article className="bg-white rounded-xl p-5 space-y-2">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Promedio general</p>
+                                                <Star className="w-4 h-4 text-[#5a665a]" />
+                                            </div>
+                                            <p className="text-3xl font-extrabold text-[#191c1c]">
+                                                {selectedSummary.averageRating !== null ? selectedSummary.averageRating.toFixed(1) : "—"}
+                                            </p>
+                                            <p className="text-xs text-[#5a665a]">Promedio calculado sobre todas las preguntas de rating respondidas.</p>
+                                        </article>
+
+                                        <article className="bg-white rounded-xl p-5 space-y-2">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Duración</p>
+                                                <Clock className="w-4 h-4 text-[#5a665a]" />
+                                            </div>
+                                            <p className="text-3xl font-extrabold text-[#191c1c]">
+                                                {selectedHours !== null ? selectedHours.toFixed(1) : "—"}
+                                            </p>
+                                            <p className="text-xs text-[#5a665a]">Horas programadas para la capacitación seleccionada.</p>
+                                        </article>
+
+                                        <article className="bg-white rounded-xl p-5 space-y-2">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Comentarios abiertos</p>
+                                                <MessageSquareText className="w-4 h-4 text-[#5a665a]" />
+                                            </div>
+                                            <p className="text-3xl font-extrabold text-[#191c1c]">{totalComments}</p>
+                                            <p className="text-xs text-[#5a665a]">Total de respuestas de texto libre registradas para esta capacitación.</p>
+                                        </article>
+                                    </section>
+
+                                    <section className="bg-white rounded-xl p-6 space-y-6">
+                                        <div className="space-y-4">
+                                            <div>
+                                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Capacitación seleccionada</p>
+                                                <h2 className="text-2xl font-bold text-[#191c1c] mt-2">
+                                                    {selectedMeeting?.title ?? `Capacitación ${selectedSummary.trainingId}`}
+                                                </h2>
+                                                <div className="mt-2 flex flex-wrap gap-2 text-xs text-[#5a665a]">
+                                                    <span>{selectedMeeting ? formatDateLabel(selectedMeeting.startTime) : "Fecha no disponible"}</span>
+                                                    {selectedLocation && <span>• {selectedLocation}</span>}
+                                                </div>
+                                            </div>
+                                            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                                                <div className="rounded-2xl bg-[#f3f4f3] px-4 py-3">
+                                                    <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Capacitador</p>
+                                                    <p className="text-sm font-bold text-[#191c1c] mt-2">{trainerLabel}</p>
+                                                </div>
+                                                <div className="rounded-2xl bg-[#f3f4f3] px-4 py-3">
+                                                    <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Recintos detectados</p>
+                                                    <p className="text-2xl font-extrabold text-[#191c1c] mt-1">{respondentRecintoDistribution.length}</p>
+                                                    <p className="text-xs text-[#5a665a] mt-2">Recintos con al menos una respuesta registrada.</p>
+                                                </div>
+                                                <div className="rounded-2xl bg-[#f3f4f3] px-4 py-3">
+                                                    <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Preguntas analizadas</p>
+                                                    <p className="text-2xl font-extrabold text-[#191c1c] mt-1">{questions.length}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid gap-4 xl:grid-cols-3">
+                                                <DistributionDonutCard
+                                                    title="Áreas que respondieron"
+                                                    subtitle="Distribución de participación por área"
+                                                    items={respondentAreaDistribution}
+                                                    emptyMessage="No hay áreas disponibles en los perfiles de quienes respondieron."
+                                                />
+                                                <DistributionDonutCard
+                                                    title="Cargos que respondieron"
+                                                    subtitle="Distribución de participación por cargo"
+                                                    items={respondentRoleDistribution}
+                                                    emptyMessage="No hay cargos disponibles en los perfiles de quienes respondieron."
+                                                />
+                                                <DistributionDonutCard
+                                                    title="Recintos con respuestas"
+                                                    subtitle="Origen de las respuestas por recinto"
+                                                    items={respondentRecintoDistribution}
+                                                    emptyMessage="No hay recintos registrados en las respuestas de esta capacitación."
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-5">
+                                            <div className="flex items-center justify-between gap-4">
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-[#191c1c]">Resultados por pregunta</h3>
+                                                    <p className="text-xs text-[#5a665a] mt-1">
+                                                        Cada bloque muestra el comportamiento de una pregunta dentro de esta capacitación.
+                                                    </p>
+                                                </div>
+                                                <BarChart3 className="w-5 h-5 text-[#5a665a]" />
+                                            </div>
+
+                                            {questionAnalytics.length === 0 ? (
+                                                <p className="text-sm text-[#434843]">Esta encuesta no tiene preguntas configuradas.</p>
+                                            ) : (
+                                                <div className="space-y-5">
+                                                    {questionAnalytics.map((analytics, index) => (
+                                                        <article key={analytics.question.id} className="rounded-2xl  bg-[#fafbfa] p-5 space-y-5">
+                                                            <header className="flex flex-wrap items-start justify-between gap-4">
+                                                                <div className="space-y-2">
+                                                                    <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-outline">
+                                                                        <span>Pregunta {index + 1}</span>
+                                                                        <span className="rounded-full bg-white px-2.5 py-1 text-[#1b3022] border border-[#dbe5db]">
+                                                                            {QUESTION_TYPE_LABELS[analytics.question.type]}
+                                                                        </span>
+                                                                        <span>{analytics.answeredCount} respuestas válidas</span>
+                                                                    </div>
+                                                                    <h4 className="text-base font-bold text-[#191c1c]">{analytics.question.text}</h4>
+                                                                </div>
+                                                                {analytics.question.type === "rating" && (
+                                                                    <div className="rounded-2xl bg-white  px-4 py-3 min-w-32 text-center">
+                                                                        <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Promedio</p>
+                                                                        <p className="text-2xl font-extrabold text-[#191c1c] mt-1">
+                                                                            {analytics.averageRating !== null ? analytics.averageRating.toFixed(1) : "—"}
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                            </header>
+
+                                                            {analytics.question.type === "rating" && (
+                                                                <RatingDistributionChart items={analytics.ratingDistribution} />
+                                                            )}
+
+                                                            {(analytics.question.type === "single" || analytics.question.type === "multiple") && (
+                                                                <SelectionDistributionChart items={analytics.selectionDistribution} />
+                                                            )}
+
+                                                            {analytics.question.type === "text" && (
+                                                                analytics.comments.length === 0 ? (
+                                                                    <p className="text-sm text-[#5a665a]">No se registraron comentarios para esta pregunta.</p>
+                                                                ) : (
+                                                                    <div className="space-y-3">
+                                                                        {analytics.comments.slice(0, 6).map((comment, commentIndex) => (
+                                                                            <div key={`${analytics.question.id}-${commentIndex}`} className="rounded-xl  bg-white px-4 py-3">
+                                                                                <p className="text-sm text-[#434843] leading-6">{comment}</p>
+                                                                            </div>
+                                                                        ))}
+                                                                        {analytics.comments.length > 6 && (
+                                                                            <p className="text-xs text-[#5a665a]">
+                                                                                Se muestran 6 de {analytics.comments.length} comentarios registrados.
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                )
+                                                            )}
+                                                        </article>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </section>
+                                </>
+                            )}
+
+                            {activeTab === "responses" && (
+                                <section className="bg-white rounded-xl shadow-sm  p-6 space-y-4">
+                                    <div className="flex flex-wrap items-start justify-between gap-4">
                                         <div>
-                                            <h3 className="text-lg font-bold text-[#191c1c]">Resultados por pregunta</h3>
+                                            <h3 className="text-lg font-bold text-[#191c1c]">Respuestas individuales</h3>
                                             <p className="text-xs text-[#5a665a] mt-1">
-                                                Cada bloque muestra el comportamiento de una pregunta dentro de esta capacitación.
+                                                Este bloque concentra el detalle operativo por respondiente para no cargar la vista de resumen.
                                             </p>
                                         </div>
-                                        <BarChart3 className="w-5 h-5 text-[#5a665a]" />
+                                        <div className="rounded-2xl bg-[#f3f4f3] px-4 py-3 text-right">
+                                            <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Capacitación seleccionada</p>
+                                            <p className="text-sm font-bold text-[#191c1c] mt-2">
+                                                {selectedMeeting?.title ?? `Capacitación ${selectedSummary.trainingId}`}
+                                            </p>
+                                        </div>
                                     </div>
 
-                                    {questionAnalytics.length === 0 ? (
-                                        <p className="text-sm text-[#434843]">Esta encuesta no tiene preguntas configuradas.</p>
+                                    {selectedResponses.length === 0 ? (
+                                        <p className="text-sm text-[#5a665a]">No se encontraron respuestas para esta capacitación.</p>
                                     ) : (
-                                        <div className="space-y-5">
-                                            {questionAnalytics.map((analytics, index) => (
-                                                <article key={analytics.question.id} className="rounded-2xl border border-[#edeeed] bg-[#fafbfa] p-5 space-y-5">
-                                                    <header className="flex flex-wrap items-start justify-between gap-4">
-                                                        <div className="space-y-2">
-                                                            <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-outline">
-                                                                <span>Pregunta {index + 1}</span>
-                                                                <span className="rounded-full bg-white px-2.5 py-1 text-[#1b3022] border border-[#dbe5db]">
-                                                                    {QUESTION_TYPE_LABELS[analytics.question.type]}
-                                                                </span>
-                                                                <span>{analytics.answeredCount} respuestas válidas</span>
-                                                            </div>
-                                                            <h4 className="text-base font-bold text-[#191c1c]">{analytics.question.text}</h4>
-                                                        </div>
-                                                        {analytics.question.type === "rating" && (
-                                                            <div className="rounded-2xl bg-white border border-[#edeeed] px-4 py-3 min-w-32 text-center">
-                                                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Promedio</p>
-                                                                <p className="text-2xl font-extrabold text-[#191c1c] mt-1">
-                                                                    {analytics.averageRating !== null ? analytics.averageRating.toFixed(1) : "—"}
-                                                                </p>
-                                                            </div>
-                                                        )}
-                                                    </header>
+                                        <div className="space-y-4">
+                                            <SurveyResponseFilters
+                                                search={responsesSearch}
+                                                selectedRecinto={selectedRecintoFilter}
+                                                selectedDepartment={selectedDepartmentFilter}
+                                                selectedCargo={selectedCargoFilter}
+                                                recintoOptions={responseRecintoOptions}
+                                                departmentOptions={responseDepartmentOptions}
+                                                cargoOptions={responseCargoOptions}
+                                                onSearchChange={setResponsesSearch}
+                                                onRecintoChange={setSelectedRecintoFilter}
+                                                onDepartmentChange={setSelectedDepartmentFilter}
+                                                onCargoChange={setSelectedCargoFilter}
+                                                onClear={() => {
+                                                    setResponsesSearch("")
+                                                    setSelectedRecintoFilter(ALL_FILTER_VALUE)
+                                                    setSelectedDepartmentFilter(ALL_FILTER_VALUE)
+                                                    setSelectedCargoFilter(ALL_FILTER_VALUE)
+                                                }}
+                                            />
 
-                                                    {analytics.question.type === "rating" && (
-                                                        <div className="space-y-3">
-                                                            {analytics.ratingDistribution.map((item) => (
-                                                                <div key={item.value} className="grid grid-cols-[40px_1fr_72px] items-center gap-3">
-                                                                    <span className="text-sm font-semibold text-[#191c1c]">{item.value}</span>
-                                                                    <div className="h-3 rounded-full bg-[#e8ebe8] overflow-hidden">
-                                                                        <div
-                                                                            className="h-full rounded-full bg-[#1b3022] transition-all"
-                                                                            style={{ width: `${item.percentage}%` }}
-                                                                        />
-                                                                    </div>
-                                                                    <span className="text-xs text-[#5a665a] text-right">
-                                                                        {item.count} · {item.percentage.toFixed(0)}%
-                                                                    </span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
+                                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#f3f4f3] px-4 py-3 text-xs text-[#5a665a]">
+                                                <span>
+                                                    Mostrando <strong>{paginatedResponses.length}</strong> de <strong>{filteredResponses.length}</strong> respuestas
+                                                </span>
+                                                <span>
+                                                    Página <strong>{safeResponsesPage}</strong> de <strong>{totalResponsePages}</strong>
+                                                </span>
+                                            </div>
 
-                                                    {(analytics.question.type === "single" || analytics.question.type === "multiple") && (
-                                                        <div className="space-y-3">
-                                                            {analytics.selectionDistribution.map((item) => (
-                                                                <div key={item.optionId} className="space-y-1.5">
-                                                                    <div className="flex items-center justify-between gap-4 text-xs">
-                                                                        <span className="font-medium text-[#191c1c]">{item.label}</span>
-                                                                        <span className="text-[#5a665a]">
-                                                                            {item.count} selección{item.count === 1 ? "" : "es"} · {item.percentage.toFixed(0)}%
-                                                                        </span>
-                                                                    </div>
-                                                                    <div className="h-3 rounded-full bg-[#e8ebe8] overflow-hidden">
-                                                                        <div
-                                                                            className="h-full rounded-full bg-[#588157] transition-all"
-                                                                            style={{ width: `${item.percentage}%` }}
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
+                                            {filteredResponses.length === 0 ? (
+                                                <div className="rounded-[28px] border border-dashed border-[#dbe5db] bg-[#f8faf8] px-5 py-10 text-center">
+                                                    <p className="text-sm font-semibold text-[#191c1c]">No hay respuestas que coincidan con los filtros.</p>
+                                                    <p className="mt-2 text-xs text-[#5a665a]">Prueba con otra combinación o limpia la búsqueda.</p>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3 pr-1">
+                                                    {paginatedResponses.map((response) => {
+                                                        const respondentProfile = respondentProfiles[response.userId]
+                                                        const respondentName = respondentProfile?.name?.trim()
+                                                            || response.userName?.trim()
+                                                            || response.userEmail
+                                                            || "Colaborador sin nombre"
+                                                        const respondentDepartment = respondentProfile?.department?.trim() || "No disponible"
+                                                        const respondentCargo = respondentProfile?.cargo?.trim() || "No disponible"
+                                                        const respondentRecinto = response.recinto?.trim() || "No disponible"
+                                                        const respondentEmail = response.userEmail?.trim() || "No disponible"
+                                                        const answeredQuestionList = questions.flatMap((question, questionIndex) => {
+                                                            const rawValue = response.answers[question.id]
+                                                            if (typeof rawValue === "undefined") {
+                                                                return []
+                                                            }
 
-                                                    {analytics.question.type === "text" && (
-                                                        analytics.comments.length === 0 ? (
-                                                            <p className="text-sm text-[#5a665a]">No se registraron comentarios para esta pregunta.</p>
-                                                        ) : (
-                                                            <div className="space-y-3">
-                                                                {analytics.comments.slice(0, 6).map((comment, commentIndex) => (
-                                                                    <div key={`${analytics.question.id}-${commentIndex}`} className="rounded-xl border border-[#edeeed] bg-white px-4 py-3">
-                                                                        <p className="text-sm text-[#434843] leading-6">{comment}</p>
-                                                                    </div>
-                                                                ))}
-                                                                {analytics.comments.length > 6 && (
-                                                                    <p className="text-xs text-[#5a665a]">
-                                                                        Se muestran 6 de {analytics.comments.length} comentarios registrados.
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        )
-                                                    )}
-                                                </article>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </section>
-
-                            <section className="bg-white rounded-xl shadow-sm border border-[#edeeed] p-6 space-y-4">
-                                <div>
-                                    <h3 className="text-lg font-bold text-[#191c1c]">Respuestas individuales</h3>
-                                    <p className="text-xs text-[#5a665a] mt-1">
-                                        Este bloque sirve como respaldo detallado para revisar lo que respondió cada colaborador.
-                                    </p>
-                                </div>
-
-                                {selectedResponses.length === 0 ? (
-                                    <p className="text-sm text-[#5a665a]">No se encontraron respuestas para esta capacitación.</p>
-                                ) : (
-                                    <div className="space-y-3 max-h-140 overflow-y-auto pr-1">
-                                        {selectedResponses.map((response) => (
-                                            <details
-                                                key={response.id}
-                                                className="group rounded-xl border border-[#edeeed] bg-[#fafbfa] overflow-hidden"
-                                            >
-                                                {(() => {
-                                                    const respondentProfile = respondentProfiles[response.userId]
-                                                    const respondentName = respondentProfile?.name?.trim()
-                                                        || response.userName?.trim()
-                                                        || response.userEmail
-                                                        || "Colaborador sin nombre"
-                                                    const respondentDepartment = respondentProfile?.department?.trim() || "No disponible"
-                                                    const respondentCargo = respondentProfile?.cargo?.trim() || "No disponible"
-
-                                                    return (
-                                                <summary className="list-none cursor-pointer px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-                                                    <div>
-                                                        <p className="text-sm font-semibold text-[#191c1c]">
-                                                            {respondentName}
-                                                        </p>
-                                                        <div className="mt-1 flex flex-wrap gap-2 text-[11px] text-[#5a665a]">
-                                                            {response.userEmail && <span>{response.userEmail}</span>}
-                                                            {response.recinto && <span>• {response.recinto}</span>}
-                                                        </div>
-                                                        <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-                                                            <span className="rounded-full bg-white px-2.5 py-1 text-[#434843] border border-[#edeeed]">
-                                                                Cargo: {respondentCargo}
-                                                            </span>
-                                                            <span className="rounded-full bg-white px-2.5 py-1 text-[#434843] border border-[#edeeed]">
-                                                                Área: {respondentDepartment}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="text-[11px] text-[#5a665a]">Respondida el</p>
-                                                        <p className="text-xs font-medium text-[#191c1c]">{formatDateTimeLabel(response.createdAt)}</p>
-                                                    </div>
-                                                </summary>
-                                                    )
-                                                })()}
-
-                                                <div className="border-t border-[#edeeed] px-4 py-4 space-y-3 bg-white">
-                                                    {questions.map((question) => {
-                                                        const rawValue = response.answers[question.id]
-
-                                                        if (typeof rawValue === "undefined") {
-                                                            return null
-                                                        }
-
-                                                        const label = formatAnswerValue(question, rawValue, options)
+                                                            return [{
+                                                                id: question.id,
+                                                                index: questionIndex,
+                                                                type: question.type,
+                                                                text: question.text,
+                                                                answer: formatAnswerValue(question, rawValue, options).trim() || "Sin respuesta",
+                                                            }]
+                                                        })
 
                                                         return (
-                                                            <div key={question.id} className="space-y-1">
-                                                                <p className="text-xs font-semibold text-[#191c1c]">{question.text}</p>
-                                                                <p className="text-sm text-[#5a665a] leading-6">
-                                                                    {label.trim().length > 0 ? label : "Sin respuesta"}
-                                                                </p>
-                                                            </div>
+                                                            <SurveyResponseCard
+                                                                key={response.id}
+                                                                respondentName={respondentName}
+                                                                respondentDepartment={respondentDepartment}
+                                                                respondentCargo={respondentCargo}
+                                                                respondentRecinto={respondentRecinto}
+                                                                respondentEmail={respondentEmail}
+                                                                answeredQuestions={answeredQuestionList.length}
+                                                                totalQuestions={questions.length}
+                                                                createdAt={response.createdAt}
+                                                                questions={answeredQuestionList}
+                                                            />
                                                         )
                                                     })}
                                                 </div>
-                                            </details>
-                                        ))}
-                                    </div>
-                                )}
-                            </section>
+                                            )}
+
+                                            {filteredResponses.length > 0 && totalResponsePages > 1 && (
+                                                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#edeeed] pt-4">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setResponsesPage((previous) => Math.max(1, previous - 1))}
+                                                        disabled={safeResponsesPage === 1}
+                                                        className="px-4 py-2 rounded-xl bg-[#f3f4f3] text-sm font-semibold text-[#434843] hover:bg-[#e6e8e6] disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        Anterior
+                                                    </button>
+                                                    <div className="flex flex-wrap items-center justify-center gap-2">
+                                                        {Array.from({ length: totalResponsePages }, (_, index) => index + 1).map((pageNumber) => (
+                                                            <button
+                                                                key={pageNumber}
+                                                                type="button"
+                                                                onClick={() => setResponsesPage(pageNumber)}
+                                                                className={`min-w-10 px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${safeResponsesPage === pageNumber
+                                                                    ? "bg-[#1b3022] text-white"
+                                                                    : "bg-[#f3f4f3] text-[#434843] hover:bg-[#e6e8e6]"
+                                                                    }`}
+                                                            >
+                                                                {pageNumber}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setResponsesPage((previous) => Math.min(totalResponsePages, previous + 1))}
+                                                        disabled={safeResponsesPage === totalResponsePages}
+                                                        className="px-4 py-2 rounded-xl bg-[#f3f4f3] text-sm font-semibold text-[#434843] hover:bg-[#e6e8e6] disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        Siguiente
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </section>
+                            )}
                         </>
                     )}
                 </div>
