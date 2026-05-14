@@ -495,7 +495,6 @@ function MeetsPage() {
                                     <h2 className="text-xl font-bold text-foreground">Actividades a las que me han citado</h2>
                                 </div>
                                 <MeetingsTabContent
-                                    title="Citadas a mi"
                                     items={invitedVisible}
                                     viewMode={viewMode}
                                     page={invitedPage}
@@ -522,7 +521,6 @@ function MeetsPage() {
                                     <h2 className="text-xl font-bold text-foreground">Creadas por mi</h2>
                                 </div>
                                 <MeetingsTabContent
-                                    title="Creadas por mi"
                                     items={createdVisible}
                                     viewMode={viewMode}
                                     page={createdPage}
@@ -549,7 +547,6 @@ function MeetsPage() {
                                     <h2 className="text-xl font-bold text-foreground">Todas las actividades</h2>
                                 </div>
                                 <MeetingsTabContent
-                                    title="Todas"
                                     items={allVisible}
                                     viewMode={viewMode}
                                     page={allPage}

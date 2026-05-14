@@ -5,7 +5,6 @@ import { Link } from 'react-router-dom'
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 
 interface MeetingsTabContentProps {
-  readonly title: string
   readonly items: ReadonlyArray<MeetingWithIndex>
   readonly viewMode: 'grid' | 'list'
   readonly page: number
@@ -29,7 +28,6 @@ interface MeetingsTabContentProps {
  * incluyendo paginación y acciones reutilizables.
  */
 export default function MeetingsTabContent({
-  title,
   items,
   viewMode,
   page,
