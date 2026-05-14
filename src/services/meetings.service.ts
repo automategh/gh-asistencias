@@ -148,6 +148,64 @@ export async function updateParticipantStatus(
     await update(participantRef, updates)
 }
 
+/**
+ * Refleja un check-in en una segunda base de datos para mantener trazabilidad
+ * del asistente en su recinto de origen y en el recinto donde se dictó la actividad.
+ *
+ * Si la actividad no existe en la base destino, se crea una copia del registro base.
+ * También asegura el registro del participante y su índice en `userMeetings`.
+ */
+export async function mirrorParticipantCheckIn(
+    database: Database | null,
+    meeting: Meeting,
+    participant: MeetingParticipant,
+    changes: Pick<MeetingParticipant, "attendance" | "checkedInAt" | "checkinMethod">,
+): Promise<void> {
+    assertDatabase(database)
+
+    const meetingRef = ref(database, `meetings/${meeting.id}`)
+    const participantRef = ref(database, `meetingParticipants/${meeting.id}/${participant.uid}`)
+
+    const [meetingSnap, participantSnap] = await Promise.all([
+        get(meetingRef),
+        get(participantRef),
+    ])
+
+    const existingParticipant = participantSnap.exists()
+        ? (participantSnap.val() as MeetingParticipant)
+        : null
+
+    const mirroredParticipant: MeetingParticipant = {
+        uid: participant.uid,
+        name: participant.name,
+        email: participant.email,
+        role: participant.role,
+        inviteStatus: participant.inviteStatus,
+        attendance: changes.attendance,
+        checkedInAt: changes.checkedInAt,
+        checkinMethod: changes.checkinMethod,
+        noShow: existingParticipant?.noShow ?? participant.noShow ?? null,
+    }
+
+    const updates: Record<string, unknown> = {}
+
+    if (!meetingSnap.exists()) {
+        updates[`/meetings/${meeting.id}`] = meeting
+    }
+
+    updates[`/meetingParticipants/${meeting.id}/${participant.uid}`] = mirroredParticipant
+    updates[`/userMeetings/${participant.uid}/${meeting.id}`] = {
+        meetingId: meeting.id,
+        startTime: meeting.startTime,
+        status: meeting.status,
+        role: mirroredParticipant.role,
+        inviteStatus: mirroredParticipant.inviteStatus,
+        attendance: mirroredParticipant.attendance,
+    }
+
+    await update(ref(database), updates)
+}
+
 /** Obtiene una reunión por su ID.
  *
  * @param database Instancia RTDB
