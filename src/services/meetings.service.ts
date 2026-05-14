@@ -163,13 +163,9 @@ export async function mirrorParticipantCheckIn(
 ): Promise<void> {
     assertDatabase(database)
 
-    const meetingRef = ref(database, `meetings/${meeting.id}`)
     const participantRef = ref(database, `meetingParticipants/${meeting.id}/${participant.uid}`)
 
-    const [meetingSnap, participantSnap] = await Promise.all([
-        get(meetingRef),
-        get(participantRef),
-    ])
+    const participantSnap = await get(participantRef)
 
     const existingParticipant = participantSnap.exists()
         ? (participantSnap.val() as MeetingParticipant)
@@ -188,10 +184,6 @@ export async function mirrorParticipantCheckIn(
     }
 
     const updates: Record<string, unknown> = {}
-
-    if (!meetingSnap.exists()) {
-        updates[`/meetings/${meeting.id}`] = meeting
-    }
 
     updates[`/meetingParticipants/${meeting.id}/${participant.uid}`] = mirroredParticipant
     updates[`/userMeetings/${participant.uid}/${meeting.id}`] = {
