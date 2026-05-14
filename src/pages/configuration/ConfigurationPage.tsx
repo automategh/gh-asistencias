@@ -10,7 +10,8 @@ import type { Departament } from '@/types/departament';
 import { getLeaderNames, updateUserProfile } from '@/services/user.service';
 import Layout from '@/components/layouts/layout';
 import { useDatabase } from '@/context/DatabaseContext';
-import { DEFAULT_DATABASE_URL } from '@/services/firebase';
+import { DEFAULT_DATABASE_URL, getDatabaseForUrl } from '@/services/firebase';
+import { getAllAvailableDatabases } from '@/lib/firebase/databaseResolver';
 import { SignaturePadCanvas } from '@/components/profile/signature-pad';
 import { persistUserSignature } from '@/services/user-signature.service';
 import { Button } from '@/components/ui/button';
@@ -19,7 +20,7 @@ import { Button } from '@/components/ui/button';
 function ConfigurationProfilePage() {
 
     const { user: firebaseUser, profilePhotoUrl, roleId: authRoleId } = useAuth();
-    const { database, isCorporateUser, databaseUrl } = useDatabase();
+    const { database, isCorporateUser, databaseUrl, setSelectedDatabase } = useDatabase();
     const [user, setUser] = useState<UserProfile | null>(null)
     const [isEditing, setIsEditing] = useState<boolean>(false);
     const [departaments, setDepartaments] = useState<Departament[]>([]);
@@ -42,6 +43,7 @@ function ConfigurationProfilePage() {
 
     const [isMyDatabase, setIsMyDatabase] = useState<boolean | null>(null);
     const isLocked = isMyDatabase === false;
+    const hasExternalCompany = Boolean(user?.companyName && user.companyName.trim().length > 0)
 
     const missingProfileFields = useMemo<string[]>(() => {
         if (!user) {
@@ -59,12 +61,12 @@ function ConfigurationProfilePage() {
         if (!user.cargo || user.cargo.trim().length === 0) {
             missing.push('Cargo')
         }
-        if (!user.immediateBoss || user.immediateBoss.trim().length === 0) {
+        if (!hasExternalCompany && (!user.immediateBoss || user.immediateBoss.trim().length === 0)) {
             missing.push('Jefe inmediato')
         }
 
         return missing
-    }, [user])
+    }, [user, hasExternalCompany])
 
 
     useEffect(() => {
@@ -74,11 +76,49 @@ function ConfigurationProfilePage() {
 
         const fetchUserData = async () => {
             try {
+                if (!firebaseUser?.uid) {
+                    return
+                }
+
                 const userRef = ref(database, `users/${firebaseUser?.uid}`);
                 const snapshot = await get(userRef);
-                const value = snapshot.val();
-                setUser(value);
-                setSignature(typeof value?.signatureUrl === 'string' ? value.signatureUrl : null);
+
+                if (snapshot.exists()) {
+                    const value = snapshot.val() as UserProfile
+                    setUser(value);
+                    setSignature(typeof value?.signatureUrl === 'string' ? value.signatureUrl : null);
+                    return
+                }
+
+                // Para usuarios no corporativos, busca su perfil por UID en todas las bases.
+                if (!isCorporateUser) {
+                    const availableDatabases = getAllAvailableDatabases()
+
+                    for (const candidateDatabase of availableDatabases) {
+                        if (candidateDatabase.url === databaseUrl) {
+                            continue
+                        }
+
+                        const candidateDb = getDatabaseForUrl(candidateDatabase.url)
+                        if (!candidateDb) {
+                            continue
+                        }
+
+                        const candidateSnapshot = await get(ref(candidateDb, `users/${firebaseUser.uid}`))
+                        if (!candidateSnapshot.exists()) {
+                            continue
+                        }
+
+                        const resolvedProfile = candidateSnapshot.val() as UserProfile
+                        setUser(resolvedProfile)
+                        setSignature(typeof resolvedProfile.signatureUrl === 'string' ? resolvedProfile.signatureUrl : null)
+                        setSelectedDatabase(candidateDatabase.url, candidateDatabase.key)
+                        return
+                    }
+                }
+
+                setUser(null)
+                setSignature(null)
             } catch (error) {
                 console.error("Error al obtener datos del usuario:", error);
             }
@@ -112,7 +152,7 @@ function ConfigurationProfilePage() {
         }
 
         fetchUserData();
-    }, [database, firebaseUser, isCorporateUser, databaseUrl]);
+    }, [database, firebaseUser, isCorporateUser, databaseUrl, setSelectedDatabase]);
 
     useEffect(() => {
         if (!firebaseUser?.uid || !user || isLocked) {
