@@ -204,15 +204,8 @@ export const registerWithEmailPassword = async (data: RegisterFormData) => {
     if (!auth) throw new Error('Firebase Auth no inicializado');
 
     try {
-
-        // Validar que el email no exista en ninguna BD
-        const existingUser = await findUserByEmailInAllDatabases(data.email);
-
-        if (existingUser) {
-            throw new Error("Este correo electrónico ya ha sido registrado.");
-        }
-
         // Crear usuario en Firebase Auth
+        // Firebase Auth garantiza unicidad de correo; evita lectura previa sin auth en RTDB.
         const result = await createUserWithEmailAndPassword(auth, data.email, data.password);
         const user = result.user;
 

@@ -1,7 +1,7 @@
-import { get, ref, update, type Database } from "firebase/database";
+import { equalTo, get, orderByChild, query, ref, update, type Database } from "firebase/database";
 import type { UserProfile } from "@/types/user";
 import { getAllAvailableDatabases } from "@/lib/firebase/databaseResolver";
-import { getDatabaseForUrl } from "@/services/firebase";
+import { auth, getDatabaseForUrl } from "@/services/firebase";
 
 /**
  * Obtiene los usuarios que pueden actuar como líder dentro de la organización.
@@ -88,12 +88,42 @@ export async function getUserLeaders(
  * Obtiene solo los nombres de usuarios con rol "Lider".
  */
 export async function getLeaderNames(database: Database) {
-    const leaders = await getUserLeaders(database);
-    const uniqueNames = Array.from(new Set(leaders.map((user) => user.name.trim())))
-        .filter((name) => name.length > 0)
-        .sort((first, second) => first.localeCompare(second))
+    if (!auth?.currentUser) {
+        const leadersRef = query(ref(database, "users"), orderByChild("isLeader"), equalTo(true))
+        const snapshot = await get(leadersRef)
+        const users = snapshot.val() as Record<string, Partial<UserProfile>> | null
 
-    return uniqueNames;
+        const names = Object.values(users ?? {})
+            .map((user) => (typeof user.name === "string" ? user.name.trim() : ""))
+            .filter((name) => name.length > 0)
+
+        return Array.from(new Set(names)).sort((first, second) => first.localeCompare(second))
+    }
+
+    try {
+        const leaders = await getUserLeaders(database);
+        const uniqueNames = Array.from(new Set(leaders.map((user) => user.name.trim())))
+            .filter((name) => name.length > 0)
+            .sort((first, second) => first.localeCompare(second))
+
+        return uniqueNames;
+    } catch (error) {
+        const isPermissionDenied = error instanceof Error && error.message.toLowerCase().includes("permission_denied")
+        if (!isPermissionDenied) {
+            throw error
+        }
+
+        // Fallback para registro sin autenticación: solo líderes explícitos.
+        const leadersRef = query(ref(database, "users"), orderByChild("isLeader"), equalTo(true))
+        const snapshot = await get(leadersRef)
+        const users = snapshot.val() as Record<string, Partial<UserProfile>> | null
+
+        const names = Object.values(users ?? {})
+            .map((user) => (typeof user.name === "string" ? user.name.trim() : ""))
+            .filter((name) => name.length > 0)
+
+        return Array.from(new Set(names)).sort((first, second) => first.localeCompare(second))
+    }
 }
 
 /**

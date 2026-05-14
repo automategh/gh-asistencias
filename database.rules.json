@@ -28,7 +28,14 @@
       }
     },
     "users": {
-      ".indexOn": ["name", "email", "role", "roleId"]
+      ".indexOn": ["name", "email", "role", "roleId", "isLeader"],
+      ".read": "auth != null || (query.orderByChild == 'isLeader' && (query.equalTo == true || query.equalTo == 'true'))",
+      "$uid": {
+        ".read": "auth != null || data.child('isLeader').val() === true"
+      }
+    },
+    "departaments": {
+      ".read": true
     },
     "roles": {
       ".read": "auth != null",
