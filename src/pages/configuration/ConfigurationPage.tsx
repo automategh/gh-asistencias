@@ -43,8 +43,6 @@ function ConfigurationProfilePage() {
 
     const [isMyDatabase, setIsMyDatabase] = useState<boolean | null>(null);
     const isLocked = isMyDatabase === false;
-    const hasExternalCompany = Boolean(user?.companyName && user.companyName.trim().length > 0)
-
     const missingProfileFields = useMemo<string[]>(() => {
         if (!user) {
             return []
@@ -61,12 +59,9 @@ function ConfigurationProfilePage() {
         if (!user.cargo || user.cargo.trim().length === 0) {
             missing.push('Cargo')
         }
-        if (!hasExternalCompany && (!user.immediateBoss || user.immediateBoss.trim().length === 0)) {
-            missing.push('Jefe inmediato')
-        }
 
         return missing
-    }, [user, hasExternalCompany])
+    }, [user])
 
 
     useEffect(() => {
@@ -132,7 +127,7 @@ function ConfigurationProfilePage() {
                 console.error("Error al cargar departamentos:", error);
             });
 
-        getLeaderNames(database)
+        getLeaderNames(database, { explicitOnly: true })
             .then(names => {
                 // Aquí podrías usar los nombres de líderes si es necesario
                 setLeaders(names);

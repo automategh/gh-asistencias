@@ -85,10 +85,18 @@ export async function getUserLeaders(
 }
 
 /**
- * Obtiene solo los nombres de usuarios con rol "Lider".
+ * Obtiene nombres de líderes.
+ *
+ * - `explicitOnly=true`: solo usuarios con `isLeader=true`.
+ * - `explicitOnly=false` (default): usa la resolución completa de liderazgo.
  */
-export async function getLeaderNames(database: Database) {
-    if (!auth?.currentUser) {
+export async function getLeaderNames(
+    database: Database,
+    options?: { explicitOnly?: boolean },
+) {
+    const explicitOnly = options?.explicitOnly === true
+
+    if (!auth?.currentUser || explicitOnly) {
         const leadersRef = query(ref(database, "users"), orderByChild("isLeader"), equalTo(true))
         const snapshot = await get(leadersRef)
         const users = snapshot.val() as Record<string, Partial<UserProfile>> | null
