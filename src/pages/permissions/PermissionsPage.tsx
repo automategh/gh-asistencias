@@ -7,7 +7,6 @@ import {
   getLegacyRoleFromRoleId,
   isGlobalRole,
   listRolesAcrossDatabases,
-  migrateLegacyRolesToRoleIdsAcrossDatabases,
   upsertRole,
 } from "@/services/authorization/role-permissions.service"
 import { getDatabaseForUrl } from "@/services/firebase"
@@ -27,7 +26,7 @@ import type {
   RoleScope,
 } from "@/types/authorization"
 import type { CrossDbUserItem } from "@/types/user"
-import { ChevronRight, Loader2, PencilLine, Plus, RefreshCw, ShieldCheck, Trash2, Users } from "lucide-react"
+import { ChevronRight, PencilLine, Plus, ShieldCheck, Trash2, Users } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 interface RoleDraftState {
@@ -117,8 +116,6 @@ export default function PermissionsPage() {
   const [deletingRoleId, setDeletingRoleId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [roleEditorError, setRoleEditorError] = useState<string | null>(null)
-  const [catalogSyncMessage, setCatalogSyncMessage] = useState<string | null>(null)
-  const [syncingCatalog, setSyncingCatalog] = useState<boolean>(false)
   const [roleDraft, setRoleDraft] = useState<RoleDraftState | null>(null)
   const [activating, setActivating] = useState<Record<string, boolean>>({})
   const [activatingDepartment, setActivatingDepartment] = useState<Record<string, boolean>>({})
@@ -246,22 +243,6 @@ export default function PermissionsPage() {
   const closeRoleEditor = (): void => {
     setRoleEditorError(null)
     setRoleDraft(null)
-  }
-
-  const syncAuthorizationCatalog = async (): Promise<void> => {
-    try {
-      setCatalogSyncMessage(null)
-      setSyncingCatalog(true)
-      const seededDatabases = await ensureAuthorizationCatalogAcrossDatabases()
-      const migrationResults = await migrateLegacyRolesToRoleIdsAcrossDatabases()
-      const migratedUsers = migrationResults.reduce((total, result) => total + result.usersMigrated, 0)
-      await loadCatalogData()
-      setCatalogSyncMessage(`Sincronizacion completada en ${seededDatabases.length} base(s). Usuarios migrados a roleId: ${migratedUsers}.`)
-    } catch (err) {
-      setCatalogSyncMessage(err instanceof Error ? err.message : "No fue posible sincronizar el catalogo de autorizacion.")
-    } finally {
-      setSyncingCatalog(false)
-    }
   }
 
   const handleRoleDisplayNameChange = (value: string): void => {
@@ -557,12 +538,6 @@ export default function PermissionsPage() {
               {error}
             </div>
           )}
-          {catalogSyncMessage && (
-            <div className="bg-[#f5fbf6] border border-[#d0e9d4] rounded-2xl p-6 text-sm text-[#1b3022] shadow-[0_20px_20px_rgba(25,28,28,0.04)]">
-              {catalogSyncMessage}
-            </div>
-          )}
-
           <section className="grid gap-6 xl:grid-cols-[1.15fr_1.85fr]">
             <article className="bg-white rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] overflow-hidden">
               <div className="p-8 border-b border-[#edeeed] flex items-start justify-between gap-4">
@@ -571,15 +546,6 @@ export default function PermissionsPage() {
                   <p className="text-sm text-[#5f6560] mt-1">Edita permisos y define si un rol es global o local.</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 rounded-xl border border-[#d8ddd9] bg-white px-4 py-3 text-sm font-semibold text-[#191c1c] hover:bg-[#f3f4f3] transition-colors disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={syncAuthorizationCatalog}
-                    disabled={syncingCatalog}
-                  >
-                    {syncingCatalog ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                    Sincronizar catalogo
-                  </button>
                   <button
                     type="button"
                     className="inline-flex items-center gap-2 rounded-xl bg-[#1b3022] px-4 py-3 text-sm font-semibold text-white hover:bg-[#243c2d] transition-colors"
