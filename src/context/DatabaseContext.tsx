@@ -65,18 +65,9 @@ export const DatabaseProvider: React.FC<PropsWithChildren> = ({ children }) => {
 
             const { databaseUrl: resolvedUrl, recinto: resolvedRecinto } = resolveDatabaseByEmail(user?.email ?? null);
 
-            // Si es usuario corporativo y no ha seleccionado BD manualmente, mostrar modal
-            if (isCorporate) {
-                // Ver si hay selección guardada para NO machacarla
-                const saved = localStorage.getItem("selectedDatabase");
-
-                if (!saved) {
-                    // solo si NO existe una selección previa, mostrar modal para elegir
-                    setShowModal(true);
-                    setDatabaseUrl(resolvedUrl);
-                    setRecinto(resolvedRecinto);
-                }
-            }
+            // Primer ingreso: resolver automáticamente la BD por email sin abrir modal.
+            setDatabaseUrl(resolvedUrl);
+            setRecinto(resolvedRecinto);
         } catch (error) {
             console.error("No fue posible resolver la base de datos del recinto", error);
             setDatabaseUrl(null);
