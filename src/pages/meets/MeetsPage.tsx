@@ -697,13 +697,13 @@ function MeetsPage() {
                                                                 <td className="px-4 py-2 align-top">
                                                                     <div className="flex flex-wrap gap-2">
                                                                         <Link
-                                                                            to={`/meeting/${meeting.id}`}
+                                                                            to={buildMeetingPath('/meeting', meeting)}
                                                                             className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted/60"
                                                                         >
                                                                             Detalles
                                                                         </Link>
                                                                         <Link
-                                                                            to={`/checkin/${meeting.id}`}
+                                                                            to={buildMeetingPath('/checkin', meeting)}
                                                                             className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
                                                                         >
                                                                             Asistencia

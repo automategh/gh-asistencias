@@ -31,7 +31,7 @@ export async function createMeeting(
     const id = newRef.key
 
     if (!id) {
-        throw new Error("No fue posible generar el id de la reunión")
+        throw new Error("No fue posible generar el id de la actividad")
     }
 
     const now = Date.now()
@@ -125,7 +125,7 @@ export async function updateParticipantStatus(
     const participantRef = ref(database, `meetingParticipants/${meetingId}/${uid}`)
     const snapshot = await get(participantRef)
     if (!snapshot.exists()) {
-        throw new Error("El participante no existe en esta reunión")
+        throw new Error("El participante no existe en esta actividad")
     }
 
     const updates: Record<string, unknown> = {}
@@ -163,7 +163,7 @@ export async function getMeetingById(
     const meetingRef = ref(database, `meetings/${meetingId}`)
     const snapshot = await get(meetingRef)
     if (!snapshot.exists()) {
-        throw new Error("La reunión no existe")
+        throw new Error("La actividad no existe")
     }
     const meeting = snapshot.val() as Meeting
     return meeting
@@ -191,20 +191,20 @@ export async function closeMeeting(
     const meetingRef = ref(database, `meetings/${meetingId}`)
     const snap = await get(meetingRef)
     if (!snap.exists()) {
-        throw new Error("La reunión no existe")
+        throw new Error("La actividad no existe")
     }
     const meeting = snap.val() as Meeting
 
     // Validación de estado
     if (meeting.status === "closed" || meeting.status === "completed" || meeting.status === "cancelled") {
-        throw new Error("La reunión ya no puede cerrarse (estado final)")
+        throw new Error("La actividad ya no puede cerrarse (estado final)")
     }
 
     // Validación de permisos básicos a nivel de cliente (reglas RTDB también protegen)
     const isCreator = meeting.createdBy === closerUid
     const isManager = Array.isArray(meeting.managers) ? meeting.managers.includes(closerUid) : false
     if (!isCreator && !isManager) {
-        throw new Error("No tienes permisos para cerrar esta reunión")
+        throw new Error("No tienes permisos para cerrar esta actividad")
     }
 
     const now = Date.now()
@@ -255,19 +255,19 @@ export async function completeMeeting(
     const meetingRef = ref(database, `meetings/${meetingId}`)
     const snap = await get(meetingRef)
     if (!snap.exists()) {
-        throw new Error("La reunión no existe")
+        throw new Error("La actividad no existe")
     }
     const meeting = snap.val() as Meeting
 
     if (meeting.status === "completed" || meeting.status === "cancelled") {
-        throw new Error("La reunión ya no puede completarse")
+        throw new Error("La actividad ya no puede completarse")
     }
 
     const isCreator = meeting.createdBy === actorUid
     const isManager = Array.isArray(meeting.managers) ? meeting.managers.includes(actorUid) : false
     // Nota: Admin se valida por reglas del servidor; aquí reforzamos cliente.
     if (!isCreator && !isManager) {
-        throw new Error("No tienes permisos para completar esta reunión")
+        throw new Error("No tienes permisos para completar esta actividad")
     }
 
     const now = Date.now()
@@ -307,7 +307,7 @@ export async function cancelMeeting(
     const meetingRef = ref(database, `meetings/${meetingId}`)
     const snap = await get(meetingRef)
     if (!snap.exists()) {
-        throw new Error('La reunión no existe')
+        throw new Error('La actividad no existe')
     }
 
     const now = Date.now()

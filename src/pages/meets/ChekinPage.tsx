@@ -1,6 +1,7 @@
 import Layout from "@/components/layouts/layout"
 import { useDatabase } from "@/context/DatabaseContext"
 import { getMeetingById, updateParticipantStatus } from "@/services/meetings.service"
+import { getDatabaseForUrl } from "@/services/firebase"
 import type { Meeting, MeetingParticipant } from "@/types/meeting"
 import { AlertCircle, ArrowLeft, CheckCircle } from "lucide-react"
 import { get, ref } from "firebase/database"
@@ -14,6 +15,7 @@ function ChekinPage() {
     const { id } = useParams<{ id: string }>()
     const [searchParams] = useSearchParams()
     const method = searchParams.get('method') as methodType | null
+    const sourceDatabaseUrl = searchParams.get('db')
 
     const { database } = useDatabase()
     const { user } = useAuth()
@@ -24,24 +26,35 @@ function ChekinPage() {
     const [error, setError] = useState<string | null>(null)
     const [checkedIn, setCheckedIn] = useState<boolean>(false)
 
+    const meetingDatabase = useMemo(() => {
+        if (sourceDatabaseUrl) {
+            const resolvedDatabase = getDatabaseForUrl(sourceDatabaseUrl)
+            if (resolvedDatabase) {
+                return resolvedDatabase
+            }
+        }
+
+        return database
+    }, [database, sourceDatabaseUrl])
+
     useEffect(() => {
         let cancelled = false
         async function load(): Promise<void> {
             try {
                 setLoading(true)
                 setError(null)
-                if (!database || !id) {
+                if (!meetingDatabase || !id) {
                     setMeeting(null)
                     setParticipant(null)
                     return
                 }
 
-                const meet = await getMeetingById(database, id)
+                const meet = await getMeetingById(meetingDatabase, id)
                 if (!cancelled) setMeeting(meet)
 
                 if (!user) return
                 // Cargar registro del participante
-                const pSnap = await get(ref(database, `meetingParticipants/${id}/${user.uid}`))
+                const pSnap = await get(ref(meetingDatabase, `meetingParticipants/${id}/${user.uid}`))
                 if (cancelled) return
                 if (pSnap.exists()) {
                     const p = pSnap.val() as MeetingParticipant
@@ -50,14 +63,14 @@ function ChekinPage() {
                     setParticipant(null)
                 }
             } catch (err) {
-                if (!cancelled) setError(err instanceof Error ? err.message : 'No fue posible cargar la reunión')
+                if (!cancelled) setError(err instanceof Error ? err.message : 'No fue posible cargar la actividad')
             } finally {
                 if (!cancelled) setLoading(false)
             }
         }
-        load().catch(() => setError('No fue posible cargar la reunión'))
+        load().catch(() => setError('No fue posible cargar la actividad'))
         return () => { cancelled = true }
-    }, [database, id, user])
+    }, [meetingDatabase, id, user])
 
     const alreadyCheckedIn = useMemo<boolean>(() => {
         return typeof participant?.checkedInAt === 'number'
@@ -85,7 +98,7 @@ function ChekinPage() {
     }
 
     async function handleCheckIn(): Promise<void> {
-        if (!database || !id || !user || !meeting) return
+        if (!meetingDatabase || !id || !user || !meeting) return
         if (!canCheckIn) {
             setError('No cumples las condiciones para registrar asistencia')
             return
@@ -94,14 +107,19 @@ function ChekinPage() {
             setError(null)
             const now = Date.now()
             const attendance = computeAttendanceStatus(meeting, now)
-            await updateParticipantStatus(database, id, user.uid, {
+            await updateParticipantStatus(meetingDatabase, id, user.uid, {
                 attendance,
                 checkedInAt: now,
                 checkinMethod: method ?? 'manual',
             })
             setCheckedIn(true)
             // Redirigir luego de exito
-            setTimeout(() => navigate('/meets'), 1500)
+            setTimeout(() => {
+                const destination = sourceDatabaseUrl
+                    ? `/meets?db=${encodeURIComponent(sourceDatabaseUrl)}`
+                    : '/meets'
+                navigate(destination)
+            }, 1500)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'No fue posible registrar la asistencia')
         }
@@ -112,7 +130,7 @@ function ChekinPage() {
                 <header className="bg-card border-b border-border sticky top-0 z-20 backdrop-blur-xl">
                     <nav className="max-w-2xl mx-auto px-6 py-4">
                         <Link
-                            to="/meets"
+                            to={sourceDatabaseUrl ? `/meets?db=${encodeURIComponent(sourceDatabaseUrl)}` : '/meets'}
                             className="inline-flex items-center gap-2 text-secondary hover:text-secondary-light transition-colors font-semibold"
                         >
                             <ArrowLeft className="w-5 h-5" />
@@ -129,9 +147,9 @@ function ChekinPage() {
                         )}
                         {!loading && !canCheckIn && (
                             <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1">
-                                <li>Debes ser participante de la reunión.</li>
+                                <li>Debes ser participante de la actividad.</li>
                                 <li>No debes haber registrado asistencia previamente.</li>
-                                <li>La reunión debe estar en estado "Programada".</li>
+                                <li>La actividad debe estar en estado "Programada".</li>
                             </ul>
                         )}
                     </div>
@@ -141,7 +159,7 @@ function ChekinPage() {
                     <div className="p-6 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl mb-6 text-center">
                         <CheckCircle className="w-12 h-12 text-emerald-600 dark:text-emerald-400 mx-auto mb-4" />
                         <p className="text-emerald-700 dark:text-emerald-400 font-semibold text-xl">Asistencia Registrada</p>
-                        <p className="text-emerald-600 dark:text-emerald-400 text-sm mt-2">Redirigiendo a reuniones...</p>
+                        <p className="text-emerald-600 dark:text-emerald-400 text-sm mt-2">Redirigiendo a actividades...</p>
                     </div>
                 )}
 

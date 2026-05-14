@@ -6,13 +6,14 @@ import { getDatabaseForUrl } from '@/services/firebase'
 import { getSurveys, getSurveyById, type Survey } from '@/services/forms.service'
 import { cancelMeeting, closeMeeting, completeMeeting, getMeetingById, reopenMeeting } from '@/services/meetings.service'
 import type { Meeting } from '@/types/meeting'
-import { BarChart3, Calendar, Clock, FileText, MapPin } from 'lucide-react'
+import { ArrowLeft, BarChart3, Calendar, Clock, FileText, MapPin } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 function DetailMeetPage() {
 
     const { id } = useParams<{ id: string }>()
+    const navigate = useNavigate()
     const { database } = useDatabase()
     const { user, hasPermission } = useAuth()
     const [searchParams] = useSearchParams()
@@ -258,11 +259,33 @@ function DetailMeetPage() {
         }
     }
 
+    const handleGoBack = (): void => {
+        if (window.history.length > 1) {
+            navigate(-1)
+            return
+        }
+
+        const baseRoute = '/meets'
+        const destination = sourceDatabaseUrl
+            ? `${baseRoute}?db=${encodeURIComponent(sourceDatabaseUrl)}`
+            : baseRoute
+
+        navigate(destination)
+    }
+
     return (
         <Layout>
             <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
                 <header className="bg-card border-b border-border sticky top-0 z-20 backdrop-blur-xl">
                     <nav className="max-w-6xl mx-auto px-6 py-4">
+                        <button
+                            type="button"
+                            onClick={handleGoBack}
+                            className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                            <ArrowLeft className="w-4 h-4" />
+                            Volver
+                        </button>
                         <h1 className="text-3xl font-bold mt-4 text-foreground">{meeting?.title}</h1>
                     </nav>
                 </header>
