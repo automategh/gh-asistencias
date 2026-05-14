@@ -72,6 +72,17 @@ export async function getUserCreatedMeetings(
 }
 
 /**
+ * Obtiene todas las actividades de una base de datos.
+ */
+export async function getAllMeetings(
+  database: Database
+): Promise<Meeting[]> {
+  const snap = await get(ref(database, 'meetings'))
+  const val = snap.val() as Record<string, Meeting> | null
+  return val ? Object.values(val) : []
+}
+
+/**
  * Invited (citadas) a través de múltiples recintos.
  */
 export async function getUserInvitedMeetingsAcross(
@@ -108,3 +119,4 @@ export async function getUserCreatedMeetingsAcross(
   const parts = await Promise.all(tasks)
   return parts.flat()
 }
+
