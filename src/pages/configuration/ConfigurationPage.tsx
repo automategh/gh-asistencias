@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 
 function ConfigurationProfilePage() {
 
-    const { user: firebaseUser, profilePhotoUrl } = useAuth();
+    const { user: firebaseUser, profilePhotoUrl, roleId: authRoleId } = useAuth();
     const { database, isCorporateUser, databaseUrl } = useDatabase();
     const [user, setUser] = useState<UserProfile | null>(null)
     const [isEditing, setIsEditing] = useState<boolean>(false);
@@ -35,6 +35,7 @@ function ConfigurationProfilePage() {
     const [leaders, setLeaders] = useState<string[]>([]);
     const [showIncompleteProfileModal, setShowIncompleteProfileModal] = useState<boolean>(false);
     const [passwordForm, setPasswordForm] = useState<{ current: string; next: string; confirm: string }>({ current: '', next: '', confirm: '' });
+    const [passwordFeedback, setPasswordFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [showPwd, setShowPwd] = useState<{ current: boolean; next: boolean; confirm: boolean }>({ current: false, next: false, confirm: false });
     const [savingProfile, setSavingProfile] = useState<boolean>(false);
     const isEmailPasswordUser = Boolean(firebaseUser?.providerData?.some(p => p?.providerId === 'password'));
@@ -214,6 +215,9 @@ function ConfigurationProfilePage() {
     }
     function handlePasswordFieldChange(event: ChangeEvent<HTMLInputElement>): void {
         const { name, value } = event.target;
+        if (passwordFeedback) {
+            setPasswordFeedback(null);
+        }
         setPasswordForm(prev => ({ ...prev, [name]: value }));
     }
 
@@ -225,26 +229,26 @@ function ConfigurationProfilePage() {
 
             const { current, next, confirm } = passwordForm;
             if (!current || !next || !confirm) {
-                alert('Completa todos los campos de contraseña.');
+                setPasswordFeedback({ type: 'error', message: 'Completa todos los campos de contraseña.' });
                 return;
             }
             if (next !== confirm) {
-                alert('La confirmación no coincide.');
+                setPasswordFeedback({ type: 'error', message: 'La confirmación no coincide.' });
                 return;
             }
             if (next.length < 6) {
-                alert('La nueva contraseña debe tener al menos 6 caracteres.');
+                setPasswordFeedback({ type: 'error', message: 'La nueva contraseña debe tener al menos 6 caracteres.' });
                 return;
             }
 
             const credential = EmailAuthProvider.credential(firebaseUser.email, current);
             await reauthenticateWithCredential(firebaseUser, credential);
             await updatePassword(firebaseUser, next);
-            alert('Contraseña actualizada correctamente.');
+            setPasswordFeedback({ type: 'success', message: 'Contraseña actualizada correctamente.' });
             setPasswordForm({ current: '', next: '', confirm: '' });
         } catch (error) {
             console.error('Error al cambiar la contraseña:', error);
-            alert('No se pudo actualizar la contraseña. Verifica la contraseña actual.');
+            setPasswordFeedback({ type: 'error', message: 'No se pudo actualizar la contraseña. Verifica la contraseña actual.' });
         }
     }
 
@@ -259,23 +263,110 @@ function ConfigurationProfilePage() {
         ? user.companyName
         : 'Grupo Heroica';
 
-    const getRoleDescription = (role: string | undefined | null): string => {
-        if (!role) {
-            return 'Usuario estándar del sistema con acceso a sus propias asistencias y capacitaciones.';
-        }
+    interface RolePresentationPayload {
+        readonly displayName?: string | null
+        readonly description?: string | null
+    }
 
-        switch (role) {
-            case 'Admin':
-                return 'Administrador de sistema con permisos globales. Responsable de la gestión de departamentos y reportes mensuales.';
-            case 'HR':
-                return 'Rol de Talento Humano enfocado en la administración de personal, seguimiento de capacitaciones y análisis de reportes.';
-            case 'Lider':
-                return 'Líder de equipo encargado de gestionar las asistencias y capacitaciones de su grupo de colaboradores.';
-            case 'User':
+    interface RolePresentation {
+        readonly label: string
+        readonly description: string
+    }
+
+    const resolvedRoleId = (user?.roleId ?? authRoleId ?? 'user').trim().toLowerCase()
+    const [rolePresentation, setRolePresentation] = useState<RolePresentation | null>(null)
+
+    const formatRoleIdAsLabel = (roleId: string): string => {
+        switch (roleId) {
+            case 'admin':
+                return 'Administrador'
+            case 'hr':
+                return 'Talento Humano'
+            case 'lider':
+                return 'Lider'
+            case 'instructor':
+                return 'Instructor'
+            case 'user':
+                return 'Colaborador'
             default:
+                return roleId
+                    .replace(/[-_]+/g, ' ')
+                    .replace(/\b\w/g, (character) => character.toUpperCase())
+        }
+    }
+
+    const getFallbackRoleDescription = (roleId: string): string => {
+        switch (roleId) {
+            case 'admin':
+                return 'Administrador de sistema con permisos globales. Responsable de la gestión de departamentos y reportes mensuales.';
+            case 'hr':
+                return 'Rol de Talento Humano enfocado en la administración de personal, seguimiento de capacitaciones y análisis de reportes.';
+            case 'lider':
+                return 'Líder de equipo encargado de gestionar las asistencias y capacitaciones de su grupo de colaboradores.';
+            case 'instructor':
+                return 'Instructor responsable de impartir actividades de formación y seguimiento de asistencia.';
+            case 'user':
                 return 'Colaborador que participa en las actividades de formación y registra sus asistencias.';
+            default:
+                return 'Rol personalizado con permisos configurados por el administrador.';
         }
     };
+
+    useEffect(() => {
+        if (!database) {
+            setRolePresentation({
+                label: formatRoleIdAsLabel(resolvedRoleId),
+                description: getFallbackRoleDescription(resolvedRoleId),
+            })
+            return
+        }
+
+        let cancelled = false
+
+        const loadRolePresentation = async (): Promise<void> => {
+            const fallback: RolePresentation = {
+                label: formatRoleIdAsLabel(resolvedRoleId),
+                description: getFallbackRoleDescription(resolvedRoleId),
+            }
+
+            try {
+                const roleRef = ref(database, `roles/${resolvedRoleId}`)
+                const snapshot = await get(roleRef)
+                const value = snapshot.val() as RolePresentationPayload | null
+
+                if (cancelled) {
+                    return
+                }
+
+                setRolePresentation({
+                    label: typeof value?.displayName === 'string' && value.displayName.trim().length > 0
+                        ? value.displayName
+                        : fallback.label,
+                    description: typeof value?.description === 'string' && value.description.trim().length > 0
+                        ? value.description
+                        : fallback.description,
+                })
+            } catch (error) {
+                if (!cancelled) {
+                    console.error('Error al obtener metadata del rol:', error)
+                    setRolePresentation(fallback)
+                }
+            }
+        }
+
+        loadRolePresentation().catch(() => {
+            if (!cancelled) {
+                setRolePresentation({
+                    label: formatRoleIdAsLabel(resolvedRoleId),
+                    description: getFallbackRoleDescription(resolvedRoleId),
+                })
+            }
+        })
+
+        return () => {
+            cancelled = true
+        }
+    }, [database, resolvedRoleId])
 
     return (
         <Layout>
@@ -352,14 +443,14 @@ function ConfigurationProfilePage() {
                             <div className="grow">
                                 <h2 className="text-3xl font-bold text-foreground mb-2">{user?.name}</h2>
                                 <div className="flex items-center gap-2 text-muted-foreground">
-                                    <span className="text-xs px-2.5 py-1 rounded-lg bg-secondary-light/15 text-secondary">{user?.role === 'HR' ? 'Talento Humano' : user?.role}</span>
+                                    <span className="text-xs px-2.5 py-1 rounded-lg bg-secondary-light/15 text-secondary">{rolePresentation?.label ?? formatRoleIdAsLabel(resolvedRoleId)}</span>
                                     <div className='flex gap-2 items-center justify-center'>
                                         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                                         <span className="text-xs">Activo</span>
                                     </div>
                                 </div>
                                 <p className="mt-3 text-sm text-muted-foreground max-w-xl">
-                                    {getRoleDescription(user?.role ?? null)}
+                                    {rolePresentation?.description ?? getFallbackRoleDescription(resolvedRoleId)}
                                 </p>
                             </div>
                             <div className="md:ml-auto flex gap-3 self-center md:self-start">
@@ -629,6 +720,12 @@ function ConfigurationProfilePage() {
                                             <p className="text-[#c8e3d2] text-sm mb-6 relative z-10">
                                                 Mantén tu cuenta protegida cambiando tu contraseña periódicamente.
                                             </p>
+
+                                            {passwordFeedback && (
+                                                <div className={`mb-4 rounded-xl border px-3 py-2 text-xs font-medium ${passwordFeedback.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-rose-200 bg-rose-50 text-rose-900'}`}>
+                                                    {passwordFeedback.message}
+                                                </div>
+                                            )}
 
                                             <div className="space-y-4 relative z-10">
                                                 <div>

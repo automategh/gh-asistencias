@@ -1,29 +1,33 @@
 import { useAuth } from "@/context/AuthContext"
-import type { AppRole } from "@/types/permissions"
+import type { PermissionId } from "@/types/authorization"
 import type { JSX, ReactNode } from "react"
 import { Navigate, useLocation } from "react-router-dom"
 
 interface RoleRouteProps {
-  readonly allowed: ReadonlyArray<AppRole>
+  readonly requireAny: ReadonlyArray<PermissionId>
   readonly children: ReactNode
 }
 
 /**
- * Protege una sección de la app por rol.
+ * Protege una sección de la app por permisos.
  * Debe usarse dentro de rutas ya protegidas por autenticación (ProtectedRoute).
  */
-export function RoleRoute({ allowed, children }: RoleRouteProps): JSX.Element {
-  const { role, loading, user } = useAuth()
+export function RoleRoute({ requireAny, children }: RoleRouteProps): JSX.Element {
+  const { roleId, loading, user, hasPermission } = useAuth()
   const location = useLocation()
 
-  // Mientras se resuelve la sesión o el rol, no redirigimos todavía
-  if (loading || (user && role === null)) {
+  // Mientras se resuelve la sesión o el rol, no redirigimos todavía.
+  if (loading || (user && roleId === null)) {
     return <div className="p-4 text-sm text-muted-foreground">Verificando permisos…</div>
   }
 
-  const currentRole = (role ?? "User") as AppRole
+  if (requireAny.length === 0) {
+    return <>{children}</>
+  }
 
-  if (!allowed.includes(currentRole)) {
+  const hasAccess = requireAny.some((permissionId) => hasPermission(permissionId))
+
+  if (!hasAccess) {
     return <Navigate to="/" replace state={{ from: location }} />
   }
 

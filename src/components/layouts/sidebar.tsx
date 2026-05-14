@@ -1,6 +1,7 @@
 import { useAuth } from "@/context/AuthContext"
 import { useDatabase } from "@/context/DatabaseContext"
 import { cn } from "@/lib/utils"
+import type { PermissionId } from "@/types/authorization"
 import { Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, LogOut, Menu, UserCircle, UserCog, X, LayoutDashboard, User, PlusCircleIcon, ChartColumnBig, Building2Icon, ClipboardList, GroupIcon } from "lucide-react"
 import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
@@ -11,7 +12,7 @@ interface SidebarProps {
 
 export function Sidebar({ onCollapsedChange }: SidebarProps) {
 
-    const { user, logout, role, profilePhotoUrl } = useAuth()
+    const { user, logout, hasPermission, profilePhotoUrl } = useAuth()
 
     const location = useLocation()
 
@@ -67,16 +68,21 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
         window.localStorage.setItem("sidebar:collapsed", newState ? "1" : "0")
     }
 
-    const links = [
-        { icon: LayoutDashboard, name: "Dashboard", path: "/", roles: ["Admin", "Lider", "User", "HR"] },
-        { icon: PlusCircleIcon, name: "Nueva Actividad", path: "/new-meeting", roles: ["Admin", "Lider", "HR"] },
-        { icon: Calendar, name: "Actividades", path: "/meets", roles: ["Admin", "Lider", "User", "HR"] },
-        { icon: User, name: "Perfil", path: "/configure-profile", roles: ["Admin", "Lider", "User", "HR"] },
-        { icon: ChartColumnBig, name: "Reportes", path: "/reports", roles: ["Admin", "HR", "Lider"] },
-        { icon: Building2Icon, name: "Areas", path: "/departments", roles: ["Admin", "HR"] },
-        { icon: GroupIcon, name: "Formas de agrupar", path: "/user-grouping", roles: ["Admin", "HR"] },
-        { icon: ClipboardList, name: "Encuestas", path: "/survey", roles: ["Admin", "HR"] },
-        { icon: UserCog, name: "Permisos", path: "/permissions", roles: ["Admin"] },
+    const links: ReadonlyArray<{
+        readonly icon: typeof LayoutDashboard
+        readonly name: string
+        readonly path: string
+        readonly requireAny: readonly PermissionId[]
+    }> = [
+        { icon: LayoutDashboard, name: "Dashboard", path: "/", requireAny: ["dashboard_view"] },
+        { icon: PlusCircleIcon, name: "Nueva Actividad", path: "/new-meeting", requireAny: ["meetings_create"] },
+        { icon: Calendar, name: "Actividades", path: "/meets", requireAny: ["meetings_view"] },
+        { icon: User, name: "Perfil", path: "/configure-profile", requireAny: ["profile_edit_self"] },
+        { icon: ChartColumnBig, name: "Reportes", path: "/reports", requireAny: ["reports_view_team", "reports_view_all"] },
+        { icon: Building2Icon, name: "Areas", path: "/departments", requireAny: ["departments_manage"] },
+        { icon: GroupIcon, name: "Formas de agrupar", path: "/user-grouping", requireAny: ["user_grouping_manage"] },
+        { icon: ClipboardList, name: "Encuestas", path: "/survey", requireAny: ["surveys_admin_view"] },
+        { icon: UserCog, name: "Permisos", path: "/permissions", requireAny: ["roles_view", "roles_manage"] },
     ]
 
 
@@ -124,7 +130,8 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
                 <nav className="flex-1 p-4 overflow-y-auto overflow-x-hidden">
                     <ul className="space-y-2">
                         {links.map((link) => {
-                            if (!link.roles.includes(role || "")) return null
+                            const hasAccess = link.requireAny.some((permissionId) => hasPermission(permissionId))
+                            if (!hasAccess) return null
                             const isActive = link.path === "/"
                                 ? pathname === "/"
                                 : pathname === link.path || pathname.startsWith(`${link.path}/`)

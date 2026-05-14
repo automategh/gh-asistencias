@@ -6,6 +6,8 @@
  * - `email`: correo electrónico del usuario.
  * - `name`: nombre completo del usuario.
  * - `role`: rol del usuario (p. ej. "User").
+ * - `roleId`: identificador canonico del rol persistido en el nuevo modelo.
+ * - `isLeader`: bandera explícita para determinar si puede actuar como líder.
  * - `active`: indica si la cuenta está activa.
  * - `createdAt`: fecha ISO cuando se creó el registro.
  * - `lastLogin`: fecha ISO del último inicio de sesión.
@@ -20,6 +22,8 @@ export interface UserProfile {
   readonly email: string
   readonly name: string
   readonly role: string
+  readonly roleId?: string | null
+  readonly isLeader?: boolean | null
   readonly active: boolean
   readonly createdAt: string
   readonly lastLogin: string
@@ -42,6 +46,8 @@ export interface CrossDbUserItem {
   readonly name: string
   readonly email: string
   readonly role?: string | null
+  readonly roleId?: string | null
+  readonly isLeader?: boolean | null
   readonly active?: boolean | null
   readonly department?: string | null
   readonly immediateBoss?: string | null

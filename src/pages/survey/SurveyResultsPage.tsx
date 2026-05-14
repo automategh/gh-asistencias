@@ -1,6 +1,8 @@
 import Layout from "@/components/layouts/layout"
+import { getAllAvailableDatabases, getDatabaseByRecinto, type RecintoKey } from "@/lib/firebase/databaseResolver"
 import { useDatabase } from "@/context/DatabaseContext"
 import {
+    findSurveyDatabaseDescriptorById,
     getSurveyById,
     getSurveyOptionsByQuestionIds,
     getSurveyQuestionsBySurveyId,
@@ -10,12 +12,13 @@ import {
     type SurveyQuestion,
     type SurveyResponse,
 } from "@/services/forms.service"
+import { getDatabaseForUrl } from "@/services/firebase"
 import { getMeetingById } from "@/services/meetings.service"
 import type { UserProfile } from "@/types/user"
 import { BarChart3, ChevronRight, Clock, MessageSquareText, Star, Users } from "lucide-react"
 import { useEffect, useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
-import { get, ref } from "firebase/database"
+import { useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { get, ref, type Database } from "firebase/database"
 import { DistributionDonutCard, RatingDistributionChart, SelectionDistributionChart } from "./components/SurveyResultsCharts"
 import { SurveyResponseCard } from "./components/SurveyResponseCard"
 import { SurveyResponseFilters } from "./components/SurveyResponseFilters"
@@ -33,28 +36,83 @@ import {
     SURVEY_CATEGORY_LABELS,
 } from "./survey-results.utils"
 
+const isRecintoKey = (value: string | null | undefined): value is RecintoKey => {
+    return value === "corporativo" || value === "ccci" || value === "cccr" || value === "cevp"
+}
+
+const appendDatabaseCandidate = (list: Database[], candidate: Database | null): void => {
+    if (candidate && !list.includes(candidate)) {
+        list.push(candidate)
+    }
+}
+
+const loadMeetingFromCandidates = async (
+    currentDatabase: Database,
+    trainingId: string,
+    trainingResponses: readonly SurveyResponse[],
+) => {
+    const candidates: Database[] = []
+    const recintos = Array.from(new Set(trainingResponses.map((response) => response.recinto).filter(isRecintoKey)))
+
+    recintos.forEach((recinto) => appendDatabaseCandidate(candidates, getDatabaseByRecinto(recinto)))
+    appendDatabaseCandidate(candidates, currentDatabase)
+    getAllAvailableDatabases().forEach((descriptor) => {
+        appendDatabaseCandidate(candidates, getDatabaseByRecinto(descriptor.key))
+    })
+
+    for (const candidateDatabase of candidates) {
+        try {
+            const meeting = await getMeetingById(candidateDatabase, trainingId)
+            if (meeting) {
+                return meeting
+            }
+        } catch {
+            // Continuar con la siguiente base candidata.
+        }
+    }
+
+    return null
+}
+
 const loadRespondentProfiles = async (
-    database: NonNullable<ReturnType<typeof useDatabase>["database"]>,
-    userIds: readonly string[],
+    database: Database,
+    responses: readonly SurveyResponse[],
 ): Promise<Record<string, SurveyRespondentProfile>> => {
-    if (userIds.length === 0) {
+    if (responses.length === 0) {
         return {}
     }
 
-    const usersRef = ref(database, "users")
-    const snapshot = await get(usersRef)
-    const rawUsers = snapshot.val() as Record<string, UserProfile> | null
-
-    if (!rawUsers) {
-        return {}
-    }
-
-    const targetIds = new Set(userIds)
     const profileMap: Record<string, SurveyRespondentProfile> = {}
+    const recintos = Array.from(new Set(responses.map((response) => response.recinto).filter(isRecintoKey)))
+    const usersByRecinto: Partial<Record<RecintoKey, Record<string, UserProfile>>> = {}
 
-    for (const [uid, user] of Object.entries(rawUsers)) {
-        if (!targetIds.has(uid)) {
-            continue
+    await Promise.all(
+        recintos.map(async (recinto) => {
+            const databaseByRecinto = getDatabaseByRecinto(recinto)
+            if (!databaseByRecinto) {
+                return
+            }
+
+            const snapshot = await get(ref(databaseByRecinto, "users"))
+            usersByRecinto[recinto] = (snapshot.val() as Record<string, UserProfile> | null) ?? {}
+        }),
+    )
+
+    const fallbackSnapshot = await get(ref(database, "users"))
+    const fallbackUsers = (fallbackSnapshot.val() as Record<string, UserProfile> | null) ?? {}
+
+    responses.forEach((response) => {
+        const uid = response.userId.trim()
+        if (!uid) {
+            return
+        }
+
+        const recinto = isRecintoKey(response.recinto) ? response.recinto : null
+        const recintoUsers = recinto ? usersByRecinto[recinto] : undefined
+        const user = recintoUsers?.[uid] ?? fallbackUsers[uid]
+
+        if (!user) {
+            return
         }
 
         profileMap[uid] = {
@@ -62,7 +120,7 @@ const loadRespondentProfiles = async (
             department: typeof user.department === "string" ? user.department : user.department ?? null,
             cargo: typeof user.cargo === "string" ? user.cargo : user.cargo ?? null,
         }
-    }
+    })
 
     return profileMap
 }
@@ -70,7 +128,9 @@ const loadRespondentProfiles = async (
 function SurveyResultsPage() {
     const { id } = useParams<{ id: string }>()
     const { database } = useDatabase()
+    const [searchParams] = useSearchParams()
     const [survey, setSurvey] = useState<Survey | null>(null)
+    const [surveyDatabase, setSurveyDatabase] = useState<Database | null>(null)
     const [isLoadingSurvey, setIsLoadingSurvey] = useState<boolean>(false)
     const [isLoadingTrainings, setIsLoadingTrainings] = useState<boolean>(false)
     const [questions, setQuestions] = useState<SurveyQuestion[]>([])
@@ -89,7 +149,43 @@ function SurveyResultsPage() {
     const navigate = useNavigate()
 
     useEffect(() => {
-        if (!database || !id) {
+        let cancelled = false
+
+        const resolveSurveyDatabase = async () => {
+            const queryDatabaseUrl = searchParams.get("db")
+            if (queryDatabaseUrl) {
+                const queryDatabase = getDatabaseForUrl(queryDatabaseUrl)
+                if (!cancelled && queryDatabase) {
+                    setSurveyDatabase(queryDatabase)
+                    return
+                }
+            }
+
+            if (database) {
+                setSurveyDatabase(database)
+                return
+            }
+
+            if (!id) {
+                setSurveyDatabase(null)
+                return
+            }
+
+            const descriptor = await findSurveyDatabaseDescriptorById(id)
+            if (!cancelled) {
+                setSurveyDatabase(descriptor?.database ?? null)
+            }
+        }
+
+        void resolveSurveyDatabase()
+
+        return () => {
+            cancelled = true
+        }
+    }, [database, id, searchParams])
+
+    useEffect(() => {
+        if (!surveyDatabase || !id) {
             setSurvey(null)
             return
         }
@@ -99,7 +195,7 @@ function SurveyResultsPage() {
         const loadSurvey = async () => {
             try {
                 setIsLoadingSurvey(true)
-                const found = await getSurveyById(database, id)
+                const found = await getSurveyById(surveyDatabase, id)
                 if (!cancelled) {
                     setSurvey(found)
                 }
@@ -120,10 +216,10 @@ function SurveyResultsPage() {
         return () => {
             cancelled = true
         }
-    }, [database, id])
+    }, [surveyDatabase, id])
 
     useEffect(() => {
-        if (!database || !survey) {
+        if (!surveyDatabase || !survey) {
             setQuestions([])
             setOptions([])
             setResponsesByTraining({})
@@ -139,7 +235,7 @@ function SurveyResultsPage() {
             try {
                 setIsLoadingTrainings(true)
 
-                const loadedQuestions = await getSurveyQuestionsBySurveyId(database, survey.id)
+                const loadedQuestions = await getSurveyQuestionsBySurveyId(surveyDatabase, survey.id)
                 if (cancelled) {
                     return
                 }
@@ -150,7 +246,7 @@ function SurveyResultsPage() {
                     .filter((question) => question.type === "rating")
                     .map((question) => question.id)
 
-                const groupedResponses = await getSurveyResponsesByTraining(database, survey.id)
+                const groupedResponses = await getSurveyResponsesByTraining(surveyDatabase, survey.id)
                 if (cancelled) {
                     return
                 }
@@ -158,7 +254,7 @@ function SurveyResultsPage() {
                 setResponsesByTraining(groupedResponses)
 
                 const loadedOptions = await getSurveyOptionsByQuestionIds(
-                    database,
+                    surveyDatabase,
                     loadedQuestions.map((question) => question.id),
                 )
                 if (cancelled) {
@@ -176,12 +272,9 @@ function SurveyResultsPage() {
                 }
 
                 const meetings = await Promise.all(
-                    trainingIds.map(async (trainingId) => {
-                        try {
-                            return await getMeetingById(database, trainingId)
-                        } catch {
-                            return null
-                        }
+                    trainingIds.map((trainingId) => {
+                        const trainingResponses = groupedResponses[trainingId] ?? []
+                        return loadMeetingFromCandidates(surveyDatabase, trainingId, trainingResponses)
                     }),
                 )
 
@@ -235,18 +328,17 @@ function SurveyResultsPage() {
         return () => {
             cancelled = true
         }
-    }, [database, survey])
+    }, [surveyDatabase, survey])
 
     useEffect(() => {
-        if (!database || !selectedTrainingId) {
+        if (!surveyDatabase || !selectedTrainingId) {
             setRespondentProfiles({})
             return
         }
 
         const selectedResponses = responsesByTraining[selectedTrainingId] ?? []
-        const userIds = Array.from(new Set(selectedResponses.map((response) => response.userId.trim()).filter((uid) => uid.length > 0)))
 
-        if (userIds.length === 0) {
+        if (selectedResponses.length === 0) {
             setRespondentProfiles({})
             return
         }
@@ -255,7 +347,7 @@ function SurveyResultsPage() {
 
         const loadProfiles = async () => {
             try {
-                const profileMap = await loadRespondentProfiles(database, userIds)
+                const profileMap = await loadRespondentProfiles(surveyDatabase, selectedResponses)
                 if (!cancelled) {
                     setRespondentProfiles(profileMap)
                 }
@@ -272,7 +364,7 @@ function SurveyResultsPage() {
         return () => {
             cancelled = true
         }
-    }, [database, selectedTrainingId, responsesByTraining])
+    }, [surveyDatabase, selectedTrainingId, responsesByTraining])
 
     useEffect(() => {
         setResponsesPage(1)

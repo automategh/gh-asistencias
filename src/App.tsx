@@ -35,7 +35,7 @@ function App() {
                     <Route
                         path="/departments"
                         element={(
-                            <RoleRoute allowed={["Admin", "HR"]}>
+                            <RoleRoute requireAny={["departments_manage"]}>
                                 <DepartmentsPage />
                             </RoleRoute>
                         )}
@@ -43,27 +43,27 @@ function App() {
                     <Route
                         path="/user-grouping"
                         element={(
-                            <RoleRoute allowed={["Admin", "HR"]}>
+                            <RoleRoute requireAny={["user_grouping_manage"]}>
                                 <UserGroupingPage />
                             </RoleRoute>
                         )}
                     />
                     <Route path="/new-meeting" element={(
-                        <RoleRoute allowed={["Admin", "HR", "Lider", "Instructor"]}>
+                        <RoleRoute requireAny={["meetings_create"]}>
                             <NewMeetPage />
                         </RoleRoute>
                     )} />
                     <Route path="/meets" element={<MeetsPage />} />
                     <Route path="/meeting/:id" element={<DetailMeetPage />} />
                     <Route path="/attendance/:id" element={(
-                        <RoleRoute allowed={["Admin", "HR", "Lider", "Instructor"]}>
+                        <RoleRoute requireAny={["meetings_attendance_view"]}>
                             <AttendancePage />
                         </RoleRoute>
                     )} />
                     <Route
                         path="/permissions"
                         element={(
-                            <RoleRoute allowed={["Admin", "HR"]}>
+                            <RoleRoute requireAny={["roles_view", "roles_manage"]}>
                                 <PermissionsPage />
                             </RoleRoute>
                         )}
@@ -71,7 +71,7 @@ function App() {
                     <Route
                         path="/reports"
                         element={(
-                            <RoleRoute allowed={["Admin", "HR", "Lider"]}>
+                            <RoleRoute requireAny={["reports_view_team", "reports_view_all"]}>
                                 <ReportsPage />
                             </RoleRoute>
                         )}
@@ -79,7 +79,7 @@ function App() {
                     <Route
                         path="/reports/training-plan"
                         element={(
-                            <RoleRoute allowed={["Admin", "HR", "Lider"]}>
+                            <RoleRoute requireAny={["reports_view_team", "reports_view_all"]}>
                                 <ReportTrainingPlanPage />
                             </RoleRoute>
                         )}
@@ -88,28 +88,28 @@ function App() {
                         <Route
                             path="/reports/group"
                             element={(
-                                <RoleRoute allowed={["Admin", "HR", "Lider"]}>
+                                <RoleRoute requireAny={["reports_view_team", "reports_view_all"]}>
                                     <ReportGroupPage />
                                 </RoleRoute>
                             )}
                         />
 
                     <Route path="/reports/individual" element={(
-                        <RoleRoute allowed={["Admin", "HR", "Lider"]}>
+                        <RoleRoute requireAny={["reports_view_team", "reports_view_all"]}>
                             <ReportIndividualPage />
                         </RoleRoute>
                     )} />
 
                     <Route path="/survey"
                         element={(
-                            <RoleRoute allowed={["Admin", "HR"]}>
+                            <RoleRoute requireAny={["surveys_admin_view"]}>
                                 <SurveyAdminPage />
                             </RoleRoute>
                         )}
                     />
 
                     <Route path='/survey/create' element={(
-                        <RoleRoute allowed={["Admin", "HR"]}>
+                        <RoleRoute requireAny={["surveys_create"]}>
                             <NewSurveyPage />
                         </RoleRoute>
                     )} />
@@ -117,7 +117,7 @@ function App() {
                     <Route
                         path="/survey/:id"
                         element={(
-                            <RoleRoute allowed={["Admin", "HR"]}>
+                            <RoleRoute requireAny={["surveys_edit"]}>
                                 <EditSurveyPage />
                             </RoleRoute>
                         )}
@@ -126,7 +126,7 @@ function App() {
                     <Route
                         path="/survey/:id/results"
                         element={(
-                            <RoleRoute allowed={["Admin", "HR"]}>
+                            <RoleRoute requireAny={["surveys_results_view"]}>
                                 <SurveyResultsPage />
                             </RoleRoute>
                         )}

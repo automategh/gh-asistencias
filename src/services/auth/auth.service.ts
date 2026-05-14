@@ -9,6 +9,7 @@ interface UserRecord {
     name: string;
     email: string;
     role: string;
+    roleId?: string;
     immediateBoss?: string | null;
     identify?: string | null;
     department?: string | null;
@@ -160,6 +161,7 @@ export const loginWithMicrosoft = async (): Promise<{ user: User; photoUrl: stri
                 name: user.displayName,
                 email: user.email,
                 role: "User", // rol por defecto
+                roleId: "user",
                 active: true,
                 createdAt: new Date().toISOString(),
                 lastLogin: new Date().toISOString(),
@@ -232,6 +234,7 @@ export const registerWithEmailPassword = async (data: RegisterFormData) => {
             name: data.name,
             email: data.email,
             role: "User", // rol por defecto
+            roleId: "user",
             active: false, // el usuario debe ser activado por un admin
             createdAt: new Date().toISOString(),
             lastLogin: new Date().toISOString(),

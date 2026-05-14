@@ -33,8 +33,11 @@ interface ActivityDetailAttendee {
 
 function ReportGroupPage() {
     const navigate = useNavigate()
-    const { user, role } = useAuth()
+    const { user, hasPermission } = useAuth()
     const { database } = useDatabase()
+    const canViewTeamReports = hasPermission("reports_view_team")
+    const canViewAllReports = hasPermission("reports_view_all")
+    const isTeamScoped = canViewTeamReports && !canViewAllReports
 
     const [allUsers, setAllUsers] = useState<ReportUserItem[]>([])
     const [isLoadingUsers, setIsLoadingUsers] = useState<boolean>(false)
@@ -73,7 +76,7 @@ function ReportGroupPage() {
                 setIsLoadingUsers(true)
                 setUsersError(null)
 
-                const leaderName = role === "Lider" ? user.displayName ?? null : null
+                const leaderName = isTeamScoped ? user.displayName ?? null : null
                 const list = await getUsersForReports(database, { leaderName })
 
                 if (cancelled) {
@@ -99,7 +102,7 @@ function ReportGroupPage() {
         return () => {
             cancelled = true
         }
-    }, [database, role, user])
+    }, [database, isTeamScoped, user])
 
     useEffect(() => {
         if (!database) {

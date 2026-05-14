@@ -4,7 +4,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useDatabase } from '@/context/DatabaseContext'
 import type { Meeting, MeetingKind, MeetingStatus } from '@/types/meeting'
 import { Calendar, ChevronDown, Search, ShieldCheckIcon, TagIcon } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 // (sin acceso directo a firebase aquí; se maneja en el servicio)
 import { completeMeeting } from '@/services/meetings.service'
@@ -31,6 +31,7 @@ const PAGE_SIZE = 9
 function MeetsPage() {
     const { user } = useAuth()
     const { database, databaseUrl, isCorporateUser, availableDatabases } = useDatabase()
+    const navigate = useNavigate()
 
     const [loading, setLoading] = useState<boolean>(true)
     const [error, setError] = useState<string | null>(null)
@@ -50,6 +51,22 @@ function MeetsPage() {
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
     const [invitedPage, setInvitedPage] = useState<number>(1)
     const [createdPage, setCreatedPage] = useState<number>(1)
+
+    const buildMeetingPath = (basePath: '/meeting' | '/checkin', meeting: MeetingWithIndex): string => {
+        if (!meeting.source?.url) {
+            return `${basePath}/${meeting.id}`
+        }
+
+        return `${basePath}/${meeting.id}?db=${encodeURIComponent(meeting.source.url)}`
+    }
+
+    const openMeetingDetails = (meeting: MeetingWithIndex): void => {
+        navigate(buildMeetingPath('/meeting', meeting))
+    }
+
+    const openMeetingCheckin = (meeting: MeetingWithIndex): void => {
+        navigate(buildMeetingPath('/checkin', meeting))
+    }
 
     useEffect(() => {
         let cancelled = false
@@ -450,6 +467,8 @@ function MeetsPage() {
                                                                 canComplete={canComplete}
                                                                 completing={completing[m.id]}
                                                                 onComplete={async () => handleCompleteMeeting(m)}
+                                                                onOpenDetails={() => openMeetingDetails(m)}
+                                                                onOpenCheckin={() => openMeetingCheckin(m)}
                                                             />
                                                         )
                                                     })}
@@ -520,13 +539,13 @@ function MeetsPage() {
                                                                 <td className="px-4 py-2 align-top">
                                                                     <div className="flex flex-wrap gap-2">
                                                                         <Link
-                                                                            to={`/meeting/${meeting.id}`}
+                                                                            to={buildMeetingPath('/meeting', meeting)}
                                                                             className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted/60"
                                                                         >
                                                                             Detalles
                                                                         </Link>
                                                                         <Link
-                                                                            to={`/checkin/${meeting.id}`}
+                                                                            to={buildMeetingPath('/checkin', meeting)}
                                                                             className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
                                                                         >
                                                                             Asistencia
@@ -606,6 +625,8 @@ function MeetsPage() {
                                                                 canComplete={canComplete}
                                                                 completing={completing[m.id]}
                                                                 onComplete={async () => handleCompleteMeeting(m)}
+                                                                onOpenDetails={() => openMeetingDetails(m)}
+                                                                onOpenCheckin={() => openMeetingCheckin(m)}
                                                             />
                                                         )
                                                     })}

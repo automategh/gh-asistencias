@@ -1,7 +1,9 @@
 import { getAllAvailableDatabases, type RecintoKey } from "@/lib/firebase/databaseResolver"
+import { assignRoleIdToUser, getLegacyRoleFromRoleId, LEGACY_ROLE_TO_ROLE_ID } from "@/services/authorization/role-permissions.service"
 import { getDatabaseForUrl } from "@/services/firebase"
 import { get, ref, update, type Database } from "firebase/database"
 
+import type { RoleDefinition } from "@/types/authorization"
 import type { CrossDbUserItem } from "@/types/user"
 import type { AppRole } from "@/types/permissions"
 
@@ -21,12 +23,14 @@ export async function listAllUsersAcrossDatabases(): Promise<CrossDbUserItem[]> 
     const database: Database | null = getDatabaseForUrl(dbInfo.url)
     if (!database) continue
     const snap = await get(ref(database, "users"))
-    const val = snap.val() as Record<string, { name?: string; email?: string; role?: string | null; active?: boolean | null; department?: string | null; immediateBoss?: string | null; cargo?: string | null; companyName?: string | null }> | null
+    const val = snap.val() as Record<string, { name?: string; email?: string; role?: string | null; roleId?: string | null; isLeader?: boolean | null; active?: boolean | null; department?: string | null; immediateBoss?: string | null; cargo?: string | null; companyName?: string | null }> | null
     if (!val) continue
     for (const [uid, u] of Object.entries(val)) {
       const name = String(u?.name ?? "").trim()
       const email = String(u?.email ?? "").trim()
       const role = (u?.role ?? null)
+      const roleId = u?.roleId ?? (role && role in LEGACY_ROLE_TO_ROLE_ID ? LEGACY_ROLE_TO_ROLE_ID[role as AppRole] : null)
+      const isLeader = typeof u?.isLeader === "boolean" ? u.isLeader : null
       const active = (u?.active ?? null)
       const department = (u?.department ?? null)
       const immediateBoss = (u?.immediateBoss ?? null)
@@ -38,6 +42,8 @@ export async function listAllUsersAcrossDatabases(): Promise<CrossDbUserItem[]> 
         name,
         email,
         role,
+        roleId,
+        isLeader,
         active,
         department,
         immediateBoss,
@@ -55,15 +61,17 @@ export async function listAllUsersAcrossDatabases(): Promise<CrossDbUserItem[]> 
 }
 
 /**
- * Asigna un rol de aplicación a un usuario en su base de datos de origen.
+ * Asigna un rol del catalogo a un usuario en su base de datos de origen.
  *
- * Escribe bajo `users/{uid}/role` en la instancia correspondiente, usando
- * la `databaseUrl` incluida en el `CrossDbUserItem`.
+ * Escribe `roleId` y mantiene `role` legado para compatibilidad temporal.
  */
-export async function assignRoleInUserDatabase(user: CrossDbUserItem, role: AppRole): Promise<void> {
+export async function assignRoleInUserDatabase(user: CrossDbUserItem, role: Pick<RoleDefinition, "id">): Promise<void> {
   const db = getDatabaseForUrl(user.databaseUrl)
   if (!db) throw new Error("No se pudo resolver la base de datos de destino")
-  await update(ref(db), { [`users/${user.uid}/role`]: role })
+  await assignRoleIdToUser(db, user.uid, {
+    roleId: role.id,
+    legacyRole: getLegacyRoleFromRoleId(role.id),
+  })
 }
 
 /**
@@ -91,6 +99,15 @@ export async function deactivateUserInUserDatabase(user: CrossDbUserItem): Promi
 }
 
 /**
+ * Define de forma explícita si un usuario puede actuar como líder.
+ */
+export async function setUserLeaderInUserDatabase(user: CrossDbUserItem, isLeader: boolean): Promise<void> {
+  const db = getDatabaseForUrl(user.databaseUrl)
+  if (!db) throw new Error("No se pudo resolver la base de datos de destino")
+  await update(ref(db), { [`users/${user.uid}/isLeader`]: isLeader })
+}
+
+/**
  * Filtro utilitario en memoria para trabajar con listados de usuarios cruzados.
  *
  * Permite combinar búsqueda por texto (nombre/correo) con filtros de recinto,
@@ -98,16 +115,16 @@ export async function deactivateUserInUserDatabase(user: CrossDbUserItem): Promi
  */
 export function filterUsers(
   users: ReadonlyArray<CrossDbUserItem>,
-  opts: { searchText?: string; recinto?: RecintoKey | "ALL"; role?: AppRole | "ALL"; active?: boolean | "ALL" }
+  opts: { searchText?: string; recinto?: RecintoKey | "ALL"; roleId?: string | "ALL"; active?: boolean | "ALL" }
 ): CrossDbUserItem[] {
   const search = (opts.searchText ?? "").trim().toLowerCase()
   const recintoFilter = opts.recinto ?? "ALL"
-  const roleFilter = opts.role ?? "ALL"
+  const roleFilter = opts.roleId ?? "ALL"
   const activeFilter = opts.active ?? "ALL"
   return users.filter((u) => {
     const matchesSearch = !search || u.name.toLowerCase().includes(search) || u.email.toLowerCase().includes(search)
     const matchesRecinto = recintoFilter === "ALL" || u.recinto === recintoFilter
-    const matchesRole = roleFilter === "ALL" || u.role === roleFilter
+    const matchesRole = roleFilter === "ALL" || u.roleId === roleFilter
     const matchesActive = activeFilter === "ALL" || (!!u.active === activeFilter)
     return matchesSearch && matchesRecinto && matchesRole && matchesActive
   })

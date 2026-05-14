@@ -1,6 +1,9 @@
 import { resolveDatabaseByEmail } from "@/lib/firebase/databaseResolver";
+import { ensureAuthorizationCatalog } from "@/services/authorization/role-permissions.service";
+import { getLegacyRoleFromRoleId, LEGACY_ROLE_TO_ROLE_ID } from "@/services/authorization/role-permissions.service";
 import { loginWithEmailPassword, loginWithMicrosoft, logout, registerWithEmailPassword } from "@/services/auth/auth.service";
 import { auth, getDatabaseForUrl } from "@/services/firebase";
+import type { PermissionId, RoleId } from "@/types/authorization";
 import type { RegisterFormData } from "@/types/user";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { get, ref } from "firebase/database";
@@ -11,6 +14,9 @@ interface AuthContextType {
     user: User | null;
     loading: boolean;
     role: string | null;
+    roleId: RoleId | null;
+    permissions: readonly PermissionId[];
+    hasPermission: (permissionId: PermissionId) => boolean;
     profilePhotoUrl: string | null;
     loginWithMicrosoft: () => Promise<void>;
     loginWithEmailPassword: (email: string, password: string) => Promise<void>;
@@ -32,6 +38,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [loading, setLoading] = useState(false);
     const [role, setRole] = useState<string | null>(null);
+    const [roleId, setRoleId] = useState<RoleId | null>(null);
+    const [permissions, setPermissions] = useState<PermissionId[]>([]);
     const [user, setUser] = useState<User | null>(null);
     const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
 
@@ -44,7 +52,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         interface DbUserPayload {
             readonly role?: string | null;
+            readonly roleId?: RoleId | null;
             readonly photoUrl?: string | null;
+        }
+
+        interface DbRolePayload {
+            readonly permissions?: Partial<Record<PermissionId, boolean>> | null;
+        }
+
+        const resolveUserRoleState = (data: DbUserPayload | null) => {
+            const resolvedRoleId = data?.roleId ?? (data?.role ? LEGACY_ROLE_TO_ROLE_ID[data.role as keyof typeof LEGACY_ROLE_TO_ROLE_ID] ?? "user" : "user");
+            const resolvedRole = data?.role ?? getLegacyRoleFromRoleId(resolvedRoleId);
+
+            setRoleId(resolvedRoleId);
+            setRole(resolvedRole);
+        }
+
+        const fetchRolePermissions = async (resolvedRoleId: RoleId, email: string | null) => {
+            try {
+                const { databaseUrl } = resolveDatabaseByEmail(email);
+                const db = getDatabaseForUrl(databaseUrl);
+
+                if (!db) {
+                    setPermissions([]);
+                    return;
+                }
+
+                // Asegura que el catalogo base exista en la BD activa antes de resolver permisos del rol.
+                await ensureAuthorizationCatalog(db);
+
+                const roleRef = ref(db, `roles/${resolvedRoleId}`);
+                const roleSnapshot = await get(roleRef);
+                const roleData = roleSnapshot.val() as DbRolePayload | null;
+                const rolePermissions = roleData?.permissions ?? null;
+
+                if (!rolePermissions) {
+                    setPermissions([]);
+                    return;
+                }
+
+                const grantedPermissions = Object.entries(rolePermissions)
+                    .filter(([, granted]) => granted === true)
+                    .map(([permissionId]) => permissionId as PermissionId);
+
+                setPermissions(grantedPermissions);
+            } catch (error) {
+                console.error("Error al obtener permisos del rol:", error);
+                setPermissions([]);
+            }
         }
 
         // Función asyncrónica para obtener el rol
@@ -59,6 +114,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (!db) {
                     console.error("No se pudo obtener la instancia de base de datos");
                     setRole("User");
+                    setRoleId("user");
+                    setPermissions([]);
                     return;
                 }
 
@@ -70,23 +127,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const data = snapshot.val() as DbUserPayload | null;
 
                     if (data) {
-                        setRole(data.role ?? "User");
+                        resolveUserRoleState(data);
+                        const resolvedRoleId = data.roleId ?? (data.role ? LEGACY_ROLE_TO_ROLE_ID[data.role as keyof typeof LEGACY_ROLE_TO_ROLE_ID] ?? "user" : "user");
+                        await fetchRolePermissions(resolvedRoleId, email);
 
                         if (typeof data.photoUrl === "string" && data.photoUrl.trim().length > 0) {
                             setProfilePhotoUrl(data.photoUrl);
                         }
                     } else {
-                        setRole("User");
+                        resolveUserRoleState(null);
+                        await fetchRolePermissions("user", email);
                     }
                 } else {
                     // Usuario autenticado pero sin registro en esta BD
                     // Asignar rol por defecto "User" para permitir acceso básico
                     console.warn(`Usuario ${uid} no encontrado en la base de datos, asignando rol por defecto "User"`);
                     setRole("User");
+                    setRoleId("user");
+                    await fetchRolePermissions("user", email);
                 }
             } catch (error) {
                 console.error("Error al obtener el rol del usuario:", error);
                 setRole("User");
+                setRoleId("user");
+                setPermissions([]);
             }
         };
 
@@ -100,6 +164,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 fetchUserRole(firebaseUser.uid, firebaseUser.email); // Llama la función async sin await
             } else {
                 setRole(null);
+                setRoleId(null);
+                setPermissions([]);
             }
         });
 
@@ -178,6 +244,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         loading,
         role,
+        roleId,
+        permissions,
+        hasPermission: (permissionId: PermissionId) => permissions.includes(permissionId),
         profilePhotoUrl,
         loginWithMicrosoft: handleLoginWithMicrosoft,
         loginWithEmailPassword: handleLoginWithEmailPassword,

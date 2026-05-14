@@ -28,8 +28,11 @@ const MONTH_LABELS: readonly string[] = [
 function ReportIndividualPage() {
 
     const navigate = useNavigate()
-    const { user, role } = useAuth()
+    const { user, hasPermission } = useAuth()
     const { database } = useDatabase()
+    const canViewTeamReports = hasPermission("reports_view_team")
+    const canViewAllReports = hasPermission("reports_view_all")
+    const isTeamScoped = canViewTeamReports && !canViewAllReports
 
     const [users, setUsers] = useState<ReportUserItem[]>([])
     const [isLoadingUsers, setIsLoadingUsers] = useState<boolean>(false)
@@ -63,7 +66,7 @@ function ReportIndividualPage() {
                 setIsLoadingUsers(true)
                 setUsersError(null)
 
-                const leaderName = role === "Lider" ? user.displayName ?? null : null
+                const leaderName = isTeamScoped ? user.displayName ?? null : null
                 const list = await getUsersForReports(database, { leaderName })
 
                 if (cancelled) {
@@ -91,7 +94,7 @@ function ReportIndividualPage() {
         return () => {
             cancelled = true
         }
-    }, [database, role, user])
+    }, [database, isTeamScoped, user])
 
     useEffect(() => {
         if (!database) {
@@ -339,7 +342,7 @@ function ReportIndividualPage() {
                                             Colaboradores
                                         </p>
                                         <p className="text-xs text-[#5a665a]">
-                                            {role === "Lider"
+                                            {isTeamScoped
                                                 ? "Solo se muestran los colaboradores que tienen tu nombre como jefe inmediato."
                                                 : "Lista completa de colaboradores disponibles para reportes."}
                                         </p>

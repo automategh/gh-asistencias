@@ -1,11 +1,15 @@
-import { equalTo, get, orderByChild, query, ref, update, type Database } from "firebase/database";
+import { get, ref, update, type Database } from "firebase/database";
 import type { UserProfile } from "@/types/user";
 import { getAllAvailableDatabases } from "@/lib/firebase/databaseResolver";
 import { getDatabaseForUrl } from "@/services/firebase";
 
 /**
- * Obtiene los usuarios con rol "Lider" desde Realtime Database.
- * Retorna un arreglo compacto con uid, name, email y role.
+ * Obtiene los usuarios que pueden actuar como líder dentro de la organización.
+ *
+ * Criterios de liderazgo:
+ * - Tener permisos de alcance de equipo en su rol (`reports_view_team` o `meetings_manage_owned`).
+ * - Tener rol legado `Lider` (compatibilidad).
+ * - Estar referenciado como `immediateBoss` por al menos un usuario.
  */
 export async function getUserLeaders(
     database: Database
@@ -15,15 +19,34 @@ export async function getUserLeaders(
     }
 
     const usersRef = ref(database, "users");
-    const leadersQuery = query(
-        usersRef,
-        orderByChild("role"),
-        equalTo("Lider")
-    )
-    const snapshot = await get(leadersQuery);
+    const snapshot = await get(usersRef);
     const values = snapshot.val() as Record<string, Partial<UserProfile>> | null;
 
     if (!values) return [];
+
+    const rolesSnapshot = await get(ref(database, "roles"));
+    const roles = rolesSnapshot.val() as Record<string, {
+        readonly permissions?: Partial<Record<string, boolean>> | null
+    }> | null;
+
+    const roleIdsWithTeamScope = new Set<string>(
+        Object.entries(roles ?? {})
+            .filter(([, role]) => {
+                const permissions = role.permissions ?? null
+                if (!permissions) {
+                    return false
+                }
+
+                return permissions.reports_view_team === true || permissions.meetings_manage_owned === true
+            })
+            .map(([roleId]) => roleId.trim().toLowerCase()),
+    )
+
+    const referencedBossNames = new Set<string>(
+        Object.values(values)
+            .map((user) => (typeof user.immediateBoss === "string" ? user.immediateBoss.trim().toLowerCase() : ""))
+            .filter((bossName) => bossName.length > 0),
+    )
 
     const leaders = Object.entries(values)
         .map(([uid, data]) => ({
@@ -31,8 +54,32 @@ export async function getUserLeaders(
             name: String(data.name ?? ""),
             email: String(data.email ?? ""),
             role: String(data.role ?? ""),
+            roleId: String(data.roleId ?? ""),
+            isLeader: typeof data.isLeader === "boolean" ? data.isLeader : null,
         }))
-        .filter((u) => u.role.toLowerCase() === "lider" && u.name.trim().length > 0);
+        .filter((userCandidate) => {
+            const cleanName = userCandidate.name.trim()
+            if (cleanName.length === 0) {
+                return false
+            }
+
+            if (userCandidate.isLeader === true) {
+                return true
+            }
+
+            if (userCandidate.isLeader === false) {
+                return false
+            }
+
+            const normalizedRole = userCandidate.role.trim().toLowerCase()
+            const normalizedRoleId = userCandidate.roleId.trim().toLowerCase()
+            const hasLegacyLeaderRole = normalizedRole === "lider"
+            const hasTeamScopedPermission = normalizedRoleId.length > 0 && roleIdsWithTeamScope.has(normalizedRoleId)
+            const isReferencedAsBoss = referencedBossNames.has(cleanName.toLowerCase())
+
+            return hasLegacyLeaderRole || hasTeamScopedPermission || isReferencedAsBoss
+        })
+        .sort((first, second) => first.name.localeCompare(second.name));
 
     return leaders;
 }
@@ -42,7 +89,11 @@ export async function getUserLeaders(
  */
 export async function getLeaderNames(database: Database) {
     const leaders = await getUserLeaders(database);
-    return leaders.map((u) => u.name);
+    const uniqueNames = Array.from(new Set(leaders.map((user) => user.name.trim())))
+        .filter((name) => name.length > 0)
+        .sort((first, second) => first.localeCompare(second))
+
+    return uniqueNames;
 }
 
 /**

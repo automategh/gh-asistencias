@@ -2,27 +2,41 @@ import Layout from '@/components/layouts/layout'
 import { QRCodeDisplay } from '@/components/meet/qr-code-display'
 import { useDatabase } from '@/context/DatabaseContext'
 import { useAuth } from '@/context/AuthContext'
+import { getDatabaseForUrl } from '@/services/firebase'
 import { getSurveys, getSurveyById, type Survey } from '@/services/forms.service'
 import { cancelMeeting, closeMeeting, completeMeeting, getMeetingById, reopenMeeting } from '@/services/meetings.service'
 import type { Meeting } from '@/types/meeting'
 import { BarChart3, Calendar, Clock, FileText, MapPin } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 
 function DetailMeetPage() {
 
     const { id } = useParams<{ id: string }>()
     const { database } = useDatabase()
-    const { user, role } = useAuth()
+    const { user, hasPermission } = useAuth()
+    const [searchParams] = useSearchParams()
     const [meeting, setMeeting] = useState<Meeting | null>(null)
     const [satisfactionSurvey, setSatisfactionSurvey] = useState<Survey | null>(null)
     const [closing, setClosing] = useState(false)
     const [completing, setCompleting] = useState(false)
     const [cancel, setCancel] = useState(false)
     const [reopening, setReopening] = useState(false)
+    const sourceDatabaseUrl = searchParams.get('db')
+
+    const meetingDatabase = useMemo(() => {
+        if (sourceDatabaseUrl) {
+            const resolvedDatabase = getDatabaseForUrl(sourceDatabaseUrl)
+            if (resolvedDatabase) {
+                return resolvedDatabase
+            }
+        }
+
+        return database
+    }, [database, sourceDatabaseUrl])
 
     useEffect(() => {
-        if (!database || !id) {
+        if (!meetingDatabase || !id) {
             return
         }
 
@@ -30,7 +44,7 @@ function DetailMeetPage() {
 
         const loadMeetingAndSurvey = async () => {
             try {
-                const loadedMeeting = await getMeetingById(database, id)
+                const loadedMeeting = await getMeetingById(meetingDatabase, id)
 
                 if (cancelled) {
                     return
@@ -44,7 +58,7 @@ function DetailMeetPage() {
                 }
 
                 if (loadedMeeting.satisfactionSurveyId && loadedMeeting.satisfactionSurveyId.trim().length > 0) {
-                    const surveyById = await getSurveyById(database, loadedMeeting.satisfactionSurveyId)
+                    const surveyById = await getSurveyById(meetingDatabase, loadedMeeting.satisfactionSurveyId)
 
                     if (cancelled) {
                         return
@@ -56,7 +70,7 @@ function DetailMeetPage() {
                     }
                 }
 
-                const surveys = await getSurveys(database)
+                const surveys = await getSurveys(meetingDatabase)
 
                 if (cancelled) {
                     return
@@ -74,7 +88,7 @@ function DetailMeetPage() {
         return () => {
             cancelled = true
         }
-    }, [database, id])
+    }, [meetingDatabase, id])
 
     /**
      * Devuelve la etiqueta legible del tipo de reunión.
@@ -134,14 +148,17 @@ function DetailMeetPage() {
         }
     }
 
-    // Permiso de cierre: creador, manager o Admin
+    const canManageAnyMeeting = hasPermission('meetings_manage_any')
+    const canManageOwnedMeeting = hasPermission('meetings_manage_owned')
+    const canViewAttendance = hasPermission('meetings_attendance_view')
+
+    // Permiso de cierre: manage_any o manage_owned (si es creador/manager)
     const canClose = useMemo(() => {
         if (!meeting || !user) return false
-        if (role === 'Admin') return true
         const isCreator = meeting.createdBy === user.uid
         const isManager = Array.isArray(meeting.managers) ? meeting.managers.includes(user.uid) : false
-        return isCreator || isManager
-    }, [meeting, user, role])
+        return canManageAnyMeeting || (canManageOwnedMeeting && (isCreator || isManager))
+    }, [meeting, user, canManageAnyMeeting, canManageOwnedMeeting])
 
     const isFinalStatus = useMemo(() => {
         const s = meeting?.status
@@ -149,20 +166,19 @@ function DetailMeetPage() {
     }, [meeting])
 
     /** 
-     * Permiso de cancelación: creador, manager o Admin
+     * Permiso de cancelación: manage_any o manage_owned (si es creador/manager)
      * */
     const canCancel = useMemo(() => {
         if (!meeting || !user) return false
         if (isFinalStatus) return false
         const isCreator = meeting.createdBy === user.uid
         const isManager = Array.isArray(meeting.managers) ? meeting.managers.includes(user.uid) : false
-        const isAdmin = role === 'Admin'
-        return isCreator || isManager || isAdmin
-    }, [meeting, user, role, isFinalStatus])
+        return canManageAnyMeeting || (canManageOwnedMeeting && (isCreator || isManager))
+    }, [meeting, user, isFinalStatus, canManageAnyMeeting, canManageOwnedMeeting])
 
     /**
      * Permiso para reabrir una reunión cerrada o cancelada.
-     * Solo creador, manager o Admin pueden reabrir.
+     * Solo quien tenga permisos de gestión puede reabrir.
      */
     const canReopen = useMemo(() => {
         if (!meeting || !user) return false
@@ -171,15 +187,14 @@ function DetailMeetPage() {
 
         const isCreator = meeting.createdBy === user.uid
         const isManager = Array.isArray(meeting.managers) ? meeting.managers.includes(user.uid) : false
-        const isAdmin = role === 'Admin'
-        return isCreator || isManager || isAdmin
-    }, [meeting, user, role])
+        return canManageAnyMeeting || (canManageOwnedMeeting && (isCreator || isManager))
+    }, [meeting, user, canManageAnyMeeting, canManageOwnedMeeting])
 
     async function handleCloseMeeting() {
-        if (!database || !meeting || !user) return
+        if (!meetingDatabase || !meeting || !user) return
         setClosing(true)
         try {
-            const updated = await closeMeeting(database, meeting.id, user.uid)
+            const updated = await closeMeeting(meetingDatabase, meeting.id, user.uid)
             setMeeting(updated)
         } catch (error) {
             console.error('No fue posible cerrar la actividad:', error)
@@ -189,7 +204,7 @@ function DetailMeetPage() {
     }
 
     /**
-     * Permiso de completar: creador, manager o Admin y reunión finalizada
+     * Permiso de completar: gestión permitida y reunión finalizada
      */
     const canComplete = useMemo(() => {
         if (!meeting || !user) return false
@@ -198,15 +213,15 @@ function DetailMeetPage() {
         const canByStatus = meeting.status === 'closed'
         const isCreator = meeting.createdBy === user.uid
         const isManager = Array.isArray(meeting.managers) ? meeting.managers.includes(user.uid) : false
-        const isAdmin = role === 'Admin'
-        return (isCreator || isManager || isAdmin) && (ended || canByStatus)
-    }, [meeting, user, role])
+        const canManage = canManageAnyMeeting || (canManageOwnedMeeting && (isCreator || isManager))
+        return canManage && (ended || canByStatus)
+    }, [meeting, user, canManageAnyMeeting, canManageOwnedMeeting])
 
     async function handleCompleteMeeting() {
-        if (!database || !meeting || !user) return
+        if (!meetingDatabase || !meeting || !user) return
         setCompleting(true)
         try {
-            const updated = await completeMeeting(database, meeting.id, user.uid)
+            const updated = await completeMeeting(meetingDatabase, meeting.id, user.uid)
             setMeeting(updated)
         } catch (error) {
             console.error('No fue posible completar la actividad:', error)
@@ -216,12 +231,12 @@ function DetailMeetPage() {
     }
 
     async function handleCancelMeeting() {
-        if (!database || !meeting || !user) return
+        if (!meetingDatabase || !meeting || !user) return
         setCancel(true)
 
         try {
             // Opcional: podrías pedir un motivo y pasarlo como cuarto parámetro
-            const updated = await cancelMeeting(database, meeting.id, user.uid)
+            const updated = await cancelMeeting(meetingDatabase, meeting.id, user.uid)
             setMeeting(updated)
         } catch (error) {
             console.error('No fue posible cancelar la actividad:', error)
@@ -231,10 +246,10 @@ function DetailMeetPage() {
     }
 
     async function handleReopenMeeting() {
-        if (!database || !meeting || !user) return
+        if (!meetingDatabase || !meeting || !user) return
         setReopening(true)
         try {
-            const updated = await reopenMeeting(database, meeting.id, user.uid)
+            const updated = await reopenMeeting(meetingDatabase, meeting.id, user.uid)
             setMeeting(updated)
         } catch (error) {
             console.error('No fue posible reabrir la actividad:', error)
@@ -368,9 +383,9 @@ function DetailMeetPage() {
                                                     {cancel ? 'Cancelando…' : 'Cancelar actividad'}
                                                 </button>
                                             )}
-                                            {role === 'Admin' || role === 'HR' || role === 'Lider' || role === 'Instructor' ? (
+                                            {canViewAttendance ? (
                                                 <Link
-                                                    to={`/attendance/${meeting?.id}`}
+                                                    to={meeting ? `/attendance/${meeting.id}${sourceDatabaseUrl ? `?db=${encodeURIComponent(sourceDatabaseUrl)}` : ''}` : '/meets'}
                                                     className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5"
                                                 >
                                                     <BarChart3 className="w-4 h-4" />

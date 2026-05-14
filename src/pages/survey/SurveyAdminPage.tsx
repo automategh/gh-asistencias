@@ -11,7 +11,7 @@ import { getSurveys, type Survey } from "@/services/forms.service"
  */
 function SurveyAdminPage() {
     const navigate = useNavigate()
-    const { database } = useDatabase()
+    const { database, databaseUrl } = useDatabase()
     const [surveys, setSurveys] = useState<Survey[]>([])
     const [isLoading, setIsLoading] = useState<boolean>(false)
     const [searchTerm, setSearchTerm] = useState<string>("")
@@ -266,7 +266,7 @@ function SurveyAdminPage() {
                                         <button
                                             type="button"
                                             className="flex items-center gap-2 border border-[#d6e3d5] text-[#1b3022] px-5 py-2.5 rounded-full font-semibold text-xs hover:bg-[#f3f4f3] transition-all"
-                                            onClick={() => navigate(`/survey/${survey.id}/results`)}
+                                            onClick={() => navigate(`/survey/${survey.id}/results${databaseUrl ? `?db=${encodeURIComponent(databaseUrl)}` : ""}`)}
                                         >
                                             Ver respuestas por capacitación
                                         </button>
