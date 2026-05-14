@@ -1,7 +1,13 @@
 import { QRCodeSVG } from "qrcode.react"
 
-export function QRCodeDisplay({ meetingId }: { meetingId: string }) {
-    const qrValue = `${window.location.origin}/checkin/${meetingId}?method=qr`
+interface QRCodeDisplayProps {
+    readonly meetingId: string
+    readonly sourceDatabaseUrl?: string | null
+}
+
+export function QRCodeDisplay({ meetingId, sourceDatabaseUrl = null }: QRCodeDisplayProps) {
+    const dbQuery = sourceDatabaseUrl ? `&db=${encodeURIComponent(sourceDatabaseUrl)}` : ""
+    const qrValue = `${window.location.origin}/checkin/${meetingId}?method=qr${dbQuery}`
 
     return (
         <div className="flex justify-center">

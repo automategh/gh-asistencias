@@ -422,7 +422,7 @@ function DetailMeetPage() {
                         </div>
                         <div className="bg-card rounded-2xl border border-border p-6 text-center h-fit sticky top-24">
                             <h3 className="text-lg font-bold text-foreground mb-4">Código QR</h3>
-                            <QRCodeDisplay meetingId={meeting?.id || ''} />
+                            <QRCodeDisplay meetingId={meeting?.id || ''} sourceDatabaseUrl={sourceDatabaseUrl} />
                             <p className="text-xs text-muted-foreground mt-4">Escanea este código para registrar asistencia</p>
                         </div>
                     </div>
