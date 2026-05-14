@@ -30,7 +30,7 @@ const PAGE_SIZE = 9
  */
 function MeetsPage() {
     const { user } = useAuth()
-    const { database, databaseUrl, isCorporateUser, availableDatabases } = useDatabase()
+    const { database, databaseUrl, availableDatabases } = useDatabase()
     const navigate = useNavigate()
 
     const [loading, setLoading] = useState<boolean>(true)
@@ -85,8 +85,8 @@ function MeetsPage() {
                 let invited: MeetingWithIndex[] = []
                 let createdList: MeetingWithIndex[] | Meeting[] = []
 
-                if (isCorporateUser && availableDatabases.length > 0) {
-                    // Multi-recinto: agrupar de todas las BDs disponibles
+                if (availableDatabases.length > 0) {
+                    // Multi-recinto: agrupar de todas las BDs disponibles para cualquier usuario.
                     invited = await getUserInvitedMeetingsAcross(
                         availableDatabases.map((d) => ({ url: d.url, key: d.key })),
                         user.uid,
@@ -99,7 +99,7 @@ function MeetsPage() {
                         user.uid
                     )
                 } else {
-                    // Una sola base (seleccionada)
+                    // Fallback: una sola base (seleccionada)
                     invited = await getUserInvitedMeetings(database, user.uid, now, LOOKBACK_MS, ALL_MEETING_STATUSES)
                     createdList = await getUserCreatedMeetings(database, user.uid)
                 }
@@ -119,7 +119,7 @@ function MeetsPage() {
         // Ejecutar
         load().catch(() => setError('No fue posible cargar las actividades'))
         return () => { cancelled = true }
-    }, [database, databaseUrl, user?.uid, now, isCorporateUser, availableDatabases])
+    }, [database, databaseUrl, user?.uid, now, availableDatabases])
 
     // Reiniciar paginación cuando cambian filtros o datos base
     useEffect(() => {
