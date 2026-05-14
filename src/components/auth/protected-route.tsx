@@ -8,7 +8,6 @@ import { findUserDatabaseByUid } from '@/services/user.discovery.service'
 interface ProfileCompletionPayload {
     readonly identify?: string | null
     readonly department?: string | null
-    readonly immediateBoss?: string | null
     readonly cargo?: string | null
 }
 
@@ -30,13 +29,13 @@ function isProfileComplete(payload: ProfileCompletionPayload | null): boolean {
 /**
  * Protección de rutas al estilo "middleware".
  * - Requiere sesión.
- * - Verifica perfil en RTDB (identify, department, immediateBoss y cargo).
+ * - Verifica perfil en RTDB (identify, department y cargo).
  * - Si el perfil está incompleto, redirige a /configure-profile,
  *   excepto cuando ya estás en esa ruta (evita bucles).
  */
 export default function ProtectedRoute(): JSX.Element {
     const { user, loading } = useAuth()
-    const { database, availableDatabases, setSelectedDatabase } = useDatabase()
+     const { database, availableDatabases } = useDatabase()
     const location = useLocation()
     const [profileComplete, setProfileComplete] = useState<boolean | null>(null)
 
@@ -100,7 +99,7 @@ export default function ProtectedRoute(): JSX.Element {
         return () => {
             cancelled = true
         }
-    }, [uid, isOnProfileRoute, database, availableDatabases, setSelectedDatabase]) // Tamaño y orden constantes
+    }, [uid, isOnProfileRoute, database, availableDatabases]) // Tamaño y orden constantes
 
     // Evita redirigir mientras se determina auth y perfil
     if (loading) {
