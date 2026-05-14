@@ -20,7 +20,6 @@ function isProfileComplete(payload: ProfileCompletionPayload | null): boolean {
     const requiredFields = [
         payload.identify,
         payload.department,
-        payload.immediateBoss,
         payload.cargo,
     ]
 
