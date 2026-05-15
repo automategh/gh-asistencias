@@ -1,6 +1,5 @@
 import { resolveDatabaseByEmail } from "@/lib/firebase/databaseResolver";
 import { ensureAuthorizationCatalog } from "@/services/authorization/role-permissions.service";
-import { getLegacyRoleFromRoleId, LEGACY_ROLE_TO_ROLE_ID } from "@/services/authorization/role-permissions.service";
 import { loginWithEmailPassword, loginWithMicrosoft, logout, registerWithEmailPassword } from "@/services/auth/auth.service";
 import { auth, getDatabaseForUrl } from "@/services/firebase";
 import type { PermissionId, RoleId } from "@/types/authorization";
@@ -13,7 +12,6 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 interface AuthContextType {
     user: User | null;
     loading: boolean;
-    role: string | null;
     roleId: RoleId | null;
     permissions: readonly PermissionId[];
     hasPermission: (permissionId: PermissionId) => boolean;
@@ -37,7 +35,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
  */
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [loading, setLoading] = useState(false);
-    const [role, setRole] = useState<string | null>(null);
     const [roleId, setRoleId] = useState<RoleId | null>(null);
     const [permissions, setPermissions] = useState<PermissionId[]>([]);
     const [user, setUser] = useState<User | null>(null);
@@ -51,7 +48,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         interface DbUserPayload {
-            readonly role?: string | null;
             readonly roleId?: RoleId | null;
             readonly photoUrl?: string | null;
         }
@@ -61,11 +57,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const resolveUserRoleState = (data: DbUserPayload | null) => {
-            const resolvedRoleId = data?.roleId ?? (data?.role ? LEGACY_ROLE_TO_ROLE_ID[data.role as keyof typeof LEGACY_ROLE_TO_ROLE_ID] ?? "user" : "user");
-            const resolvedRole = data?.role ?? getLegacyRoleFromRoleId(resolvedRoleId);
-
+            const resolvedRoleId = data?.roleId ?? "user";
             setRoleId(resolvedRoleId);
-            setRole(resolvedRole);
         }
 
         const fetchRolePermissions = async (resolvedRoleId: RoleId, email: string | null) => {
@@ -113,7 +106,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // Verficamos si la db existe
                 if (!db) {
                     console.error("No se pudo obtener la instancia de base de datos");
-                    setRole("User");
                     setRoleId("user");
                     setPermissions([]);
                     return;
@@ -128,7 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
                     if (data) {
                         resolveUserRoleState(data);
-                        const resolvedRoleId = data.roleId ?? (data.role ? LEGACY_ROLE_TO_ROLE_ID[data.role as keyof typeof LEGACY_ROLE_TO_ROLE_ID] ?? "user" : "user");
+                        const resolvedRoleId = data.roleId ?? "user";
                         await fetchRolePermissions(resolvedRoleId, email);
 
                         if (typeof data.photoUrl === "string" && data.photoUrl.trim().length > 0) {
@@ -140,15 +132,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     }
                 } else {
                     // Usuario autenticado pero sin registro en esta BD
-                    // Asignar rol por defecto "User" para permitir acceso básico
-                    console.warn(`Usuario ${uid} no encontrado en la base de datos, asignando rol por defecto "User"`);
-                    setRole("User");
+                    // Asignar roleId por defecto para permitir acceso básico
+                    console.warn(`Usuario ${uid} no encontrado en la base de datos, asignando roleId por defecto "user"`);
                     setRoleId("user");
                     await fetchRolePermissions("user", email);
                 }
             } catch (error) {
                 console.error("Error al obtener el rol del usuario:", error);
-                setRole("User");
                 setRoleId("user");
                 setPermissions([]);
             }
@@ -163,7 +153,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (firebaseUser) {
                 fetchUserRole(firebaseUser.uid, firebaseUser.email); // Llama la función async sin await
             } else {
-                setRole(null);
                 setRoleId(null);
                 setPermissions([]);
             }
@@ -243,7 +232,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const contextValue: AuthContextType = {
         user,
         loading,
-        role,
         roleId,
         permissions,
         hasPermission: (permissionId: PermissionId) => permissions.includes(permissionId),

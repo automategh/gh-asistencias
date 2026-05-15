@@ -1,6 +1,5 @@
 import { getAllAvailableDatabases, type RecintoKey } from "@/lib/firebase/databaseResolver"
 import { getDatabaseForUrl } from "@/services/firebase"
-import type { AppRole } from "@/types/permissions"
 import type {
   AuthorizationCatalogSnapshot,
   ManageableRoleDefinition,
@@ -31,12 +30,6 @@ interface AuthorizationSeedResult {
   readonly rolesSeeded: number
 }
 
-interface LegacyRoleMigrationResult {
-  readonly recinto: RecintoKey
-  readonly databaseUrl: string
-  readonly usersMigrated: number
-}
-
 export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { id: "dashboard_view", label: "Ver dashboard", description: "Permite acceder al dashboard principal.", category: "dashboard", system: true, active: true },
   { id: "profile_edit_self", label: "Editar perfil propio", description: "Permite editar el propio perfil.", category: "profile", system: true, active: true },
@@ -61,14 +54,6 @@ export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { id: "roles_view", label: "Ver roles", description: "Permite consultar el catalogo de roles.", category: "roles", system: true, active: true },
   { id: "roles_manage", label: "Administrar roles", description: "Permite crear, editar y eliminar roles.", category: "roles", system: true, active: true },
 ] as const
-
-export const LEGACY_ROLE_TO_ROLE_ID: Readonly<Record<AppRole, RoleId>> = {
-  Admin: "admin",
-  HR: "hr",
-  Lider: "lider",
-  Instructor: "instructor",
-  User: "user",
-}
 
 const buildPermissionMap = (permissions: readonly PermissionId[]) => {
   return permissions.reduce<Partial<Record<PermissionId, boolean>>>((accumulator, permissionId) => {
@@ -260,11 +245,6 @@ const hasAssignedUsersInDatabase = async (database: Database, roleId: RoleId): P
   }
 
   return Object.values(users).some((user) => user.roleId === roleId)
-}
-
-export const getLegacyRoleFromRoleId = (roleId: RoleId): AppRole => {
-  const entry = Object.entries(LEGACY_ROLE_TO_ROLE_ID).find(([, value]) => value === roleId)
-  return (entry?.[0] ?? "User") as AppRole
 }
 
 export const isGlobalRole = (role: Pick<RoleDefinition, "id" | "scope" | "system">): boolean => {
@@ -469,52 +449,6 @@ export async function deleteRole(database: Database, roleId: RoleId): Promise<vo
 export async function assignRoleIdToUser(database: Database, userId: string, assignment: UserAuthorizationAssignment): Promise<void> {
   await update(ref(database), {
     [`users/${userId}/roleId`]: assignment.roleId,
-    [`users/${userId}/role`]: assignment.legacyRole,
+    [`users/${userId}/role`]: null,
   })
-}
-
-export async function migrateLegacyRolesToRoleIds(database: Database): Promise<number> {
-  const snapshot = await get(ref(database, "users"))
-  const users = snapshot.val() as Record<string, { role?: string | null; roleId?: string | null }> | null
-
-  if (!users) {
-    return 0
-  }
-
-  const updates: Record<string, string> = {}
-
-  for (const [userId, user] of Object.entries(users)) {
-    if (typeof user.roleId === "string" && user.roleId.trim().length > 0) {
-      continue
-    }
-
-    const legacyRole = (user.role ?? "User") as AppRole
-    updates[`users/${userId}/roleId`] = LEGACY_ROLE_TO_ROLE_ID[legacyRole] ?? "user"
-  }
-
-  const updateEntries = Object.entries(updates)
-  if (updateEntries.length === 0) {
-    return 0
-  }
-
-  await update(ref(database), updates)
-  return updateEntries.length
-}
-
-export async function migrateLegacyRolesToRoleIdsAcrossDatabases(): Promise<LegacyRoleMigrationResult[]> {
-  const databases = getAllAvailableDatabases()
-  const results: LegacyRoleMigrationResult[] = []
-
-  for (const databaseInfo of databases) {
-    const database = ensureDatabase(getDatabaseForUrl(databaseInfo.url))
-    const usersMigrated = await migrateLegacyRolesToRoleIds(database)
-
-    results.push({
-      recinto: databaseInfo.key,
-      databaseUrl: databaseInfo.url,
-      usersMigrated,
-    })
-  }
-
-  return results
 }

@@ -4,7 +4,6 @@ import {
   deleteRole,
   ensureAuthorizationCatalogAcrossDatabases,
   getAuthorizationCatalog,
-  getLegacyRoleFromRoleId,
   isGlobalRole,
   listRolesAcrossDatabases,
   upsertRole,
@@ -419,8 +418,6 @@ export default function PermissionsPage() {
       await setUserLeaderInUserDatabase(user, false)
     }
 
-    const legacyRole = getLegacyRoleFromRoleId(selectedRole.id)
-
     setAllUsers((previousUsers) => previousUsers.map((currentUser) => {
       const isTargetUser = currentUser.uid === user.uid && currentUser.databaseUrl === user.databaseUrl
       if (!isTargetUser) {
@@ -430,7 +427,6 @@ export default function PermissionsPage() {
       return {
         ...currentUser,
         roleId: selectedRole.id,
-        role: legacyRole,
         isLeader: shouldEnableLeader ? true : shouldDisableLeader ? false : currentUser.isLeader,
       }
     }))

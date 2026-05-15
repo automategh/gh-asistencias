@@ -29,7 +29,7 @@ const PAGE_SIZE = 9
  * filtra `meetings` por `createdBy` para creadas.
  */
 function MeetsPage() {
-    const { user, roleId } = useAuth()
+    const { user, hasPermission } = useAuth()
     const { database, databaseUrl, availableDatabases } = useDatabase()
     const navigate = useNavigate()
 
@@ -40,7 +40,7 @@ function MeetsPage() {
     const [allMeetings, setAllMeetings] = useState<MeetingWithIndex[]>([])
     const [completing, setCompleting] = useState<Record<string, boolean>>({})
     const now = useMemo<number>(() => Date.now(), [])
-    const canViewAllTab = roleId === 'admin' || roleId === 'hr'
+    const canViewAllTab = hasPermission('meetings_manage_any')
 
     // Controles de filtros compartidos para ambas pestañas
     const [searchTerm, setSearchTerm] = useState<string>('')

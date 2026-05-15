@@ -1,11 +1,10 @@
 import { getAllAvailableDatabases, type RecintoKey } from "@/lib/firebase/databaseResolver"
-import { assignRoleIdToUser, getLegacyRoleFromRoleId, LEGACY_ROLE_TO_ROLE_ID } from "@/services/authorization/role-permissions.service"
+import { assignRoleIdToUser } from "@/services/authorization/role-permissions.service"
 import { getDatabaseForUrl } from "@/services/firebase"
 import { get, ref, update, type Database } from "firebase/database"
 
 import type { RoleDefinition } from "@/types/authorization"
 import type { CrossDbUserItem } from "@/types/user"
-import type { AppRole } from "@/types/permissions"
 
 /**
  * Lista todos los usuarios desde todas las bases de datos disponibles.
@@ -29,7 +28,7 @@ export async function listAllUsersAcrossDatabases(): Promise<CrossDbUserItem[]> 
       const name = String(u?.name ?? "").trim()
       const email = String(u?.email ?? "").trim()
       const role = (u?.role ?? null)
-      const roleId = u?.roleId ?? (role && role in LEGACY_ROLE_TO_ROLE_ID ? LEGACY_ROLE_TO_ROLE_ID[role as AppRole] : null)
+      const roleId = u?.roleId ?? null
       const isLeader = typeof u?.isLeader === "boolean" ? u.isLeader : null
       const active = (u?.active ?? null)
       const department = (u?.department ?? null)
@@ -62,15 +61,12 @@ export async function listAllUsersAcrossDatabases(): Promise<CrossDbUserItem[]> 
 
 /**
  * Asigna un rol del catalogo a un usuario en su base de datos de origen.
- *
- * Escribe `roleId` y mantiene `role` legado para compatibilidad temporal.
  */
 export async function assignRoleInUserDatabase(user: CrossDbUserItem, role: Pick<RoleDefinition, "id">): Promise<void> {
   const db = getDatabaseForUrl(user.databaseUrl)
   if (!db) throw new Error("No se pudo resolver la base de datos de destino")
   await assignRoleIdToUser(db, user.uid, {
     roleId: role.id,
-    legacyRole: getLegacyRoleFromRoleId(role.id),
   })
 }
 

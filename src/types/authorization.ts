@@ -1,4 +1,3 @@
-import type { AppRole } from "@/types/permissions"
 import type { RecintoKey } from "@/lib/firebase/databaseResolver"
 
 export type PermissionCategory =
@@ -90,5 +89,4 @@ export interface ManageableRoleDefinition extends RoleDefinition {
 
 export interface UserAuthorizationAssignment {
   readonly roleId: RoleId
-  readonly legacyRole: AppRole
 }
