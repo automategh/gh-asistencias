@@ -1,7 +1,7 @@
 import Layout from '@/components/layouts/layout'
 import { useAuth } from '@/context/AuthContext'
 import { useDatabase } from '@/context/DatabaseContext'
-import { BarChart3, Calendar, Users } from 'lucide-react'
+import { BarChart3, Calendar, Loader2, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { MeetingKind } from '@/types/meeting'
 import type { RecintoKey } from '@/lib/firebase/databaseResolver'
@@ -329,8 +329,13 @@ function DashboardPage() {
                     </section>
 
                     {isLoadingMetrics && (
-                        <div className="bg-white rounded-2xl p-6 text-sm text-[#5f6560] shadow-[0_20px_20px_rgba(25,28,28,0.04)]">
-                            Cargando métricas...
+                        <div
+                            className="bg-white rounded-2xl p-6 shadow-[0_20px_20px_rgba(25,28,28,0.04)] flex items-center justify-center"
+                            aria-live="polite"
+                            aria-busy="true"
+                        >
+                            <Loader2 className="h-6 w-6 animate-spin text-[#5f6560]" aria-hidden="true" />
+                            <span className="sr-only">Cargando métricas</span>
                         </div>
                     )}
                     {error && (
@@ -363,7 +368,7 @@ function DashboardPage() {
                                     </div>
                                     <p className="text-3xl font-extrabold text-[#191c1c]">{totalMeetings}</p>
                                     <p className="text-[10px] uppercase tracking-widest text-outline font-bold mt-1">Actividades</p>
-                                    <p className="text-xs text-[#5f6560] mt-3">Eventos programados en el mes filtrado.</p>
+                                    <p className="text-xs text-[#5f6560] mt-3">Actividades programados en el mes filtrado.</p>
                                 </div>
                                 <div className="bg-white p-6 rounded-xl shadow-[0_20px_20px_rgba(25,28,28,0.02)] border border-[#e1e3e2]/20 group hover:border-emerald-900/30 transition-all">
                                     <div className="flex justify-between items-start mb-4">
@@ -409,7 +414,7 @@ function DashboardPage() {
                                     <div>
                                         <h2 className="text-xl font-bold text-emerald-950 flex items-center gap-2">
                                             <BarChart3 className="w-5 h-5" />
-                                            Detalle por tipo de evento
+                                            Detalle por tipo de actividad
                                         </h2>
                                         <p className="text-xs text-outline font-medium mt-1">Distribución de citados y asistencias por categoría.</p>
                                     </div>
