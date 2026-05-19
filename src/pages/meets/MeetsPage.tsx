@@ -5,7 +5,7 @@ import { useDatabase } from '@/context/DatabaseContext'
 import type { Meeting, MeetingKind, MeetingStatus } from '@/types/meeting'
 import { Calendar, ChevronDown, Search, ShieldCheckIcon, TagIcon } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 // (sin acceso directo a firebase aquí; se maneja en el servicio)
 import { completeMeeting } from '@/services/meetings.service'
 import {
@@ -50,6 +50,13 @@ function parseDateInputAsLocalDate(dateValue: string): Date | null {
     return new Date(year, month - 1, day)
 }
 
+function formatDateInputValue(date: Date): string {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+}
+
 /**
  * Vista de reuniones: participación y creadas por el usuario.
  * Obtiene índices de `userMeetings/{uid}` para participación y
@@ -57,7 +64,7 @@ function parseDateInputAsLocalDate(dateValue: string): Date | null {
  */
 function MeetsPage() {
     const { user, hasPermission } = useAuth()
-    const { database, databaseUrl, availableDatabases } = useDatabase()
+    const { database, databaseUrl, availableDatabases, recinto } = useDatabase()
     const navigate = useNavigate()
     const canViewAllTab = hasPermission('meetings_manage_any')
 
@@ -81,6 +88,9 @@ function MeetsPage() {
     const [invitedPage, setInvitedPage] = useState<number>(1)
     const [createdPage, setCreatedPage] = useState<number>(1)
     const [allPage, setAllPage] = useState<number>(1)
+    const previousDateFilterBeforeAllRef = useRef<{ from: string; to: string } | null>(null)
+    const currentDateFilterRef = useRef<{ from: string; to: string }>({ from: '', to: '' })
+    const allTabDateFilterToken = activeTab === 'all' ? `${dateFrom}|${dateTo}` : ''
 
     const buildMeetingPath = (basePath: '/meeting' | '/checkin', meeting: MeetingWithIndex): string => {
         if (!meeting.source?.url) {
@@ -120,20 +130,58 @@ function MeetsPage() {
                     return
                 }
 
-                const LOOKBACK_MS = 12 * 60 * 60 * 1000
+                const DEFAULT_LOOKBACK_MS = 12 * 60 * 60 * 1000
+                let queryNow = now
+                let queryLookbackMs = DEFAULT_LOOKBACK_MS
+
+                if (canViewAllTab && activeTab === 'all') {
+                    const currentDate = new Date()
+                    const allTabDateFrom = currentDateFilterRef.current.from
+                    const allTabDateTo = currentDateFilterRef.current.to
+                    const parsedFromDate = allTabDateFrom ? parseDateInputAsLocalDate(allTabDateFrom) : null
+                    const parsedToDate = allTabDateTo ? parseDateInputAsLocalDate(allTabDateTo) : null
+
+                    const fallbackFromDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+                    const fromDate = parsedFromDate ?? fallbackFromDate
+                    const toDate = parsedToDate ?? currentDate
+
+                    const fromTimestamp = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate()).getTime()
+                    const toTimestamp = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23, 59, 59, 999).getTime()
+
+                    if (toTimestamp >= fromTimestamp) {
+                        queryNow = Math.max(now, toTimestamp)
+                        queryLookbackMs = Math.max(DEFAULT_LOOKBACK_MS, queryNow - fromTimestamp)
+                    }
+                }
 
                 let invited: MeetingWithIndex[] = []
                 let createdList: MeetingWithIndex[] | Meeting[] = []
                 let allList: MeetingWithIndex[] = []
-                const queryMode: MeetingsQueryMode = canViewAllTab ? 'all' : 'self'
+                const queryMode: MeetingsQueryMode = canViewAllTab && activeTab === 'all' ? 'all' : 'self'
 
                 if (availableDatabases.length > 0) {
-                    const recintoDescriptors = availableDatabases.map((d) => ({ url: d.url, key: d.key }))
+                    const selectedDescriptor = databaseUrl
+                        ? availableDatabases.find((databaseItem) => databaseItem.url === databaseUrl)
+                        : null
+                    const selectedRecintoDescriptor = selectedDescriptor
+                        ? [{ url: selectedDescriptor.url, key: selectedDescriptor.key }]
+                        : (databaseUrl ? [{ url: databaseUrl, key: recinto }] : [])
+                    const recintoDescriptors = queryMode === 'all'
+                        ? selectedRecintoDescriptor
+                        : availableDatabases.map((databaseItem) => ({ url: databaseItem.url, key: databaseItem.key }))
+
+                    if (recintoDescriptors.length === 0) {
+                        setInvitedRaw([])
+                        setCreated([])
+                        setAllRaw([])
+                        return
+                    }
+
                     try {
                         const cloudResult = await getUserMeetingsFromCloudFunction(
                             recintoDescriptors,
-                            now,
-                            LOOKBACK_MS,
+                            queryNow,
+                            queryLookbackMs,
                             ALL_MEETING_STATUSES,
                             queryMode,
                         )
@@ -147,8 +195,8 @@ function MeetsPage() {
                             getUserInvitedMeetingsAcross(
                                 recintoDescriptors,
                                 user.uid,
-                                now,
-                                LOOKBACK_MS,
+                                queryNow,
+                                queryLookbackMs,
                                 ALL_MEETING_STATUSES,
                             ),
                             getUserCreatedMeetingsAcross(
@@ -158,8 +206,8 @@ function MeetsPage() {
                             canViewAllTab
                                 ? getAllMeetingsAcross(
                                     recintoDescriptors,
-                                    now,
-                                    LOOKBACK_MS,
+                                    queryNow,
+                                    queryLookbackMs,
                                     ALL_MEETING_STATUSES,
                                 )
                                 : Promise.resolve([]),
@@ -178,10 +226,10 @@ function MeetsPage() {
                     }
 
                     const [invitedSingle, createdSingle, allSingle] = await Promise.all([
-                        getUserInvitedMeetings(database, user.uid, now, LOOKBACK_MS, ALL_MEETING_STATUSES),
+                        getUserInvitedMeetings(database, user.uid, queryNow, queryLookbackMs, ALL_MEETING_STATUSES),
                         getUserCreatedMeetings(database, user.uid),
                         canViewAllTab
-                            ? getMeetingsByDateRange(database, now, LOOKBACK_MS, ALL_MEETING_STATUSES)
+                            ? getMeetingsByDateRange(database, queryNow, queryLookbackMs, ALL_MEETING_STATUSES)
                             : Promise.resolve([]),
                     ])
                     invited = invitedSingle
@@ -215,13 +263,45 @@ function MeetsPage() {
         // Ejecutar
         load().catch(() => setError('No fue posible cargar las actividades'))
         return () => { cancelled = true }
-    }, [database, databaseUrl, user?.uid, now, availableDatabases, canViewAllTab, getMeetingKey])
+    }, [database, databaseUrl, user?.uid, now, availableDatabases, canViewAllTab, getMeetingKey, activeTab, allTabDateFilterToken, recinto])
 
     useEffect(() => {
         if (!canViewAllTab && activeTab === 'all') {
             setActiveTab('invited')
         }
     }, [canViewAllTab, activeTab])
+
+    useEffect(() => {
+        currentDateFilterRef.current = {
+            from: dateFrom,
+            to: dateTo,
+        }
+    }, [dateFrom, dateTo])
+
+    useEffect(() => {
+        if (activeTab === 'all') {
+            if (previousDateFilterBeforeAllRef.current === null) {
+                previousDateFilterBeforeAllRef.current = {
+                    from: currentDateFilterRef.current.from,
+                    to: currentDateFilterRef.current.to,
+                }
+            }
+
+            const currentDate = new Date()
+            const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+            const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
+
+            setDateFrom(formatDateInputValue(startOfMonth))
+            setDateTo(formatDateInputValue(endOfMonth))
+            return
+        }
+
+        if (previousDateFilterBeforeAllRef.current) {
+            setDateFrom(previousDateFilterBeforeAllRef.current.from)
+            setDateTo(previousDateFilterBeforeAllRef.current.to)
+            previousDateFilterBeforeAllRef.current = null
+        }
+    }, [activeTab])
 
     // Reiniciar paginación cuando cambian filtros o datos base
     useEffect(() => {
