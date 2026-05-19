@@ -3,7 +3,7 @@ import MeetingCard from '@/components/meet/meeting-card'
 import { useAuth } from '@/context/AuthContext'
 import { useDatabase } from '@/context/DatabaseContext'
 import type { Meeting, MeetingKind, MeetingStatus } from '@/types/meeting'
-import { Calendar, ChevronDown, Search, ShieldCheckIcon, TagIcon } from 'lucide-react'
+import { Calendar, ChevronDown, Loader2, Search, ShieldCheckIcon, TagIcon } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 // (sin acceso directo a firebase aquí; se maneja en el servicio)
@@ -643,7 +643,10 @@ function MeetsPage() {
                     </div>
 
                     {loading && (
-                        <div className="p-3 text-sm text-muted-foreground">Cargando…</div>
+                        <div className="p-3 flex items-center justify-center" aria-live="polite" aria-busy="true">
+                            <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" aria-hidden="true" />
+                            <span className="sr-only">Cargando actividades</span>
+                        </div>
                     )}
                     {error && (
                         <div className="p-3 text-sm text-red-600 border border-red-300 rounded">{error}</div>
