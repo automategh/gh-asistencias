@@ -15,6 +15,7 @@ export interface FoundDb {
 interface DiscoverableUserProfile {
     readonly identify?: string | null
     readonly department?: string | null
+    readonly immediateBoss?: string | null
     readonly cargo?: string | null
 }
 
@@ -26,6 +27,7 @@ function isProfileComplete(profile: DiscoverableUserProfile | null): boolean {
     return [
         profile.identify,
         profile.department,
+        profile.immediateBoss,
         profile.cargo,
     ].every((value) => typeof value === 'string' && value.trim().length > 0)
 }

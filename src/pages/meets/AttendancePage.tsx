@@ -8,10 +8,8 @@ import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas-pro'
 import type { MeetingParticipant, Meeting } from '@/types/meeting'
 import type { UserProfile } from '@/types/user'
-import { getMeetingById, mirrorParticipantCheckIn, updateParticipantStatus } from '@/services/meetings.service'
+import { getMeetingById, updateParticipantStatus } from '@/services/meetings.service'
 import { ArrowLeft } from 'lucide-react'
-import { getDatabaseForUrl } from '@/services/firebase'
-import { findUserDatabaseByUid } from '@/services/user.discovery.service'
 
 /**
  * Fila de asistencia enriquecida para la vista/impresión.
@@ -75,7 +73,7 @@ function loadImageAsDataUrl(url: string): Promise<string> {
  */
 function AttendancePage() {
     const { id } = useParams<{ id: string }>()
-    const { database, databaseUrl, availableDatabases } = useDatabase()
+    const { database } = useDatabase()
     const navigate = useNavigate()
 
     const [meeting, setMeeting] = useState<Meeting | null>(null)
@@ -257,24 +255,6 @@ function AttendancePage() {
 
         try {
             await updateParticipantStatus(database, id, row.uid, { noShow: checked })
-
-            const candidates = availableDatabases.map((dbItem) => ({
-                url: dbItem.url,
-                key: dbItem.key,
-            }))
-            const userDatabase = await findUserDatabaseByUid(candidates, row.uid)
-
-            if (userDatabase && userDatabase.url !== databaseUrl && meeting) {
-                const attendeeDatabase = getDatabaseForUrl(userDatabase.url)
-                if (attendeeDatabase) {
-                    await mirrorParticipantCheckIn(attendeeDatabase, meeting, row, {
-                        attendance: row.attendance,
-                        checkedInAt: row.checkedInAt,
-                        checkinMethod: row.checkinMethod,
-                    })
-                    await updateParticipantStatus(attendeeDatabase, id, row.uid, { noShow: checked })
-                }
-            }
         } catch (updateError) {
             console.error('No fue posible actualizar la marca de asistencia manual:', updateError)
             // Revertir en caso de error para mantener consistencia visual

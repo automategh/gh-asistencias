@@ -5,6 +5,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import PDFDocument from "pdfkit";
 import { Graph, type CreateTeamsMeetingOptions, type GraphEvent, type MeetingAttendee } from "./graph";
+export { getAttendanceSummary } from "./attendance-summary";
+export { getUserMeetings } from "./user-meetings";
 
 if (!admin.apps.length) {
 	admin.initializeApp();

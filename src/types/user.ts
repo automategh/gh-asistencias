@@ -5,6 +5,7 @@
  * - `uid`: identificador único del usuario en Firebase Auth.
  * - `email`: correo electrónico del usuario.
  * - `name`: nombre completo del usuario.
+ * - `role`: rol del usuario (p. ej. "User").
  * - `roleId`: identificador canonico del rol persistido en el nuevo modelo.
  * - `isLeader`: bandera explícita para determinar si puede actuar como líder.
  * - `active`: indica si la cuenta está activa.
@@ -20,7 +21,7 @@ export interface UserProfile {
   readonly uid: string
   readonly email: string
   readonly name: string
-  readonly role?: string | null
+  readonly role: string
   readonly roleId?: string | null
   readonly isLeader?: boolean | null
   readonly active: boolean

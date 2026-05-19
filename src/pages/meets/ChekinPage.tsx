@@ -1,6 +1,6 @@
 import Layout from "@/components/layouts/layout"
 import { useDatabase } from "@/context/DatabaseContext"
-import { getMeetingById, mirrorParticipantCheckIn, updateParticipantStatus } from "@/services/meetings.service"
+import { getMeetingById, updateParticipantStatus } from "@/services/meetings.service"
 import { getDatabaseForUrl } from "@/services/firebase"
 import type { Meeting, MeetingParticipant } from "@/types/meeting"
 import { AlertCircle, ArrowLeft, CheckCircle } from "lucide-react"
@@ -8,7 +8,6 @@ import { get, ref } from "firebase/database"
 import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useAuth } from "@/context/AuthContext"
-import { findUserDatabaseByUid } from "@/services/user.discovery.service"
 
 type methodType = "qr" | "manual"
 
@@ -18,7 +17,7 @@ function ChekinPage() {
     const method = searchParams.get('method') as methodType | null
     const sourceDatabaseUrl = searchParams.get('db')
 
-    const { database: activeDatabase, databaseUrl, availableDatabases } = useDatabase()
+    const { database } = useDatabase()
     const { user } = useAuth()
     const navigate = useNavigate()
     const [meeting, setMeeting] = useState<Meeting | null>(null)
@@ -35,8 +34,8 @@ function ChekinPage() {
             }
         }
 
-        return activeDatabase
-    }, [activeDatabase, sourceDatabaseUrl])
+        return database
+    }, [database, sourceDatabaseUrl])
 
     useEffect(() => {
         let cancelled = false
@@ -99,8 +98,7 @@ function ChekinPage() {
     }
 
     async function handleCheckIn(): Promise<void> {
-        if (!meetingDatabase || !id || !user || !meeting || !participant) return
-        const activeParticipant = participant
+        if (!meetingDatabase || !id || !user || !meeting) return
         if (!canCheckIn) {
             setError('No cumples las condiciones para registrar asistencia')
             return
@@ -109,28 +107,11 @@ function ChekinPage() {
             setError(null)
             const now = Date.now()
             const attendance = computeAttendanceStatus(meeting, now)
-            const checkInChanges = {
+            await updateParticipantStatus(meetingDatabase, id, user.uid, {
                 attendance,
                 checkedInAt: now,
                 checkinMethod: method ?? 'manual',
-            } as const
-
-            await updateParticipantStatus(meetingDatabase, id, user.uid, checkInChanges)
-
-            const candidates = availableDatabases.map((dbItem) => ({
-                url: dbItem.url,
-                key: dbItem.key,
-            }))
-            const userDatabase = await findUserDatabaseByUid(candidates, user.uid)
-            const activityDatabaseUrl = sourceDatabaseUrl ?? databaseUrl
-
-            if (userDatabase && userDatabase.url !== activityDatabaseUrl) {
-                const attendeeDatabase = getDatabaseForUrl(userDatabase.url)
-                if (attendeeDatabase) {
-                    await mirrorParticipantCheckIn(attendeeDatabase, meeting, activeParticipant, checkInChanges)
-                }
-            }
-
+            })
             setCheckedIn(true)
             // Redirigir luego de exito
             setTimeout(() => {

@@ -1,9 +1,10 @@
 
 import { get, query, ref, orderByChild, startAt, endAt, type Database } from "firebase/database"
+import { httpsCallable } from "firebase/functions"
 import type { Meeting, MeetingKind, MeetingParticipant } from "@/types/meeting"
 import type { UserProfile } from "@/types/user"
 import type { RecintoKey } from "@/lib/firebase/databaseResolver"
-import { getDatabaseForUrl } from "@/services/firebase"
+import { functions, getDatabaseForUrl } from "@/services/firebase"
 
 /**
  * Estadísticas de asistencia agregadas por tipo de reunión.
@@ -71,6 +72,18 @@ export interface AttendanceQueryOptions {
   type?: MeetingKind | "ALL"
 }
 
+interface AttendanceSummaryFunctionRequest {
+  readonly startTime: number
+  readonly endTime: number
+  readonly type: MeetingKind | "ALL"
+  readonly databaseUrls: readonly string[]
+}
+
+interface AttendanceSummaryFunctionResponse {
+  readonly summary: AttendanceSummary
+  readonly omittedDatabases: readonly string[]
+}
+
 function getPeriodRangeForYearAndMonth(year: number, month?: number | null): { startTime: number; endTime: number } {
   if (typeof month === "number" && month >= 1 && month <= 12) {
     const startTime = new Date(year, month - 1, 1, 0, 0, 0, 0).getTime()
@@ -112,6 +125,108 @@ function createEmptySummary(): AttendanceSummary {
       custom: createEmptyKindStats(),
     },
   }
+}
+
+/**
+ * Obtiene métricas de asistencia desde Cloud Functions para descargar
+ * cómputo del cliente y respetar reglas por contexto autenticado.
+ */
+export async function getAttendanceSummaryFromCloudFunction(
+  databaseUrls: ReadonlyArray<string>,
+  options: AttendanceQueryOptions,
+): Promise<AttendanceSummary> {
+  if (!functions) {
+    throw new Error("Cloud Functions no está disponible")
+  }
+
+  const normalizedUrls = Array.from(
+    new Set(
+      databaseUrls
+        .map((databaseUrl) => databaseUrl.trim())
+        .filter((databaseUrl) => databaseUrl.length > 0),
+    ),
+  )
+
+  if (normalizedUrls.length === 0) {
+    return createEmptySummary()
+  }
+
+  const callable = httpsCallable<AttendanceSummaryFunctionRequest, AttendanceSummaryFunctionResponse>(
+    functions,
+    "getAttendanceSummary",
+  )
+
+  const response = await callable({
+    startTime: options.startTime,
+    endTime: options.endTime,
+    type: options.type ?? "ALL",
+    databaseUrls: normalizedUrls,
+  })
+
+  const omittedCount = response.data.omittedDatabases.length
+  if (omittedCount > 0) {
+    console.warn(`Se omitieron ${omittedCount} recinto(s) al calcular métricas desde Cloud Functions.`)
+  }
+
+  return response.data.summary
+}
+
+const PARTICIPANTS_BATCH_SIZE = 25
+const DATABASE_SUMMARY_TIMEOUT_MS = 20000
+
+/**
+ * Carga participantes por reunión en lotes paralelos para reducir
+ * latencia cuando hay muchas actividades en el periodo.
+ */
+async function loadParticipantsByMeetingId(
+  database: Database,
+  meetingIds: ReadonlyArray<string>,
+): Promise<Record<string, MeetingParticipant[]>> {
+  const participantsByMeeting: Record<string, MeetingParticipant[]> = {}
+
+  for (let index = 0; index < meetingIds.length; index += PARTICIPANTS_BATCH_SIZE) {
+    const batchIds = meetingIds.slice(index, index + PARTICIPANTS_BATCH_SIZE)
+
+    const batchEntries = await Promise.all(
+      batchIds.map(async (meetingId) => {
+        const participantsSnap = await get(ref(database, `meetingParticipants/${meetingId}`))
+        const participantsValue = participantsSnap.val() as Record<string, MeetingParticipant> | null
+        const participants = participantsValue ? Object.values(participantsValue) : []
+        return [meetingId, participants] as const
+      }),
+    )
+
+    for (const [meetingId, participants] of batchEntries) {
+      participantsByMeeting[meetingId] = participants
+    }
+  }
+
+  return participantsByMeeting
+}
+
+/**
+ * Envuelve una promesa con timeout para evitar que una BD lenta
+ * bloquee todo el agregado multi-recinto.
+ */
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  return await new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`Tiempo de espera agotado (${timeoutMs} ms)`))
+    }, timeoutMs)
+
+    promise
+      .then((value) => {
+        clearTimeout(timer)
+        resolve(value)
+      })
+      .catch((error: unknown) => {
+        clearTimeout(timer)
+        reject(error)
+      })
+  })
 }
 
 /**
@@ -208,10 +323,17 @@ export async function getAttendanceSummaryForDatabase(
     return true
   })
 
+  if (meetings.length === 0) {
+    return summary
+  }
+
+  const participantsByMeetingId = await loadParticipantsByMeetingId(
+    database,
+    meetings.map((meeting) => meeting.id),
+  )
+
   for (const meeting of meetings) {
-    const participantsSnap = await get(ref(database, `meetingParticipants/${meeting.id}`))
-    const participantsValue = participantsSnap.val() as Record<string, MeetingParticipant> | null
-    const participants: MeetingParticipant[] = participantsValue ? Object.values(participantsValue) : []
+    const participants = participantsByMeetingId[meeting.id] ?? []
     accumulateMeeting(summary, meeting, participants)
   }
 
@@ -233,15 +355,27 @@ export async function getAttendanceSummaryAcrossDatabases(
     return createEmptySummary()
   }
 
-  const summaries = await Promise.all(
+  const summaryResults = await Promise.allSettled(
     recintos.map(async (recinto) => {
       const db = getDatabaseForUrl(recinto.url)
       if (!db) {
         return createEmptySummary()
       }
-      return getAttendanceSummaryForDatabase(db, options)
+      return await withTimeout(
+        getAttendanceSummaryForDatabase(db, options),
+        DATABASE_SUMMARY_TIMEOUT_MS,
+      )
     }),
   )
+
+  const summaries = summaryResults
+    .filter((result): result is PromiseFulfilledResult<AttendanceSummary> => result.status === "fulfilled")
+    .map((result) => result.value)
+
+  const failedCount = summaryResults.length - summaries.length
+  if (failedCount > 0) {
+    console.warn(`Se omitieron ${failedCount} recinto(s) por timeout o error al calcular métricas.`)
+  }
 
   const merged = createEmptySummary()
 

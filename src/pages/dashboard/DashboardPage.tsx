@@ -6,8 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { MeetingKind } from '@/types/meeting'
 import type { RecintoKey } from '@/lib/firebase/databaseResolver'
 import {
-    getAttendanceSummaryAcrossDatabases,
-    getAttendanceSummaryForDatabase,
+    getAttendanceSummaryFromCloudFunction,
     getEmptyAttendanceSummary,
     type AttendanceSummary,
 } from '@/services/meetings.analytics.service'
@@ -52,7 +51,7 @@ const MONTH_LABELS = [
  */
 function DashboardPage() {
     const { logout, user } = useAuth()
-    const { database, availableDatabases, recinto, loading: dbLoading } = useDatabase()
+    const { databaseUrl, availableDatabases, recinto, loading: dbLoading } = useDatabase()
     const emptySummary = useMemo(() => getEmptyAttendanceSummary(), [])
 
     const now = useMemo(() => new Date(), [])
@@ -109,23 +108,24 @@ function DashboardPage() {
                 let result: AttendanceSummary
 
                 if (canFilterRecintos) {
+                    const nonCorporateDatabases = availableDatabases.filter((db) => db.key !== 'corporativo')
                     const recintosToUse = recintoFilter === 'ALL'
-                        ? availableDatabases
+                        ? (nonCorporateDatabases.length > 0 ? nonCorporateDatabases : availableDatabases)
                         : availableDatabases.filter((db) => db.key === recintoFilter)
 
                     if (recintosToUse.length === 0) {
                         result = getEmptyAttendanceSummary()
                     } else {
-                        result = await getAttendanceSummaryAcrossDatabases(
-                            recintosToUse.map((db) => ({ url: db.url, key: db.key })),
+                        result = await getAttendanceSummaryFromCloudFunction(
+                            recintosToUse.map((db) => db.url),
                             options,
                         )
                     }
                 } else {
-                    if (!database) {
+                    if (!databaseUrl) {
                         result = getEmptyAttendanceSummary()
                     } else {
-                        result = await getAttendanceSummaryForDatabase(database, options)
+                        result = await getAttendanceSummaryFromCloudFunction([databaseUrl], options)
                     }
                 }
 
@@ -157,7 +157,7 @@ function DashboardPage() {
         }
     }, [
         dbLoading,
-        database,
+        databaseUrl,
         availableDatabases,
         canFilterRecintos,
         recintoFilter,

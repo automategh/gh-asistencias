@@ -1,8 +1,9 @@
 import type { Database } from 'firebase/database'
-import { get, query, ref, orderByChild, limitToFirst, equalTo } from 'firebase/database'
+import { get, query, ref, orderByChild, limitToFirst, equalTo, startAt } from 'firebase/database'
+import { httpsCallable } from 'firebase/functions'
 import type { Meeting, MeetingStatus } from '@/types/meeting'
 import type { RecintoKey } from '@/lib/firebase/databaseResolver'
-import { getDatabaseForUrl } from '@/services/firebase'
+import { functions, getDatabaseForUrl } from '@/services/firebase'
 
 export interface UserMeetingIndex {
   readonly meetingId: string
@@ -18,7 +19,71 @@ export interface MeetingWithIndex extends Meeting {
   readonly source?: { url: string; recinto: RecintoKey } | null
 }
 
+interface UserMeetingsFunctionRequest {
+  readonly now: number
+  readonly lookbackMs: number
+  readonly statuses: readonly MeetingStatus[]
+  readonly recintos: Array<{ url: string; key: RecintoKey }>
+}
+
+interface UserMeetingsFunctionResponse {
+  readonly invited: readonly MeetingWithIndex[]
+  readonly created: readonly MeetingWithIndex[]
+  readonly omittedRecintos: readonly string[]
+}
+
 const DEFAULT_LIMIT = 0 // 0 = sin límite
+
+/**
+ * Carga reuniones del usuario vía Cloud Functions para mover el fan-out
+ * multi-recinto al backend y reducir latencia en cliente.
+ */
+export async function getUserMeetingsFromCloudFunction(
+  recintos: Array<{ url: string; key: RecintoKey }>,
+  now: number,
+  lookbackMs: number,
+  statuses: ReadonlyArray<MeetingStatus> = ['scheduled']
+): Promise<{ invited: MeetingWithIndex[]; created: MeetingWithIndex[]; omittedRecintos: string[] }> {
+  if (!functions) {
+    throw new Error('Cloud Functions no está disponible')
+  }
+
+  const normalizedRecintos = Array.from(
+    new Map(
+      recintos
+        .map((recinto) => ({ url: recinto.url.trim(), key: recinto.key }))
+        .filter((recinto) => recinto.url.length > 0)
+        .map((recinto) => [recinto.url, recinto]),
+    ).values(),
+  )
+
+  if (normalizedRecintos.length === 0) {
+    return { invited: [], created: [], omittedRecintos: [] }
+  }
+
+  const callable = httpsCallable<UserMeetingsFunctionRequest, UserMeetingsFunctionResponse>(
+    functions,
+    'getUserMeetings',
+  )
+
+  const response = await callable({
+    now,
+    lookbackMs,
+    statuses: [...statuses],
+    recintos: normalizedRecintos,
+  })
+
+  const omittedRecintos = [...response.data.omittedRecintos]
+  if (omittedRecintos.length > 0) {
+    console.warn(`Se omitieron ${omittedRecintos.length} recinto(s) al cargar actividades desde Cloud Functions.`)
+  }
+
+  return {
+    invited: [...response.data.invited],
+    created: [...response.data.created],
+    omittedRecintos,
+  }
+}
 
 /**
  * Obtiene índices de userMeetings y resuelve reuniones para una base.
@@ -26,14 +91,15 @@ const DEFAULT_LIMIT = 0 // 0 = sin límite
 export async function getUserInvitedMeetings(
   database: Database,
   uid: string,
-  _now: number,
-  _lookbackMs: number,
+  now: number,
+  lookbackMs: number,
   statuses: ReadonlyArray<MeetingStatus> = ['scheduled']
 ): Promise<MeetingWithIndex[]> {
-  // Traer TODOS los índices y ordenar por startTime sin filtrar por tiempo.
+  // Traer índices recientes/futuros para evitar cargar historial completo.
   // Si DEFAULT_LIMIT > 0, aplica límite; de lo contrario no limita.
   const baseRef = ref(database, `userMeetings/${uid}`)
-  const constraints: Parameters<typeof query>[1][] = [orderByChild('startTime')]
+  const minStartTime = Math.max(0, now - lookbackMs)
+  const constraints: Parameters<typeof query>[1][] = [orderByChild('startTime'), startAt(minStartTime)]
   if (DEFAULT_LIMIT > 0) {
     constraints.push(limitToFirst(DEFAULT_LIMIT))
   }
@@ -67,17 +133,6 @@ export async function getUserCreatedMeetings(
   const snap = await get(
     query(ref(database, 'meetings'), orderByChild('createdBy'), equalTo(uid))
   )
-  const val = snap.val() as Record<string, Meeting> | null
-  return val ? Object.values(val) : []
-}
-
-/**
- * Obtiene todas las actividades de una base de datos.
- */
-export async function getAllMeetings(
-  database: Database
-): Promise<Meeting[]> {
-  const snap = await get(ref(database, 'meetings'))
   const val = snap.val() as Record<string, Meeting> | null
   return val ? Object.values(val) : []
 }
@@ -119,4 +174,3 @@ export async function getUserCreatedMeetingsAcross(
   const parts = await Promise.all(tasks)
   return parts.flat()
 }
-
