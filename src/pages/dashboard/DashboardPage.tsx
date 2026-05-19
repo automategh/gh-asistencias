@@ -51,14 +51,14 @@ const MONTH_LABELS = [
  */
 function DashboardPage() {
     const { logout, user } = useAuth()
-    const { databaseUrl, availableDatabases, recinto, loading: dbLoading } = useDatabase()
+    const { databaseUrl, availableDatabases, recinto, loading: dbLoading, isCorporateUser } = useDatabase()
     const emptySummary = useMemo(() => getEmptyAttendanceSummary(), [])
 
     const now = useMemo(() => new Date(), [])
     const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear())
     const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1)
     const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL')
-    const [recintoFilter, setRecintoFilter] = useState<RecintoFilter>('ALL')
+    const [recintoFilter, setRecintoFilter] = useState<RecintoFilter>(recinto)
 
     const [summary, setSummary] = useState<AttendanceSummary>(emptySummary)
     const [loading, setLoading] = useState<boolean>(false)
@@ -68,7 +68,7 @@ function DashboardPage() {
      * Indica si el usuario actual puede filtrar por recintos.
      * Solo es verdadero cuando el recinto resuelto es "corporativo".
      */
-    const canFilterRecintos = recinto === 'corporativo'
+    const canFilterRecintos = isCorporateUser
 
     /**
      * Años disponibles para el filtro del dashboard (año anterior, actual y siguiente).
@@ -108,9 +108,8 @@ function DashboardPage() {
                 let result: AttendanceSummary
 
                 if (canFilterRecintos) {
-                    const nonCorporateDatabases = availableDatabases.filter((db) => db.key !== 'corporativo')
                     const recintosToUse = recintoFilter === 'ALL'
-                        ? (nonCorporateDatabases.length > 0 ? nonCorporateDatabases : availableDatabases)
+                        ? availableDatabases
                         : availableDatabases.filter((db) => db.key === recintoFilter)
 
                     if (recintosToUse.length === 0) {
