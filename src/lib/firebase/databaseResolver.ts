@@ -96,13 +96,13 @@ export const getAllAvailableDatabases = (): Array<{ key: RecintoKey; name: strin
         databases.push({ key: "corporativo", name: "Corporativo", url: corporateUrl });
     }
     if (ccciUrl) {
-        databases.push({ key: "ccci", name: "CCCI - Cartagena", url: ccciUrl });
+        databases.push({ key: "ccci", name: "Centro de Convenciones Cartagena de Indias", url: ccciUrl });
     }
     if (cccrUrl) {
-        databases.push({ key: "cccr", name: "CCCR - Costa Rica", url: cccrUrl });
+        databases.push({ key: "cccr", name: "Centro de Convenciones Costa Rica", url: cccrUrl });
     }
     if (cevpUrl) {
-        databases.push({ key: "cevp", name: "CEVP - Valle del Pacífico", url: cevpUrl });
+        databases.push({ key: "cevp", name: "Centro de Eventos Valle del Pacífico", url: cevpUrl });
     }
 
     return databases;
