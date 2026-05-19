@@ -5,6 +5,8 @@ import type { Meeting, MeetingStatus } from '@/types/meeting'
 import type { RecintoKey } from '@/lib/firebase/databaseResolver'
 import { functions, getDatabaseForUrl } from '@/services/firebase'
 
+export type MeetingsQueryMode = 'self' | 'all'
+
 export interface UserMeetingIndex {
   readonly meetingId: string
   readonly startTime: number
@@ -24,11 +26,13 @@ interface UserMeetingsFunctionRequest {
   readonly lookbackMs: number
   readonly statuses: readonly MeetingStatus[]
   readonly recintos: Array<{ url: string; key: RecintoKey }>
+  readonly mode?: MeetingsQueryMode
 }
 
 interface UserMeetingsFunctionResponse {
   readonly invited: readonly MeetingWithIndex[]
   readonly created: readonly MeetingWithIndex[]
+  readonly all: readonly MeetingWithIndex[]
   readonly omittedRecintos: readonly string[]
 }
 
@@ -42,8 +46,9 @@ export async function getUserMeetingsFromCloudFunction(
   recintos: Array<{ url: string; key: RecintoKey }>,
   now: number,
   lookbackMs: number,
-  statuses: ReadonlyArray<MeetingStatus> = ['scheduled']
-): Promise<{ invited: MeetingWithIndex[]; created: MeetingWithIndex[]; omittedRecintos: string[] }> {
+  statuses: ReadonlyArray<MeetingStatus> = ['scheduled'],
+  mode: MeetingsQueryMode = 'self',
+): Promise<{ invited: MeetingWithIndex[]; created: MeetingWithIndex[]; all: MeetingWithIndex[]; omittedRecintos: string[] }> {
   if (!functions) {
     throw new Error('Cloud Functions no está disponible')
   }
@@ -58,7 +63,7 @@ export async function getUserMeetingsFromCloudFunction(
   )
 
   if (normalizedRecintos.length === 0) {
-    return { invited: [], created: [], omittedRecintos: [] }
+    return { invited: [], created: [], all: [], omittedRecintos: [] }
   }
 
   const callable = httpsCallable<UserMeetingsFunctionRequest, UserMeetingsFunctionResponse>(
@@ -71,6 +76,7 @@ export async function getUserMeetingsFromCloudFunction(
     lookbackMs,
     statuses: [...statuses],
     recintos: normalizedRecintos,
+    mode,
   })
 
   const omittedRecintos = [...response.data.omittedRecintos]
@@ -81,8 +87,30 @@ export async function getUserMeetingsFromCloudFunction(
   return {
     invited: [...response.data.invited],
     created: [...response.data.created],
+    all: [...response.data.all],
     omittedRecintos,
   }
+}
+
+/**
+ * Reuniones por rango de fecha/estado en una base.
+ */
+export async function getMeetingsByDateRange(
+  database: Database,
+  now: number,
+  lookbackMs: number,
+  statuses: ReadonlyArray<MeetingStatus> = ['scheduled']
+): Promise<MeetingWithIndex[]> {
+  const minStartTime = Math.max(0, now - lookbackMs)
+  const snap = await get(
+    query(ref(database, 'meetings'), orderByChild('startTime'), startAt(minStartTime))
+  )
+  const val = snap.val() as Record<string, Meeting> | null
+  if (!val) return []
+
+  return Object.values(val)
+    .filter((meeting) => statuses.includes(meeting.status))
+    .map<MeetingWithIndex>((meeting) => ({ ...meeting, index: null }))
 }
 
 /**
@@ -171,6 +199,32 @@ export async function getUserCreatedMeetingsAcross(
     const list = await getUserCreatedMeetings(db, uid)
     return list.map<MeetingWithIndex>((m) => ({ ...m, source: { url: r.url, recinto: r.key }, index: null }))
   })
+  const parts = await Promise.all(tasks)
+  return parts.flat()
+}
+
+/**
+ * Todas las reuniones a través de múltiples recintos.
+ */
+export async function getAllMeetingsAcross(
+  recintos: Array<{ url: string; key: RecintoKey }>,
+  now: number,
+  lookbackMs: number,
+  statuses: ReadonlyArray<MeetingStatus> = ['scheduled']
+): Promise<MeetingWithIndex[]> {
+  const tasks = recintos.map(async (recinto) => {
+    const database = getDatabaseForUrl(recinto.url)
+    if (!database) {
+      return [] as MeetingWithIndex[]
+    }
+
+    const meetings = await getMeetingsByDateRange(database, now, lookbackMs, statuses)
+    return meetings.map((meeting) => ({
+      ...meeting,
+      source: { url: recinto.url, recinto: recinto.key },
+    }))
+  })
+
   const parts = await Promise.all(tasks)
   return parts.flat()
 }

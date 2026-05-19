@@ -9,11 +9,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 // (sin acceso directo a firebase aquí; se maneja en el servicio)
 import { completeMeeting } from '@/services/meetings.service'
 import {
+    getAllMeetingsAcross,
+    getMeetingsByDateRange,
     getUserCreatedMeetings,
     getUserCreatedMeetingsAcross,
     getUserInvitedMeetings,
     getUserInvitedMeetingsAcross,
     getUserMeetingsFromCloudFunction,
+    type MeetingsQueryMode,
     type MeetingWithIndex,
 } from '@/services/meetings.listing.service'
 
@@ -53,14 +56,16 @@ function parseDateInputAsLocalDate(dateValue: string): Date | null {
  * filtra `meetings` por `createdBy` para creadas.
  */
 function MeetsPage() {
-    const { user } = useAuth()
+    const { user, hasPermission } = useAuth()
     const { database, databaseUrl, availableDatabases } = useDatabase()
     const navigate = useNavigate()
+    const canViewAllTab = hasPermission('meetings_manage_any')
 
     const [loading, setLoading] = useState<boolean>(true)
     const [error, setError] = useState<string | null>(null)
     const [invitedRaw, setInvitedRaw] = useState<MeetingWithIndex[]>([])
     const [created, setCreated] = useState<MeetingWithIndex[]>([])
+    const [allRaw, setAllRaw] = useState<MeetingWithIndex[]>([])
     const [completing, setCompleting] = useState<Record<string, boolean>>({})
     const now = useMemo<number>(() => Date.now(), [])
 
@@ -71,10 +76,11 @@ function MeetsPage() {
     const [dateFrom, setDateFrom] = useState<string>('')
     const [dateTo, setDateTo] = useState<string>('')
     const [isDateDropdownOpen, setIsDateDropdownOpen] = useState<boolean>(false)
-    const [activeTab, setActiveTab] = useState<'invited' | 'created'>('invited')
+    const [activeTab, setActiveTab] = useState<'invited' | 'created' | 'all'>('invited')
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
     const [invitedPage, setInvitedPage] = useState<number>(1)
     const [createdPage, setCreatedPage] = useState<number>(1)
+    const [allPage, setAllPage] = useState<number>(1)
 
     const buildMeetingPath = (basePath: '/meeting' | '/checkin', meeting: MeetingWithIndex): string => {
         if (!meeting.source?.url) {
@@ -110,6 +116,7 @@ function MeetsPage() {
                 if (!user?.uid) {
                     setInvitedRaw([])
                     setCreated([])
+                    setAllRaw([])
                     return
                 }
 
@@ -117,6 +124,8 @@ function MeetsPage() {
 
                 let invited: MeetingWithIndex[] = []
                 let createdList: MeetingWithIndex[] | Meeting[] = []
+                let allList: MeetingWithIndex[] = []
+                const queryMode: MeetingsQueryMode = canViewAllTab ? 'all' : 'self'
 
                 if (availableDatabases.length > 0) {
                     const recintoDescriptors = availableDatabases.map((d) => ({ url: d.url, key: d.key }))
@@ -126,13 +135,15 @@ function MeetsPage() {
                             now,
                             LOOKBACK_MS,
                             ALL_MEETING_STATUSES,
+                            queryMode,
                         )
                         invited = cloudResult.invited
                         createdList = cloudResult.created
+                        allList = cloudResult.all
                     } catch (cloudError) {
                         console.warn('Cloud Function getUserMeetings no disponible. Usando fallback local.', cloudError)
 
-                        const [invitedAcross, createdAcross] = await Promise.all([
+                        const [invitedAcross, createdAcross, allAcross] = await Promise.all([
                             getUserInvitedMeetingsAcross(
                                 recintoDescriptors,
                                 user.uid,
@@ -144,30 +155,55 @@ function MeetsPage() {
                                 recintoDescriptors,
                                 user.uid,
                             ),
+                            canViewAllTab
+                                ? getAllMeetingsAcross(
+                                    recintoDescriptors,
+                                    now,
+                                    LOOKBACK_MS,
+                                    ALL_MEETING_STATUSES,
+                                )
+                                : Promise.resolve([]),
                         ])
                         invited = invitedAcross
                         createdList = createdAcross
+                        allList = allAcross
                     }
                 } else {
                     // Fallback: una sola base (seleccionada)
                     if (!database) {
                         setInvitedRaw([])
                         setCreated([])
+                        setAllRaw([])
                         return
                     }
 
-                    const [invitedSingle, createdSingle] = await Promise.all([
+                    const [invitedSingle, createdSingle, allSingle] = await Promise.all([
                         getUserInvitedMeetings(database, user.uid, now, LOOKBACK_MS, ALL_MEETING_STATUSES),
                         getUserCreatedMeetings(database, user.uid),
+                        canViewAllTab
+                            ? getMeetingsByDateRange(database, now, LOOKBACK_MS, ALL_MEETING_STATUSES)
+                            : Promise.resolve([]),
                     ])
                     invited = invitedSingle
                     createdList = createdSingle
+                    allList = allSingle
+                }
+
+                const dedupeByMeetingKey = (meetings: MeetingWithIndex[]): MeetingWithIndex[] => {
+                    const uniqueByKey = new Map<string, MeetingWithIndex>()
+                    meetings.forEach((meeting) => {
+                        uniqueByKey.set(getMeetingKey(meeting), meeting)
+                    })
+                    return Array.from(uniqueByKey.values())
                 }
 
                 if (!cancelled) {
                     setInvitedRaw(invited)
                     setCreated(
                         [...createdList].sort((a, b) => a.startTime - b.startTime)
+                    )
+                    setAllRaw(
+                        dedupeByMeetingKey(allList).sort((a, b) => a.startTime - b.startTime)
                     )
                 }
             } catch (err) {
@@ -179,13 +215,20 @@ function MeetsPage() {
         // Ejecutar
         load().catch(() => setError('No fue posible cargar las actividades'))
         return () => { cancelled = true }
-    }, [database, databaseUrl, user?.uid, now, availableDatabases])
+    }, [database, databaseUrl, user?.uid, now, availableDatabases, canViewAllTab, getMeetingKey])
+
+    useEffect(() => {
+        if (!canViewAllTab && activeTab === 'all') {
+            setActiveTab('invited')
+        }
+    }, [canViewAllTab, activeTab])
 
     // Reiniciar paginación cuando cambian filtros o datos base
     useEffect(() => {
         setInvitedPage(1)
         setCreatedPage(1)
-    }, [searchTerm, statusFilter, meetingTypeFilter, dateFrom, dateTo, invitedRaw.length, created.length])
+        setAllPage(1)
+    }, [searchTerm, statusFilter, meetingTypeFilter, dateFrom, dateTo, invitedRaw.length, created.length, allRaw.length])
 
     /**
      * Aplica los filtros de fecha, estado y búsqueda sobre una lista de actividades.
@@ -257,6 +300,11 @@ function MeetsPage() {
         [created, applyFilters]
     )
 
+    const allVisible = useMemo<MeetingWithIndex[]>(
+        () => applyFilters(allRaw),
+        [allRaw, applyFilters]
+    )
+
     function formatDateTimeLabel(timestamp: number): string {
         const date = new Date(timestamp)
         const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -319,6 +367,7 @@ function MeetsPage() {
 
             setInvitedRaw((prev) => prev.map((currentMeeting) => (isSameMeeting(currentMeeting, meeting) ? { ...currentMeeting, status: updated.status } : currentMeeting)))
             setCreated((prev) => prev.map((currentMeeting) => (isSameMeeting(currentMeeting, meeting) ? { ...currentMeeting, status: updated.status } : currentMeeting)))
+            setAllRaw((prev) => prev.map((currentMeeting) => (isSameMeeting(currentMeeting, meeting) ? { ...currentMeeting, status: updated.status } : currentMeeting)))
         } catch (exception) {
             console.error('No fue posible completar la actividad:', exception)
         } finally {
@@ -407,6 +456,18 @@ function MeetsPage() {
                             >
                                 Creadas por mí
                             </button>
+                            {canViewAllTab && (
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab('all')}
+                                    className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'all'
+                                        ? 'border-primary text-primary'
+                                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                                        }`}
+                                >
+                                    Todas
+                                </button>
+                            )}
                         </div>
 
                         <div className='bg-[#f3f4f3] rounded-xl p-4 my-8 flex  items-center gap-4'>
@@ -812,6 +873,166 @@ function MeetsPage() {
                                                                 type="button"
                                                                 disabled={currentPage >= totalPages}
                                                                 onClick={() => setCreatedPage((prev) => Math.min(totalPages, prev + 1))}
+                                                                className={`px-3 py-1 rounded-lg border text-xs font-medium ${currentPage >= totalPages ? 'border-muted text-muted-foreground cursor-not-allowed' : 'border-border hover:bg-muted/60'}`}
+                                                            >
+                                                                Siguiente
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )
+                                    })()
+                                ) : (
+                                    EmptyState
+                                )}
+                            </section>
+                        )}
+
+                        {activeTab === 'all' && canViewAllTab && (
+                            <section>
+                                <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+                                    <h2 className="text-xl font-bold text-foreground">Todas las actividades</h2>
+                                </div>
+                                {allVisible.length > 0 ? (
+                                    (() => {
+                                        const totalPages = Math.ceil(allVisible.length / PAGE_SIZE)
+                                        const currentPage = Math.min(allPage, totalPages || 1)
+                                        const startIndex = (currentPage - 1) * PAGE_SIZE
+                                        const pageItems = allVisible.slice(startIndex, startIndex + PAGE_SIZE)
+
+                                        return viewMode === 'grid' ? (
+                                            <>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                    {pageItems.map((meeting) => {
+                                                        const canComplete = canUserCompleteMeeting(meeting, user?.uid)
+                                                        const meetingKey = getMeetingKey(meeting)
+                                                        return (
+                                                            <MeetingCard
+                                                                key={meetingKey}
+                                                                meeting={meeting}
+                                                                canComplete={canComplete}
+                                                                completing={completing[meetingKey]}
+                                                                onComplete={async () => handleCompleteMeeting(meeting)}
+                                                                onOpenDetails={() => openMeetingDetails(meeting)}
+                                                                onOpenCheckin={() => openMeetingCheckin(meeting)}
+                                                            />
+                                                        )
+                                                    })}
+                                                </div>
+                                                {totalPages > 1 && (
+                                                    <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+                                                        <span>
+                                                            Mostrando {startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, allVisible.length)} de {allVisible.length}
+                                                        </span>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                type="button"
+                                                                disabled={currentPage <= 1}
+                                                                onClick={() => setAllPage((prev) => Math.max(1, prev - 1))}
+                                                                className={`px-3 py-1 rounded-lg border text-xs font-medium ${currentPage <= 1 ? 'border-muted text-muted-foreground cursor-not-allowed' : 'border-border hover:bg-muted/60'}`}
+                                                            >
+                                                                Anterior
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                disabled={currentPage >= totalPages}
+                                                                onClick={() => setAllPage((prev) => Math.min(totalPages, prev + 1))}
+                                                                className={`px-3 py-1 rounded-lg border text-xs font-medium ${currentPage >= totalPages ? 'border-muted text-muted-foreground cursor-not-allowed' : 'border-border hover:bg-muted/60'}`}
+                                                            >
+                                                                Siguiente
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div className="overflow-x-auto rounded-xl border border-border bg-card">
+                                                <table className="min-w-full text-sm">
+                                                    <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+                                                        <tr>
+                                                            <th className="px-4 py-2 text-left font-semibold">Título</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Tipo</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Fecha</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Estado</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Lugar</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Acciones</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {pageItems.map((meeting) => {
+                                                            const canComplete = canUserCompleteMeeting(meeting, user?.uid)
+                                                            const { label, className } = getStatusPill(meeting.status)
+                                                            const meetingKey = getMeetingKey(meeting)
+                                                            return (
+                                                                <tr key={meetingKey} className="border-t border-border hover:bg-muted/40">
+                                                                    <td className="px-4 py-2 align-top">
+                                                                        <div className="font-medium text-foreground">{meeting.title}</div>
+                                                                        <div className="text-xs text-muted-foreground line-clamp-1">{meeting.description || 'Sin descripción'}</div>
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top text-xs text-muted-foreground">
+                                                                        {meeting.type === 'training' ? 'Capacitación' : meeting.type === 'custom' ? 'Personalizado' : 'Reunión'}
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top text-xs text-foreground">
+                                                                        {formatDateTimeLabel(meeting.startTime)}
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top">
+                                                                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${className}`}>
+                                                                            {label}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top text-xs text-foreground">
+                                                                        {meeting.location}
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top">
+                                                                        <div className="flex flex-wrap gap-2">
+                                                                            <Link
+                                                                                to={buildMeetingPath('/meeting', meeting)}
+                                                                                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted/60"
+                                                                            >
+                                                                                Detalles
+                                                                            </Link>
+                                                                            <Link
+                                                                                to={buildMeetingPath('/checkin', meeting)}
+                                                                                className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+                                                                            >
+                                                                                Asistencia
+                                                                            </Link>
+                                                                            {canComplete && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={completing[meetingKey]}
+                                                                                    onClick={async () => handleCompleteMeeting(meeting)}
+                                                                                    className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                                                >
+                                                                                    {completing[meetingKey] ? 'Finalizando…' : 'Completar'}
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            )
+                                                        })}
+                                                    </tbody>
+                                                </table>
+                                                {totalPages > 1 && (
+                                                    <div className="px-4 py-3 flex items-center justify-between text-xs text-muted-foreground border-t border-border">
+                                                        <span>
+                                                            Mostrando {startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, allVisible.length)} de {allVisible.length}
+                                                        </span>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                type="button"
+                                                                disabled={currentPage <= 1}
+                                                                onClick={() => setAllPage((prev) => Math.max(1, prev - 1))}
+                                                                className={`px-3 py-1 rounded-lg border text-xs font-medium ${currentPage <= 1 ? 'border-muted text-muted-foreground cursor-not-allowed' : 'border-border hover:bg-muted/60'}`}
+                                                            >
+                                                                Anterior
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                disabled={currentPage >= totalPages}
+                                                                onClick={() => setAllPage((prev) => Math.min(totalPages, prev + 1))}
                                                                 className={`px-3 py-1 rounded-lg border text-xs font-medium ${currentPage >= totalPages ? 'border-muted text-muted-foreground cursor-not-allowed' : 'border-border hover:bg-muted/60'}`}
                                                             >
                                                                 Siguiente

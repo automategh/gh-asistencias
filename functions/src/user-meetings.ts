@@ -10,6 +10,7 @@ type MeetingStatus = "draft" | "scheduled" | "closed" | "completed" | "cancelled
 type ParticipantRole = "attendee" | "speaker" | "host"
 type InviteStatus = "invited" | "accepted" | "declined"
 type AttendanceStatus = "absent" | "present" | "late"
+type MeetingsQueryMode = "self" | "all"
 
 interface RequestedRecintoInput {
 	readonly url?: string | null
@@ -26,6 +27,7 @@ interface UserMeetingsRequest {
 	readonly lookbackMs?: number | null
 	readonly statuses?: readonly MeetingStatus[] | null
 	readonly recintos?: readonly RequestedRecintoInput[] | null
+	readonly mode?: MeetingsQueryMode | null
 }
 
 interface UserMeetingIndexPayload {
@@ -75,6 +77,7 @@ interface MeetingWithIndexPayload extends MeetingPayload {
 interface UserMeetingsResponse {
 	readonly invited: readonly MeetingWithIndexPayload[]
 	readonly created: readonly MeetingPayload[]
+	readonly all: readonly MeetingPayload[]
 	readonly omittedRecintos: readonly string[]
 }
 
@@ -83,6 +86,7 @@ interface ParsedRequest {
 	readonly lookbackMs: number
 	readonly statuses: readonly MeetingStatus[]
 	readonly recintos: readonly RequestedRecinto[]
+	readonly mode: MeetingsQueryMode
 }
 
 interface StoredMeeting {
@@ -120,6 +124,12 @@ interface StoredUserMeetingIndex {
 interface RecintoMeetingsResult {
 	readonly invited: readonly MeetingWithIndexPayload[]
 	readonly created: readonly MeetingPayload[]
+	readonly all: readonly MeetingPayload[]
+}
+
+interface StoredUserRecord {
+	readonly roleId?: string | null
+	readonly role?: string | null
 }
 
 const ALL_STATUSES: readonly MeetingStatus[] = [
@@ -134,6 +144,15 @@ const MAX_RECINTOS_PER_REQUEST = 10
 const MAX_LOOKBACK_MS = 365 * 24 * 60 * 60 * 1000
 const DEFAULT_LOOKBACK_MS = 12 * 60 * 60 * 1000
 const MEETINGS_BATCH_SIZE = 40
+const CORPORATE_DOMAIN = "grupoheroica.com"
+
+const LEGACY_ROLE_TO_ROLE_ID: Readonly<Record<string, string>> = {
+	Admin: "admin",
+	HR: "hr",
+	Lider: "lider",
+	Instructor: "instructor",
+	User: "user",
+}
 
 function isMeetingKind(value?: string | null): value is MeetingKind {
 	return value === "meeting" || value === "training" || value === "custom"
@@ -160,6 +179,40 @@ function parseNumber(value: number | null | undefined, fieldName: string): numbe
 		throw new HttpsError("invalid-argument", `${fieldName} debe ser un número válido (epoch ms).`)
 	}
 	return Math.trunc(value)
+}
+
+function normalizeEmail(email: string | null | undefined): string | null {
+	if (typeof email !== "string") {
+		return null
+	}
+
+	const trimmedEmail = email.trim().toLowerCase()
+	return trimmedEmail.length > 0 ? trimmedEmail : null
+}
+
+function isCorporateEmail(email: string | null): boolean {
+	if (!email) {
+		return false
+	}
+
+	const parts = email.split("@")
+	if (parts.length !== 2) {
+		return false
+	}
+
+	return parts[1] === CORPORATE_DOMAIN
+}
+
+function normalizeMode(mode: MeetingsQueryMode | null | undefined): MeetingsQueryMode {
+	if (typeof mode === "undefined" || mode === null) {
+		return "self"
+	}
+
+	if (mode === "self" || mode === "all") {
+		return mode
+	}
+
+	throw new HttpsError("invalid-argument", "mode no es válido.")
 }
 
 function normalizeStatuses(statuses: readonly MeetingStatus[] | null | undefined): readonly MeetingStatus[] {
@@ -242,13 +295,79 @@ function parseRequest(data: UserMeetingsRequest): ParsedRequest {
 	const lookbackMs = Math.min(lookbackValue, MAX_LOOKBACK_MS)
 	const statuses = normalizeStatuses(data.statuses)
 	const recintos = normalizeRecintos(data.recintos)
+	const mode = normalizeMode(data.mode)
 
 	return {
 		now: nowValue,
 		lookbackMs,
 		statuses,
 		recintos,
+		mode,
 	}
+}
+
+function normalizeRoleId(user: StoredUserRecord | null): string | null {
+	if (!user) {
+		return null
+	}
+
+	if (typeof user.roleId === "string" && user.roleId.trim().length > 0) {
+		return user.roleId.trim()
+	}
+
+	if (typeof user.role === "string" && user.role.trim().length > 0) {
+		return LEGACY_ROLE_TO_ROLE_ID[user.role] ?? "user"
+	}
+
+	return "user"
+}
+
+async function canManageAnyMeetingsInDatabase(database: admin.database.Database, uid: string): Promise<boolean> {
+	const userSnap = await database.ref(`users/${uid}`).get()
+	if (!userSnap.exists()) {
+		return false
+	}
+
+	const user = userSnap.val() as StoredUserRecord | null
+	const roleId = normalizeRoleId(user)
+	if (!roleId) {
+		return false
+	}
+
+	const permissionSnap = await database.ref(`roles/${roleId}/permissions/meetings_manage_any`).get()
+	return permissionSnap.val() === true
+}
+
+async function resolveAuthorizedRecintos(
+	recintos: readonly RequestedRecinto[],
+	uid: string,
+	email: string | null,
+	mode: MeetingsQueryMode,
+): Promise<RequestedRecinto[]> {
+	const corporateUser = isCorporateEmail(email)
+
+	const checks = await Promise.all(
+		recintos.map(async (recinto) => {
+			const database = admin.app().database(recinto.url)
+			const userSnap = await database.ref(`users/${uid}`).get()
+
+			if (mode === "self") {
+				if (corporateUser || userSnap.exists()) {
+					return recinto
+				}
+				return null
+			}
+
+			if (!userSnap.exists()) {
+				return null
+			}
+
+			const canManageAny = await canManageAnyMeetingsInDatabase(database, uid)
+			return canManageAny ? recinto : null
+		}),
+	)
+
+	return checks.filter((recinto): recinto is RequestedRecinto => recinto !== null)
 }
 
 function normalizeString(value: string | null | undefined): string | null {
@@ -464,16 +583,58 @@ async function getCreatedMeetingsForRecinto(
 	return created
 }
 
+async function getAllMeetingsForRecinto(
+	database: admin.database.Database,
+	source: SourcePayload,
+	minStartTime: number,
+	statusSet: ReadonlySet<MeetingStatus>,
+): Promise<MeetingPayload[]> {
+	const meetingsSnap = await database
+		.ref("meetings")
+		.orderByChild("startTime")
+		.startAt(minStartTime)
+		.get()
+
+	const rawMeetings = meetingsSnap.val() as Record<string, StoredMeeting> | null
+	if (!rawMeetings) {
+		return []
+	}
+
+	const meetings: MeetingPayload[] = []
+	for (const [meetingId, rawMeeting] of Object.entries(rawMeetings)) {
+		const meeting = mapMeeting(meetingId, rawMeeting, source)
+		if (!meeting) {
+			continue
+		}
+		if (!statusSet.has(meeting.status)) {
+			continue
+		}
+		meetings.push(meeting)
+	}
+
+	return meetings
+}
+
 async function loadMeetingsForRecinto(
 	recinto: RequestedRecinto,
 	uid: string,
 	minStartTime: number,
 	statusSet: ReadonlySet<MeetingStatus>,
+	mode: MeetingsQueryMode,
 ): Promise<RecintoMeetingsResult> {
 	const database = admin.app().database(recinto.url)
 	const source: SourcePayload = {
 		url: recinto.url,
 		recinto: recinto.key,
+	}
+
+	if (mode === "all") {
+		const all = await getAllMeetingsForRecinto(database, source, minStartTime, statusSet)
+		return {
+			invited: [],
+			created: [],
+			all,
+		}
 	}
 
 	const [invited, created] = await Promise.all([
@@ -484,6 +645,7 @@ async function loadMeetingsForRecinto(
 	return {
 		invited,
 		created,
+		all: [],
 	}
 }
 
@@ -494,37 +656,59 @@ export const getUserMeetings = onCall<UserMeetingsRequest>(
 			throw new HttpsError("unauthenticated", "Debes iniciar sesión para consultar actividades.")
 		}
 
+		const auth = request.auth
+
 		const parsed = parseRequest(request.data)
 		const minStartTime = Math.max(0, parsed.now - parsed.lookbackMs)
 		const statusSet = new Set(parsed.statuses)
+		const requesterEmail = normalizeEmail(auth.token.email)
+
+		const authorizedRecintos = await resolveAuthorizedRecintos(
+			parsed.recintos,
+			auth.uid,
+			requesterEmail,
+			parsed.mode,
+		)
+
+		if (authorizedRecintos.length !== parsed.recintos.length) {
+			throw new HttpsError(
+				"permission-denied",
+				"No tienes permisos para consultar uno o más recintos solicitados.",
+			)
+		}
 
 		const recintoResults = await Promise.allSettled(
-			parsed.recintos.map((recinto) => loadMeetingsForRecinto(recinto, request.auth!.uid, minStartTime, statusSet)),
+			authorizedRecintos.map((recinto) =>
+				loadMeetingsForRecinto(recinto, auth.uid, minStartTime, statusSet, parsed.mode),
+			),
 		)
 
 		const invited: MeetingWithIndexPayload[] = []
 		const created: MeetingPayload[] = []
+		const all: MeetingPayload[] = []
 		const omittedRecintos: string[] = []
 
 		recintoResults.forEach((result, index) => {
 			if (result.status === "fulfilled") {
 				invited.push(...result.value.invited)
 				created.push(...result.value.created)
+				all.push(...result.value.all)
 				return
 			}
 
-			const failedRecinto = parsed.recintos[index]
+			const failedRecinto = authorizedRecintos[index]
 			omittedRecintos.push(failedRecinto.url)
 			console.error(`No fue posible cargar reuniones para recinto ${failedRecinto.url}:`, result.reason)
 		})
 
-		if (omittedRecintos.length === parsed.recintos.length) {
+		if (omittedRecintos.length === authorizedRecintos.length) {
 			throw new HttpsError("internal", "No fue posible cargar reuniones para los recintos solicitados.")
 		}
 
 		return {
 			invited,
 			created,
+			all,
 			omittedRecintos,
 		}
 	},
