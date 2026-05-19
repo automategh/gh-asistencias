@@ -27,7 +27,6 @@ function isProfileComplete(profile: DiscoverableUserProfile | null): boolean {
     return [
         profile.identify,
         profile.department,
-        profile.immediateBoss,
         profile.cargo,
     ].every((value) => typeof value === 'string' && value.trim().length > 0)
 }

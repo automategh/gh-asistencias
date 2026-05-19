@@ -10,8 +10,8 @@ import type { Departament } from '@/types/departament';
 import { getLeaderNames, updateUserProfile } from '@/services/user.service';
 import Layout from '@/components/layouts/layout';
 import { useDatabase } from '@/context/DatabaseContext';
-import { DEFAULT_DATABASE_URL, getDatabaseForUrl } from '@/services/firebase';
-import { getAllAvailableDatabases } from '@/lib/firebase/databaseResolver';
+import { getDatabaseForUrl } from '@/services/firebase';
+import { getAllAvailableDatabases, resolveDatabaseByEmail } from '@/lib/firebase/databaseResolver';
 import { SignaturePadCanvas } from '@/components/profile/signature-pad';
 import { persistUserSignature } from '@/services/user-signature.service';
 import { Button } from '@/components/ui/button';
@@ -136,15 +136,8 @@ function ConfigurationProfilePage() {
                 console.error("Error al obtener nombres de líderes:", error);
             });
 
-        if (isCorporateUser) {
-            if (DEFAULT_DATABASE_URL === databaseUrl) {
-                setIsMyDatabase(true);
-            } else {
-                setIsMyDatabase(false);
-            }
-        } else {
-            setIsMyDatabase(true);
-        }
+        const resolvedDatabase = resolveDatabaseByEmail(firebaseUser?.email ?? null)
+        setIsMyDatabase(Boolean(databaseUrl && resolvedDatabase.databaseUrl === databaseUrl))
 
         fetchUserData();
     }, [database, firebaseUser, isCorporateUser, databaseUrl, setSelectedDatabase]);
