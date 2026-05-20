@@ -16,6 +16,32 @@ import { SignaturePadCanvas } from '@/components/profile/signature-pad';
 import { persistUserSignature } from '@/services/user-signature.service';
 import { Button } from '@/components/ui/button';
 
+function normalizeDatabaseUrl(url: string | null | undefined): string | null {
+    if (!url) {
+        return null
+    }
+
+    try {
+        const parsed = new URL(url)
+        const hostname = parsed.hostname.toLowerCase()
+        const instanceKey = hostname.split('.')[0] ?? hostname
+        return instanceKey
+    } catch {
+        return url.trim().replace(/\/+$/, '').toLowerCase()
+    }
+}
+
+function isSameDatabaseUrl(left: string | null | undefined, right: string | null | undefined): boolean {
+    const normalizedLeft = normalizeDatabaseUrl(left)
+    const normalizedRight = normalizeDatabaseUrl(right)
+
+    if (!normalizedLeft || !normalizedRight) {
+        return false
+    }
+
+    return normalizedLeft === normalizedRight
+}
+
 
 function ConfigurationProfilePage() {
 
@@ -82,6 +108,9 @@ function ConfigurationProfilePage() {
                     const value = snapshot.val() as UserProfile
                     setUser(value);
                     setSignature(typeof value?.signatureUrl === 'string' ? value.signatureUrl : null);
+                    if (!isCorporateUser) {
+                        setIsMyDatabase(true)
+                    }
                     return
                 }
 
@@ -108,12 +137,16 @@ function ConfigurationProfilePage() {
                         setUser(resolvedProfile)
                         setSignature(typeof resolvedProfile.signatureUrl === 'string' ? resolvedProfile.signatureUrl : null)
                         setSelectedDatabase(candidateDatabase.url, candidateDatabase.key)
+                        setIsMyDatabase(true)
                         return
                     }
                 }
 
                 setUser(null)
                 setSignature(null)
+                if (!isCorporateUser) {
+                    setIsMyDatabase(false)
+                }
             } catch (error) {
                 console.error("Error al obtener datos del usuario:", error);
             }
@@ -137,7 +170,11 @@ function ConfigurationProfilePage() {
             });
 
         const resolvedDatabase = resolveDatabaseByEmail(firebaseUser?.email ?? null)
-        setIsMyDatabase(Boolean(databaseUrl && resolvedDatabase.databaseUrl === databaseUrl))
+        if (isCorporateUser) {
+            setIsMyDatabase(isSameDatabaseUrl(databaseUrl, resolvedDatabase.databaseUrl))
+        } else {
+            setIsMyDatabase(null)
+        }
 
         fetchUserData();
     }, [database, firebaseUser, isCorporateUser, databaseUrl, setSelectedDatabase]);
@@ -152,12 +189,6 @@ function ConfigurationProfilePage() {
             return
         }
 
-        const storageKey = `profile-incomplete-modal:${firebaseUser.uid}`
-        const alreadyShown = window.sessionStorage.getItem(storageKey)
-        if (alreadyShown === '1') {
-            return
-        }
-
         setFormData({
             name: user.name || '',
             department: user.department || '',
@@ -167,7 +198,6 @@ function ConfigurationProfilePage() {
         })
         setIsEditing(true)
         setShowIncompleteProfileModal(true)
-        window.sessionStorage.setItem(storageKey, '1')
     }, [firebaseUser?.uid, user, isLocked, missingProfileFields])
 
 

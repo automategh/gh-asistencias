@@ -131,7 +131,7 @@ export default function MeetingCard({
                             onClick={() => onComplete(meeting.id)}
                             className="w-full px-6 py-2 bg-emerald-600 text-white font-semibold rounded-lg transition-all duration-300 hover:bg-emerald-700 disabled:opacity-50 text-sm"
                         >
-                            {completing ? 'Finalizando…' : 'Completar reunión'}
+                            {completing ? 'Finalizando…' : 'Completar Actividad'}
                         </button>
                     </div>
                 )}

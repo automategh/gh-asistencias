@@ -1,4 +1,5 @@
 import { resolveDatabaseByEmail } from "@/lib/firebase/databaseResolver";
+import { getAllAvailableDatabases } from "@/lib/firebase/databaseResolver";
 import { ensureAuthorizationCatalog } from "@/services/authorization/role-permissions.service";
 import { getLegacyRoleFromRoleId, LEGACY_ROLE_TO_ROLE_ID } from "@/services/authorization/role-permissions.service";
 import { loginWithEmailPassword, loginWithMicrosoft, logout, registerWithEmailPassword } from "@/services/auth/auth.service";
@@ -60,6 +61,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             readonly permissions?: Partial<Record<PermissionId, boolean>> | null;
         }
 
+        interface SavedDatabaseSelection {
+            readonly url?: string;
+        }
+
         const resolveUserRoleState = (data: DbUserPayload | null) => {
             const resolvedRoleId = data?.roleId ?? (data?.role ? LEGACY_ROLE_TO_ROLE_ID[data.role as keyof typeof LEGACY_ROLE_TO_ROLE_ID] ?? "user" : "user");
             const resolvedRole = data?.role ?? getLegacyRoleFromRoleId(resolvedRoleId);
@@ -68,10 +73,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setRole(resolvedRole);
         }
 
-        const fetchRolePermissions = async (resolvedRoleId: RoleId, email: string | null) => {
+        const resolveUserDatabaseUrl = async (uid: string, email: string | null): Promise<string | null> => {
+            const savedSelectionRaw = localStorage.getItem('selectedDatabase');
+            if (savedSelectionRaw) {
+                try {
+                    const parsed = JSON.parse(savedSelectionRaw) as SavedDatabaseSelection;
+                    if (typeof parsed.url === 'string' && parsed.url.trim().length > 0) {
+                        const selectedDb = getDatabaseForUrl(parsed.url);
+                        if (selectedDb) {
+                            const selectedSnapshot = await get(ref(selectedDb, `users/${uid}`));
+                            if (selectedSnapshot.exists()) {
+                                return parsed.url;
+                            }
+                        }
+                    }
+                } catch {
+                    // Ignorar selección inválida y continuar con resolución estándar.
+                }
+            }
+
+            const { databaseUrl } = resolveDatabaseByEmail(email);
+            const dbByEmail = getDatabaseForUrl(databaseUrl);
+            if (dbByEmail) {
+                const snapshotByEmail = await get(ref(dbByEmail, `users/${uid}`));
+                if (snapshotByEmail.exists()) {
+                    return databaseUrl;
+                }
+            }
+
+            const candidates = getAllAvailableDatabases();
+            for (const candidate of candidates) {
+                const candidateDb = getDatabaseForUrl(candidate.url);
+                if (!candidateDb) {
+                    continue;
+                }
+
+                const candidateSnapshot = await get(ref(candidateDb, `users/${uid}`));
+                if (candidateSnapshot.exists()) {
+                    return candidate.url;
+                }
+            }
+
+            return null;
+        }
+
+        const fetchRolePermissions = async (resolvedRoleId: RoleId, databaseUrl: string | null) => {
             try {
-                const { databaseUrl } = resolveDatabaseByEmail(email);
-                const db = getDatabaseForUrl(databaseUrl);
+                const db = databaseUrl ? getDatabaseForUrl(databaseUrl) : null;
 
                 if (!db) {
                     setPermissions([]);
@@ -105,8 +153,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Función asyncrónica para obtener el rol
         const fetchUserRole = async (uid: string, email: string | null) => {
             try {
-                // Resolver la base de datos segun el email del usuario
-                const { databaseUrl } = resolveDatabaseByEmail(email);
+                const databaseUrl = await resolveUserDatabaseUrl(uid, email);
+                if (!databaseUrl) {
+                    console.warn(`Usuario ${uid} no encontrado en ninguna base de datos, asignando rol por defecto "User"`);
+                    setRole("User");
+                    setRoleId("user");
+                    setPermissions([]);
+                    return;
+                }
+
                 const db = getDatabaseForUrl(databaseUrl);
 
 
@@ -129,14 +184,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     if (data) {
                         resolveUserRoleState(data);
                         const resolvedRoleId = data.roleId ?? (data.role ? LEGACY_ROLE_TO_ROLE_ID[data.role as keyof typeof LEGACY_ROLE_TO_ROLE_ID] ?? "user" : "user");
-                        await fetchRolePermissions(resolvedRoleId, email);
+                        await fetchRolePermissions(resolvedRoleId, databaseUrl);
 
                         if (typeof data.photoUrl === "string" && data.photoUrl.trim().length > 0) {
                             setProfilePhotoUrl(data.photoUrl);
                         }
                     } else {
                         resolveUserRoleState(null);
-                        await fetchRolePermissions("user", email);
+                        await fetchRolePermissions("user", databaseUrl);
                     }
                 } else {
                     // Usuario autenticado pero sin registro en esta BD
@@ -144,7 +199,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     console.warn(`Usuario ${uid} no encontrado en la base de datos, asignando rol por defecto "User"`);
                     setRole("User");
                     setRoleId("user");
-                    await fetchRolePermissions("user", email);
+                    await fetchRolePermissions("user", databaseUrl);
                 }
             } catch (error) {
                 console.error("Error al obtener el rol del usuario:", error);

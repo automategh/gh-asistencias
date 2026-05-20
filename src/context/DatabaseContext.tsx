@@ -1,5 +1,6 @@
 import { getAllAvailableDatabases, isCorporateUser, resolveDatabaseByEmail, type RecintoKey } from "@/lib/firebase/databaseResolver";
 import type { Database } from "firebase/database";
+import { get, ref } from "firebase/database";
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import { useAuth } from "./AuthContext";
 import { getDatabaseForUrl } from "@/services/firebase";
@@ -52,33 +53,88 @@ export const DatabaseProvider: React.FC<PropsWithChildren> = ({ children }) => {
             return;
         }
 
-        try {
-            const { databaseUrl: resolvedUrl, recinto: resolvedRecinto } = resolveDatabaseByEmail(user?.email ?? null);
+        let cancelled = false;
 
-            // Solo usuarios corporativos respetan selección manual persistida.
-            if (isCorporate) {
+        const resolveDatabaseSelection = async (): Promise<void> => {
+            try {
+                const { databaseUrl: resolvedUrl, recinto: resolvedRecinto } = resolveDatabaseByEmail(user?.email ?? null);
+
                 const savedSelection = localStorage.getItem('selectedDatabase');
-                if (savedSelection) {
-                    const { url, key } = JSON.parse(savedSelection);
-                    setDatabaseUrl(url);
-                    setRecinto(key);
+                if (savedSelection && user?.uid) {
+                    try {
+                        const parsed = JSON.parse(savedSelection) as { url?: string; key?: RecintoKey };
+                        const savedUrl = typeof parsed.url === 'string' ? parsed.url : null;
+                        const savedKey = parsed.key;
+
+                        if (savedUrl && savedKey) {
+                            const savedDatabase = getDatabaseForUrl(savedUrl);
+                            if (savedDatabase) {
+                                const userSnapshot = await get(ref(savedDatabase, `users/${user.uid}`));
+                                if (!cancelled && userSnapshot.exists()) {
+                                    setDatabaseUrl(savedUrl);
+                                    setRecinto(savedKey);
+                                    setResolved(true);
+                                    return;
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.warn('No fue posible usar la selección de base guardada:', error);
+                    }
+                }
+
+                if (user?.uid) {
+                    for (const candidateDatabase of availableDatabases) {
+                        const candidateDb = getDatabaseForUrl(candidateDatabase.url);
+                        if (!candidateDb) {
+                            continue;
+                        }
+
+                        const candidateSnapshot = await get(ref(candidateDb, `users/${user.uid}`));
+                        if (!candidateSnapshot.exists()) {
+                            continue;
+                        }
+
+                        if (!cancelled) {
+                            setDatabaseUrl(candidateDatabase.url);
+                            setRecinto(candidateDatabase.key);
+                            localStorage.setItem('selectedDatabase', JSON.stringify({ url: candidateDatabase.url, key: candidateDatabase.key }));
+                            setResolved(true);
+                        }
+                        return;
+                    }
+                }
+
+                if (!cancelled) {
+                    setDatabaseUrl(resolvedUrl);
+                    setRecinto(resolvedRecinto);
+                    localStorage.setItem('selectedDatabase', JSON.stringify({ url: resolvedUrl, key: resolvedRecinto }));
+                }
+            } catch (error) {
+                console.error("No fue posible resolver la base de datos del recinto", error);
+                if (!cancelled) {
+                    setDatabaseUrl(null);
+                    setRecinto("corporativo");
+                }
+            } finally {
+                if (!cancelled) {
                     setResolved(true);
-                    return;
                 }
             }
+        };
 
-            // Primer ingreso: resolver automáticamente la BD por email sin abrir modal.
-            setDatabaseUrl(resolvedUrl);
-            setRecinto(resolvedRecinto);
-            localStorage.setItem('selectedDatabase', JSON.stringify({ url: resolvedUrl, key: resolvedRecinto }));
-        } catch (error) {
-            console.error("No fue posible resolver la base de datos del recinto", error);
-            setDatabaseUrl(null);
-            setRecinto("corporativo");
-        } finally {
-            setResolved(true);
-        }
-    }, [user?.email, authLoading, isCorporate]);
+        resolveDatabaseSelection().catch(() => {
+            if (!cancelled) {
+                setDatabaseUrl(null);
+                setRecinto("corporativo");
+                setResolved(true);
+            }
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [user?.email, user?.uid, authLoading, isCorporate, availableDatabases]);
 
 
      const setSelectedDatabase = (url: string, key: RecintoKey) => {
