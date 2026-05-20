@@ -53,21 +53,24 @@ export const DatabaseProvider: React.FC<PropsWithChildren> = ({ children }) => {
         }
 
         try {
-            // Intentar cargar selección previa de sessionStorage
-            const savedSelection = localStorage.getItem('selectedDatabase');
-            if (savedSelection) {
-                const { url, key } = JSON.parse(savedSelection);
-                setDatabaseUrl(url);
-                setRecinto(key);
-                setResolved(true);
-                return;
-            }
-
             const { databaseUrl: resolvedUrl, recinto: resolvedRecinto } = resolveDatabaseByEmail(user?.email ?? null);
+
+            // Solo usuarios corporativos respetan selección manual persistida.
+            if (isCorporate) {
+                const savedSelection = localStorage.getItem('selectedDatabase');
+                if (savedSelection) {
+                    const { url, key } = JSON.parse(savedSelection);
+                    setDatabaseUrl(url);
+                    setRecinto(key);
+                    setResolved(true);
+                    return;
+                }
+            }
 
             // Primer ingreso: resolver automáticamente la BD por email sin abrir modal.
             setDatabaseUrl(resolvedUrl);
             setRecinto(resolvedRecinto);
+            localStorage.setItem('selectedDatabase', JSON.stringify({ url: resolvedUrl, key: resolvedRecinto }));
         } catch (error) {
             console.error("No fue posible resolver la base de datos del recinto", error);
             setDatabaseUrl(null);
