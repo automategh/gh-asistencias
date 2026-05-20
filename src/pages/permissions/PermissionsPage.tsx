@@ -1,4 +1,5 @@
 import Layout from "@/components/layouts/layout"
+import { useDatabase } from "@/context/DatabaseContext"
 import { getAllAvailableDatabases, type RecintoKey } from "@/lib/firebase/databaseResolver"
 import {
   deleteRole,
@@ -103,6 +104,7 @@ const isLeaderRoleId = (roleId: string): boolean => roleId.trim().toLowerCase() 
  * - Mantiene la administracion de usuarios y la asignacion de roles desde el catalogo.
  */
 export default function PermissionsPage() {
+  const { databaseUrl: selectedDatabaseUrl } = useDatabase()
   const [allUsers, setAllUsers] = useState<CrossDbUserItem[]>([])
   const [visibleUsers, setVisibleUsers] = useState<CrossDbUserItem[]>([])
   const [roleDefinitions, setRoleDefinitions] = useState<ManageableRoleDefinition[]>([])
@@ -190,9 +192,12 @@ export default function PermissionsPage() {
 
         await loadCatalogData()
         const users = await listAllUsersAcrossDatabases()
+        const usersInSelectedDatabase = selectedDatabaseUrl
+          ? users.filter((user) => user.databaseUrl === selectedDatabaseUrl)
+          : []
 
         if (!cancelled) {
-          setAllUsers(users)
+          setAllUsers(usersInSelectedDatabase)
         }
       } catch (err) {
         if (!cancelled) {
@@ -210,7 +215,7 @@ export default function PermissionsPage() {
     return () => {
       cancelled = true
     }
-  }, [loadCatalogData])
+  }, [loadCatalogData, selectedDatabaseUrl])
 
   useEffect(() => {
     setVisibleUsers(filterUsers(allUsers, {

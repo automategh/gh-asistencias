@@ -318,7 +318,7 @@ function DetailMeetPage() {
                                         <p className="text-sm font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Encuesta de satisfacción</p>
                                         <Link
                                             to={`/survey/${satisfactionSurvey.id}/response/${meeting.id}`}
-                                            className="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary-light underline-offset-2 hover:underline"
+                                            className="inline-flex items-center gap-2 text-sm font-semibold text-blue-500 hover:text-primary-light underline-offset-2 hover:underline underline"
                                         >
                                             Responder encuesta de satisfacción
                                         </Link>
