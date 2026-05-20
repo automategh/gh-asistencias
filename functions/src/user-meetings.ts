@@ -141,7 +141,7 @@ const ALL_STATUSES: readonly MeetingStatus[] = [
 ]
 
 const MAX_RECINTOS_PER_REQUEST = 10
-const MAX_LOOKBACK_MS = 365 * 24 * 60 * 60 * 1000
+const MAX_LOOKBACK_MS = 100 * 365 * 24 * 60 * 60 * 1000
 const DEFAULT_LOOKBACK_MS = 12 * 60 * 60 * 1000
 const MEETINGS_BATCH_SIZE = 40
 const CORPORATE_DOMAIN = "grupoheroica.com"

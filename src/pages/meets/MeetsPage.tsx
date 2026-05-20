@@ -130,9 +130,11 @@ function MeetsPage() {
                     return
                 }
 
-                const DEFAULT_LOOKBACK_MS = 12 * 60 * 60 * 1000
+                const ALL_TAB_BASE_LOOKBACK_MS = 12 * 60 * 60 * 1000
                 let queryNow = now
-                let queryLookbackMs = DEFAULT_LOOKBACK_MS
+                let queryLookbackMs = activeTab === 'all'
+                    ? ALL_TAB_BASE_LOOKBACK_MS
+                    : Math.max(now, ALL_TAB_BASE_LOOKBACK_MS)
 
                 if (canViewAllTab && activeTab === 'all') {
                     const currentDate = new Date()
@@ -150,7 +152,7 @@ function MeetsPage() {
 
                     if (toTimestamp >= fromTimestamp) {
                         queryNow = Math.max(now, toTimestamp)
-                        queryLookbackMs = Math.max(DEFAULT_LOOKBACK_MS, queryNow - fromTimestamp)
+                        queryLookbackMs = Math.max(ALL_TAB_BASE_LOOKBACK_MS, queryNow - fromTimestamp)
                     }
                 }
 
