@@ -751,7 +751,7 @@ function NewMeetPage() {
                                     disabled={submitting}
                                     className="px-8 py-3 bg-[#1b3022] text-white font-bold rounded-xl transition-all shadow-md hover:bg-primary disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {submitting || creatingTeams ? 'Creando…' : 'Crear Reunión'}
+                                    {submitting || creatingTeams ? 'Creando…' : 'Crear Actividad'}
                                 </button>
                             </div>
                         </div>
