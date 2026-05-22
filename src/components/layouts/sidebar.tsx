@@ -2,7 +2,7 @@ import { useAuth } from "@/context/AuthContext"
 import { useDatabase } from "@/context/DatabaseContext"
 import { cn } from "@/lib/utils"
 import type { PermissionId } from "@/types/authorization"
-import { Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, LogOut, Menu, UserCircle, UserCog, X, LayoutDashboard, User, PlusCircleIcon, ChartColumnBig, Building2Icon, ClipboardList, GroupIcon } from "lucide-react"
+import { Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, CircleHelp, LogOut, Menu, UserCircle, UserCog, X, LayoutDashboard, User, PlusCircleIcon, ChartColumnBig, Building2Icon, ClipboardList, GroupIcon, Users } from "lucide-react"
 import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 
@@ -82,6 +82,7 @@ export function Sidebar({ onCollapsedChange }: SidebarProps) {
         { icon: Building2Icon, name: "Areas", path: "/departments", requireAny: ["departments_manage"] },
         { icon: GroupIcon, name: "Formas de agrupar", path: "/user-grouping", requireAny: ["user_grouping_manage"] },
         { icon: ClipboardList, name: "Encuestas", path: "/survey", requireAny: ["surveys_admin_view"] },
+        { icon: Users, name: "Usuarios", path: "/users", requireAny: ["users_view", "users_activate", "users_deactivate", "users_assign_role"] },
         { icon: UserCog, name: "Permisos", path: "/permissions", requireAny: ["roles_view", "roles_manage"] },
     ]
 

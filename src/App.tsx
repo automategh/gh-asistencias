@@ -7,6 +7,7 @@ import ConfigurationProfilePage from './pages/configuration/ConfigurationPage'
 import DashboardPage from './pages/dashboard/DashboardPage'
 import NewMeetPage from './pages/meets/NewMeetPage'
 import PermissionsPage from './pages/permissions/PermissionsPage'
+import UsersPage from './pages/permissions/UsersPage'
 import DepartmentsPage from './pages/configuration/DepartmentsPage'
 import UserGroupingPage from './pages/configuration/UserGroupingPage'
 import MeetsPage from './pages/meets/MeetsPage'
@@ -65,6 +66,14 @@ function App() {
                         element={(
                             <RoleRoute requireAny={["roles_view", "roles_manage"]}>
                                 <PermissionsPage />
+                            </RoleRoute>
+                        )}
+                    />
+                    <Route
+                        path="/users"
+                        element={(
+                            <RoleRoute requireAny={["users_view", "users_activate", "users_deactivate", "users_assign_role"]}>
+                                <UsersPage />
                             </RoleRoute>
                         )}
                     />
