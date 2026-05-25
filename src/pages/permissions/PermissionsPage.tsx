@@ -1,4 +1,5 @@
 import Layout from "@/components/layouts/layout"
+import { useAuth } from "@/context/AuthContext"
 import { getAllAvailableDatabases, type RecintoKey } from "@/lib/firebase/databaseResolver"
 import {
   deleteRole,
@@ -87,6 +88,7 @@ const buildDraftFromRole = (role: ManageableRoleDefinition): RoleDraftState => (
  * - Mantiene la administracion de usuarios y la asignacion de roles desde el catalogo.
  */
 export default function PermissionsPage() {
+  const { hasPermission } = useAuth()
   const [roleDefinitions, setRoleDefinitions] = useState<ManageableRoleDefinition[]>([])
   const [permissionDefinitions, setPermissionDefinitions] = useState<PermissionDefinition[]>([])
   const [loading, setLoading] = useState<boolean>(true)
@@ -101,6 +103,7 @@ export default function PermissionsPage() {
   const authorizationDatabaseUrl = availableRecintos[0]?.url ?? null
   const fieldClassName = "w-full bg-white border-none rounded-xl py-3 px-4 text-sm font-semibold text-[#191c1c] placeholder:text-[#8b918d] appearance-none focus:ring-2 focus:ring-primary-container"
   const textareaClassName = "w-full min-h-24 resize-y bg-white border-none rounded-xl py-3 px-4 text-sm font-medium text-[#191c1c] placeholder:text-[#8b918d] focus:ring-2 focus:ring-primary-container"
+  const canManageRoles = hasPermission("roles_manage")
 
   const permissionsByCategory = useMemo(() => {
     return permissionDefinitions.reduce<Record<string, PermissionDefinition[]>>((accumulator, permission) => {
@@ -161,6 +164,10 @@ export default function PermissionsPage() {
   }, [loadCatalogData])
 
   const openCreateRole = (): void => {
+    if (!canManageRoles) {
+      return
+    }
+
     setRoleEditorError(null)
     setRoleDraft(buildEmptyDraft(fallbackRecinto))
   }
@@ -176,6 +183,10 @@ export default function PermissionsPage() {
   }
 
   const handleRoleDisplayNameChange = (value: string): void => {
+    if (!canManageRoles) {
+      return
+    }
+
     setRoleDraft((currentDraft) => {
       if (!currentDraft) {
         return currentDraft
@@ -202,6 +213,10 @@ export default function PermissionsPage() {
   }
 
   const handleRoleScopeChange = (scope: RoleScope): void => {
+    if (!canManageRoles) {
+      return
+    }
+
     setRoleDraft((currentDraft) => {
       if (!currentDraft) {
         return currentDraft
@@ -216,6 +231,10 @@ export default function PermissionsPage() {
   }
 
   const handleRoleRecintoChange = (recinto: RecintoKey): void => {
+    if (!canManageRoles) {
+      return
+    }
+
     setRoleDraft((currentDraft) => {
       if (!currentDraft) {
         return currentDraft
@@ -230,6 +249,10 @@ export default function PermissionsPage() {
   }
 
   const togglePermission = (permissionId: PermissionId): void => {
+    if (!canManageRoles) {
+      return
+    }
+
     setRoleDraft((currentDraft) => {
       if (!currentDraft) {
         return currentDraft
@@ -252,6 +275,10 @@ export default function PermissionsPage() {
   }
 
   const saveRole = async (): Promise<void> => {
+    if (!canManageRoles) {
+      return
+    }
+
     if (!roleDraft) {
       return
     }
@@ -307,6 +334,10 @@ export default function PermissionsPage() {
   }
 
   const removeRole = async (role: ManageableRoleDefinition): Promise<void> => {
+    if (!canManageRoles) {
+      return
+    }
+
     const targetDatabase = getDatabaseForUrl(role.sourceDatabaseUrl)
     if (!targetDatabase) {
       setRoleEditorError("No fue posible resolver la base de datos del rol a eliminar.")
@@ -363,18 +394,24 @@ export default function PermissionsPage() {
               <div className="p-8 border-b border-[#edeeed] flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-bold text-[#191c1c]">Roles</h2>
-                  <p className="text-sm text-[#5f6560] mt-1">Edita permisos y define si un rol es global o local.</p>
+                  <p className="text-sm text-[#5f6560] mt-1">
+                    {canManageRoles
+                      ? "Edita permisos y define si un rol es global o local."
+                      : "Consulta permisos y alcance de cada rol en modo solo lectura."}
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#1b3022] px-4 py-3 text-sm font-semibold text-white hover:bg-[#243c2d] transition-colors"
-                    onClick={openCreateRole}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Nuevo rol
-                  </button>
-                </div>
+                {canManageRoles && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-xl bg-[#1b3022] px-4 py-3 text-sm font-semibold text-white hover:bg-[#243c2d] transition-colors"
+                      onClick={openCreateRole}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Nuevo rol
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="p-6 space-y-3 max-h-216 overflow-y-auto">
@@ -406,9 +443,9 @@ export default function PermissionsPage() {
                           onClick={() => openEditRole(role)}
                         >
                           <PencilLine className="h-4 w-4" />
-                          Editar
+                          {canManageRoles ? "Editar" : "Ver detalle"}
                         </button>
-                        {!role.system && (
+                        {canManageRoles && !role.system && (
                           <button
                             type="button"
                             className="inline-flex items-center gap-2 rounded-xl border border-[#f0c7c2] px-3 py-2 text-sm font-semibold text-[#8c1d18] hover:bg-[#fff6f5]"
@@ -467,6 +504,7 @@ export default function PermissionsPage() {
                           onChange={(event) => handleRoleDisplayNameChange(event.target.value)}
                           className={fieldClassName}
                           placeholder="Ej. Supervisor Regional"
+                          disabled={!canManageRoles}
                         />
                       </div>
                       <div>
@@ -484,9 +522,15 @@ export default function PermissionsPage() {
                       <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Descripcion</label>
                       <textarea
                         value={roleDraft.description}
-                        onChange={(event) => setRoleDraft({ ...roleDraft, description: event.target.value })}
+                        onChange={(event) => {
+                          if (!canManageRoles) {
+                            return
+                          }
+                          setRoleDraft({ ...roleDraft, description: event.target.value })
+                        }}
                         className={textareaClassName}
                         placeholder="Describe para que sirve este rol y que alcance tiene."
+                        disabled={!canManageRoles}
                       />
                     </div>
 
@@ -497,7 +541,7 @@ export default function PermissionsPage() {
                           value={roleDraft.scope}
                           onChange={(event) => handleRoleScopeChange(event.target.value as RoleScope)}
                           className={fieldClassName}
-                          disabled={roleDraft.system || Boolean(roleDraft.originalRoleId)}
+                          disabled={!canManageRoles || roleDraft.system || Boolean(roleDraft.originalRoleId)}
                         >
                           <option value="global">Global</option>
                           <option value="local">Local</option>
@@ -509,7 +553,7 @@ export default function PermissionsPage() {
                           value={roleDraft.sourceRecinto}
                           onChange={(event) => handleRoleRecintoChange(event.target.value as RecintoKey)}
                           className={fieldClassName}
-                          disabled={roleDraft.scope === "global"}
+                          disabled={!canManageRoles || roleDraft.scope === "global"}
                         >
                           {availableRecintos.map((recinto) => (
                             <option key={recinto.key} value={recinto.key}>{recinto.name}</option>
@@ -520,8 +564,14 @@ export default function PermissionsPage() {
                         <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Estado</label>
                         <select
                           value={String(roleDraft.active)}
-                          onChange={(event) => setRoleDraft({ ...roleDraft, active: event.target.value === "true" })}
+                          onChange={(event) => {
+                            if (!canManageRoles) {
+                              return
+                            }
+                            setRoleDraft({ ...roleDraft, active: event.target.value === "true" })
+                          }}
                           className={fieldClassName}
+                          disabled={!canManageRoles}
                         >
                           <option value="true">Activo</option>
                           <option value="false">Inactivo</option>
@@ -554,6 +604,7 @@ export default function PermissionsPage() {
                                     checked={roleDraft.permissions[permission.id] === true}
                                     onChange={() => togglePermission(permission.id)}
                                     className="mt-1 h-4 w-4 rounded border-[#c3c8c5] text-[#1b3022] focus:ring-[#1b3022]"
+                                    disabled={!canManageRoles}
                                   />
                                   <span>
                                     <span className="block text-sm font-semibold text-[#191c1c]">{permission.label}</span>
@@ -575,14 +626,20 @@ export default function PermissionsPage() {
                       >
                         Cancelar
                       </button>
-                      <button
-                        type="button"
-                        className="rounded-xl bg-[#1b3022] px-5 py-3 text-sm font-semibold text-white hover:bg-[#243c2d] transition-colors disabled:opacity-60"
-                        onClick={saveRole}
-                        disabled={savingRole}
-                      >
-                        {savingRole ? "Guardando..." : "Guardar rol"}
-                      </button>
+                      {canManageRoles ? (
+                        <button
+                          type="button"
+                          className="rounded-xl bg-[#1b3022] px-5 py-3 text-sm font-semibold text-white hover:bg-[#243c2d] transition-colors disabled:opacity-60"
+                          onClick={saveRole}
+                          disabled={savingRole}
+                        >
+                          {savingRole ? "Guardando..." : "Guardar rol"}
+                        </button>
+                      ) : (
+                        <span className="rounded-xl border border-[#edeeed] px-4 py-3 text-sm font-semibold text-[#5f6560] bg-[#fcfcfb]">
+                          Modo solo lectura
+                        </span>
+                      )}
                     </div>
                   </>
                 )}
