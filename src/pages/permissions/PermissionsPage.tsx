@@ -7,7 +7,7 @@ import {
   getAuthorizationCatalog,
   isGlobalRole,
   listRolesAcrossDatabases,
-  upsertRole,
+  upsertRoleAcrossDatabases,
 } from "@/services/authorization/role-permissions.service"
 import { getDatabaseForUrl } from "@/services/firebase"
 import type {
@@ -125,8 +125,6 @@ export default function PermissionsPage() {
       throw new Error("No fue posible obtener la instancia principal de base de datos")
     }
 
-    await ensureAuthorizationCatalogAcrossDatabases()
-
     const [catalogSnapshot, roles] = await Promise.all([
       getAuthorizationCatalog(authorizationDatabase),
       listRolesAcrossDatabases(),
@@ -135,6 +133,23 @@ export default function PermissionsPage() {
     setPermissionDefinitions(catalogSnapshot.permissions)
     setRoleDefinitions(roles)
   }, [authorizationDatabaseUrl])
+
+  const syncAuthorizationCatalog = async (): Promise<void> => {
+    if (!canManageRoles) {
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError(null)
+      await ensureAuthorizationCatalogAcrossDatabases()
+      await loadCatalogData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No fue posible sincronizar el catalogo")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -311,7 +326,7 @@ export default function PermissionsPage() {
       setSavingRole(true)
       setRoleEditorError(null)
 
-      await upsertRole(targetDatabase, {
+      await upsertRoleAcrossDatabases({
         id: roleId,
         name: roleDraft.name.trim() || displayName,
         displayName,
@@ -322,6 +337,7 @@ export default function PermissionsPage() {
         active: roleDraft.active,
         permissions: roleDraft.permissions,
         createdAt: roleDraft.createdAt,
+        sourceRecinto: roleDraft.sourceRecinto,
       })
 
       await loadCatalogData()
@@ -362,6 +378,11 @@ export default function PermissionsPage() {
 
   return (
     <Layout>
+      {!canManageRoles && (
+        <div className="rounded-2xl border border-[#edeeed] bg-[#fcfcfb] px-4 py-3 text-sm text-[#5f6560]">
+          No tienes permiso para administrar roles. Los cambios estarán en modo solo lectura y no podrán guardarse.
+        </div>
+      )}
       <div className="bg-linear-to-br from-background via-muted/5 to-background min-h-screen">
         <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs border-b border-[#edeeed]">
           <nav className="px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto">
@@ -401,7 +422,16 @@ export default function PermissionsPage() {
                   </p>
                 </div>
                 {canManageRoles && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* agregar clase inline-flex para ver */}
+                    <button
+                      type="button"
+                      className="items-center gap-2 rounded-xl border border-[#d8ddd9] px-4 py-3 text-sm font-semibold text-[#191c1c] hover:bg-white hidden"
+                      onClick={syncAuthorizationCatalog}
+                      disabled={loading}
+                    >
+                      Sincronizar catalogo
+                    </button>
                     <button
                       type="button"
                       className="inline-flex items-center gap-2 rounded-xl bg-[#1b3022] px-4 py-3 text-sm font-semibold text-white hover:bg-[#243c2d] transition-colors"

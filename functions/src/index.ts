@@ -12,6 +12,165 @@ if (!admin.apps.length) {
 	admin.initializeApp();
 }
 
+type RoleScope = "global" | "local";
+type RecintoKey = "corporativo" | "ccci" | "cccr" | "cevp";
+
+interface RolePermissions {
+	readonly [permissionId: string]: boolean;
+}
+
+interface RoleUpsertPayload {
+	readonly id: string;
+	readonly name: string;
+	readonly displayName: string;
+	readonly description: string;
+	readonly scope: RoleScope;
+	readonly syncKey?: string;
+	readonly system: boolean;
+	readonly active: boolean;
+	readonly permissions: RolePermissions;
+	readonly createdAt?: string;
+	readonly sourceRecinto?: RecintoKey;
+}
+
+interface RoleUpsertRequest {
+	readonly role: RoleUpsertPayload;
+}
+
+interface StoredRoleDefinition extends RoleUpsertPayload {
+	readonly createdAt: string;
+	readonly updatedAt: string;
+	readonly version: number;
+}
+
+const AUTHORIZATION_VERSION = 1;
+
+const getDatabaseUrlMap = (): Record<RecintoKey, string | null> => {
+	const defaultUrl = (admin.app().options.databaseURL as string | undefined) ?? process.env.DATABASE_URL ?? null;
+	return {
+		corporativo: defaultUrl ?? process.env.DATABASE_URL ?? null,
+		ccci: process.env.DATABASE_URL_CCCI ?? process.env.DATABASE_URL_CCCI ?? null,
+		cccr: process.env.DATABASE_URL_CCCR ?? process.env.DATABASE_URL_CCCR ?? null,
+		cevp: process.env.DATABASE_URL_CEVP ?? process.env.DATABASE_URL_CEVP ?? null,
+	};
+};
+
+const listDatabaseUrls = (): string[] => {
+	const map = getDatabaseUrlMap();
+	return Object.values(map).filter((url): url is string => typeof url === "string" && url.length > 0);
+};
+
+const resolveDatabaseUrlByRecinto = (recinto?: RecintoKey): string | null => {
+	if (!recinto) {
+		return null;
+	}
+	const map = getDatabaseUrlMap();
+	return map[recinto] ?? null;
+};
+
+const hasRolesManagePermission = async (uid: string): Promise<boolean> => {
+	const databaseUrls = listDatabaseUrls();
+
+	for (const databaseUrl of databaseUrls) {
+		const db = admin.app().database(databaseUrl);
+		const userSnapshot = await db.ref(`users/${uid}`).get();
+		if (!userSnapshot.exists()) {
+			continue;
+		}
+
+		const legacyRole = userSnapshot.child("role").val();
+		if (legacyRole === "Admin") {
+			return true;
+		}
+
+		const roleId = userSnapshot.child("roleId").val();
+		if (typeof roleId !== "string" || roleId.trim().length === 0) {
+			continue;
+		}
+
+		const permissionSnapshot = await db.ref(`roles/${roleId}/permissions/roles_manage`).get();
+		if (permissionSnapshot.val() === true) {
+			return true;
+		}
+	}
+
+	return false;
+};
+
+const resolveSyncKey = (role: RoleUpsertPayload): string => {
+	if (role.syncKey && role.syncKey.trim().length > 0) {
+		return role.syncKey;
+	}
+	if (role.system) {
+		return `system:${role.id}`;
+	}
+	if (role.scope === "global") {
+		return `custom:${role.id}`;
+	}
+	return `local:${role.sourceRecinto ?? "corporativo"}:${role.id}`;
+};
+
+export const upsertRoleAcrossDatabases = onCall<RoleUpsertRequest>(
+	async (request): Promise<StoredRoleDefinition> => {
+		if (!request.auth?.uid) {
+			throw new HttpsError("unauthenticated", "Debes iniciar sesion para actualizar roles.");
+		}
+
+		const hasPermission = await hasRolesManagePermission(request.auth.uid);
+		if (!hasPermission) {
+			throw new HttpsError("permission-denied", "No tienes permisos para administrar roles.");
+		}
+
+		const role = request.data?.role;
+		if (!role || typeof role.id !== "string" || role.id.trim().length === 0) {
+			throw new HttpsError("invalid-argument", "El rol es invalido o incompleto.");
+		}
+
+		const displayName = role.displayName?.trim();
+		if (!displayName) {
+			throw new HttpsError("invalid-argument", "El rol requiere un nombre visible.");
+		}
+
+		const targetUrls = role.scope === "global" || role.system
+			? listDatabaseUrls()
+			: [resolveDatabaseUrlByRecinto(role.sourceRecinto)].filter((url): url is string => typeof url === "string" && url.length > 0);
+
+		if (targetUrls.length === 0) {
+			throw new HttpsError("failed-precondition", "No se pudo resolver la base de datos destino.");
+		}
+
+		const nowIso = new Date().toISOString();
+		let primaryRole: StoredRoleDefinition | null = null;
+
+		for (const [index, databaseUrl] of targetUrls.entries()) {
+			const db = admin.app().database(databaseUrl);
+			const roleRef = db.ref(`roles/${role.id}`);
+			const existingSnapshot = await roleRef.get();
+			const existingRole = existingSnapshot.val() as StoredRoleDefinition | null;
+			const nextRole: StoredRoleDefinition = {
+				...role,
+				name: role.name.trim() || displayName,
+				displayName,
+				syncKey: resolveSyncKey(role),
+				createdAt: existingRole?.createdAt ?? role.createdAt ?? nowIso,
+				updatedAt: nowIso,
+				permissions: { ...role.permissions },
+				version: AUTHORIZATION_VERSION,
+			};
+			await roleRef.set(nextRole);
+			if (index === 0) {
+				primaryRole = nextRole;
+			}
+		}
+
+		if (!primaryRole) {
+			throw new HttpsError("internal", "No fue posible persistir el rol.");
+		}
+
+		return primaryRole;
+	},
+);
+
 interface CreateTeamsMeetingRequest {
 	readonly organizerEmail?: string | null;
 	readonly subject: string;

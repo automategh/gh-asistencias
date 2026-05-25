@@ -13,6 +13,8 @@ import type {
   UserAuthorizationAssignment,
 } from "@/types/authorization"
 import { get, ref, runTransaction, set, update, type Database } from "firebase/database"
+import { httpsCallable } from "firebase/functions"
+import { functions } from "@/services/firebase"
 
 const AUTHORIZATION_VERSION = 1
 
@@ -297,6 +299,7 @@ export async function ensureAuthorizationCatalog(database: Database): Promise<Au
       const roleRef = ref(database, `roles/${seed.id}`)
       await runTransaction(roleRef, (currentValue: StoredRoleDefinition | null) => {
         if (currentValue) {
+          const currentPermissions = currentValue.permissions ?? {}
           return {
             ...currentValue,
             displayName: currentValue.displayName || seed.displayName,
@@ -306,8 +309,7 @@ export async function ensureAuthorizationCatalog(database: Database): Promise<Au
             system: currentValue.system ?? seed.system,
             active: currentValue.active ?? seed.active,
             permissions: {
-              ...seed.permissions,
-              ...currentValue.permissions,
+              ...currentPermissions,
             },
             updatedAt: currentValue.updatedAt || nowIso,
             createdAt: currentValue.createdAt || nowIso,
@@ -423,16 +425,32 @@ export async function listRolesAcrossDatabases(): Promise<ManageableRoleDefiniti
 export async function upsertRole(database: Database, role: Omit<RoleDefinition, "createdAt" | "updatedAt"> & { readonly createdAt?: string }): Promise<RoleDefinition> {
   const nowIso = new Date().toISOString()
   const targetDatabases = listTargetDatabasesForRole(role, database)
+  const orderedDatabases = [
+    database,
+    ...targetDatabases.filter((candidate) => candidate !== database),
+  ]
   let primaryRole: StoredRoleDefinition | null = null
 
-  for (const targetDatabase of targetDatabases) {
+  const saveRoleInDatabase = async (targetDatabase: Database): Promise<StoredRoleDefinition> => {
     const existingSnapshot = await get(ref(targetDatabase, `roles/${role.id}`))
     const existingRole = existingSnapshot.val() as StoredRoleDefinition | null
     const nextRole = buildStoredRoleFromInput(role, existingRole, nowIso)
     await set(ref(targetDatabase, `roles/${role.id}`), nextRole)
+    return nextRole
+  }
 
-    if (!primaryRole) {
-      primaryRole = nextRole
+  try {
+    primaryRole = await saveRoleInDatabase(orderedDatabases[0])
+  } catch (error) {
+    console.error("No fue posible guardar el rol en la base principal:", error)
+    throw error
+  }
+
+  for (const targetDatabase of orderedDatabases.slice(1)) {
+    try {
+      await saveRoleInDatabase(targetDatabase)
+    } catch (error) {
+      console.warn("No fue posible replicar el rol en una base secundaria:", error)
     }
   }
 
@@ -441,6 +459,29 @@ export async function upsertRole(database: Database, role: Omit<RoleDefinition, 
   }
 
   return primaryRole
+}
+
+interface RoleUpsertCallablePayload extends Omit<RoleDefinition, "createdAt" | "updatedAt"> {
+  readonly createdAt?: string
+  readonly sourceRecinto?: RecintoKey
+}
+
+interface RoleUpsertCallableRequest {
+  readonly role: RoleUpsertCallablePayload
+}
+
+export async function upsertRoleAcrossDatabases(role: RoleUpsertCallablePayload): Promise<RoleDefinition> {
+  if (!functions) {
+    throw new Error("No fue posible inicializar las funciones de Firebase.")
+  }
+
+  const callable = httpsCallable<RoleUpsertCallableRequest, RoleDefinition>(
+    functions,
+    "upsertRoleAcrossDatabases",
+  )
+
+  const response = await callable({ role })
+  return response.data
 }
 
 export async function deleteRole(database: Database, roleId: RoleId): Promise<void> {

@@ -1,6 +1,5 @@
 import { resolveDatabaseByEmail } from "@/lib/firebase/databaseResolver";
 import { getAllAvailableDatabases } from "@/lib/firebase/databaseResolver";
-import { ensureAuthorizationCatalog } from "@/services/authorization/role-permissions.service";
 import { getLegacyRoleFromRoleId, LEGACY_ROLE_TO_ROLE_ID } from "@/services/authorization/role-permissions.service";
 import { loginWithEmailPassword, loginWithMicrosoft, logout, registerWithEmailPassword } from "@/services/auth/auth.service";
 import { auth, getDatabaseForUrl } from "@/services/firebase";
@@ -125,9 +124,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     setPermissions([]);
                     return;
                 }
-
-                // Asegura que el catalogo base exista en la BD activa antes de resolver permisos del rol.
-                await ensureAuthorizationCatalog(db);
 
                 const roleRef = ref(db, `roles/${resolvedRoleId}`);
                 const roleSnapshot = await get(roleRef);
