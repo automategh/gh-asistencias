@@ -66,6 +66,7 @@ function ConfigurationProfilePage() {
     const [showPwd, setShowPwd] = useState<{ current: boolean; next: boolean; confirm: boolean }>({ current: false, next: false, confirm: false });
     const [savingProfile, setSavingProfile] = useState<boolean>(false);
     const isEmailPasswordUser = Boolean(firebaseUser?.providerData?.some(p => p?.providerId === 'password'));
+    const worksAtHeroica = useMemo(() => !user?.companyName || user.companyName.trim().length === 0, [user]);
 
     const [isMyDatabase, setIsMyDatabase] = useState<boolean | null>(null);
     const isLocked = isMyDatabase === false;
@@ -79,15 +80,18 @@ function ConfigurationProfilePage() {
         if (!user.identify || user.identify.trim().length === 0) {
             missing.push('Identificación')
         }
-        if (!user.department || user.department.trim().length === 0) {
+        if (worksAtHeroica && (!user.department || user.department.trim().length === 0)) {
             missing.push('Área')
         }
         if (!user.cargo || user.cargo.trim().length === 0) {
             missing.push('Cargo')
         }
+        if (worksAtHeroica && (!user.immediateBoss || user.immediateBoss.trim().length === 0)) {
+            missing.push('Jefe inmediato')
+        }
 
         return missing
-    }, [user])
+    }, [user, worksAtHeroica])
 
 
     useEffect(() => {

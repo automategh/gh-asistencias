@@ -10,6 +10,7 @@ interface ProfileCompletionPayload {
     readonly department?: string | null
     readonly immediateBoss?: string | null
     readonly cargo?: string | null
+    readonly companyName?: string | null
 }
 
 function isProfileComplete(payload: ProfileCompletionPayload | null): boolean {
@@ -17,10 +18,12 @@ function isProfileComplete(payload: ProfileCompletionPayload | null): boolean {
         return false
     }
 
+    const worksAtHeroica = !payload.companyName || payload.companyName.trim().length === 0
     const requiredFields = [
         payload.identify,
-        payload.department,
         payload.cargo,
+        worksAtHeroica ? payload.department : "ok",
+        worksAtHeroica ? payload.immediateBoss : "ok",
     ]
 
     return requiredFields.every((value) => typeof value === 'string' && value.trim().length > 0)
