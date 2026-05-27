@@ -119,6 +119,16 @@ function ChekinPage() {
             setError(err instanceof Error ? err.message : 'No fue posible registrar la asistencia')
         }
     }
+
+    const handleGoBack = (): void => {
+        if (window.history.length > 1) {
+            navigate(-1)
+            return
+        }
+
+        navigate(sourceDatabaseUrl ? `/meets?db=${encodeURIComponent(sourceDatabaseUrl)}` : '/meets')
+    }
+
     return (
         <Layout
             header={{
@@ -137,6 +147,14 @@ function ChekinPage() {
         >
             <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
                 <div className="max-w-2xl mx-auto p-6 mt-8">
+                    <button
+                        type="button"
+                        onClick={handleGoBack}
+                        className="inline-flex items-center gap-2 rounded-lg bg-muted px-4 py-2 text-sm font-semibold text-[#1b3022] hover:bg-primary/20 transition-colors mb-6"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        Volver
+                    </button>
                     <div className="bg-card rounded-2xl border border-border p-6">
                         <h1 className="text-3xl font-bold text-foreground mb-2">{meeting?.title ?? '—'}</h1>
                         <p className="text-muted-foreground flex items-center gap-2 mb-6">📍 {meeting?.location ?? '—'}</p>
