@@ -3,7 +3,7 @@ import { useDatabase } from "@/context/DatabaseContext"
 import { getMeetingById, updateParticipantStatus } from "@/services/meetings.service"
 import { getDatabaseForUrl } from "@/services/firebase"
 import type { Meeting, MeetingParticipant } from "@/types/meeting"
-import { AlertCircle, ArrowLeft, CheckCircle } from "lucide-react"
+import { AlertCircle, ArrowLeft } from "lucide-react"
 import { get, ref } from "firebase/database"
 import { useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
@@ -25,6 +25,7 @@ function ChekinPage() {
     const [loading, setLoading] = useState<boolean>(true)
     const [error, setError] = useState<string | null>(null)
     const [checkedIn, setCheckedIn] = useState<boolean>(false)
+    const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false)
 
     const meetingDatabase = useMemo(() => {
         if (sourceDatabaseUrl) {
@@ -113,13 +114,7 @@ function ChekinPage() {
                 checkinMethod: method ?? 'manual',
             })
             setCheckedIn(true)
-            // Redirigir luego de exito
-            setTimeout(() => {
-                const destination = sourceDatabaseUrl
-                    ? `/meets?db=${encodeURIComponent(sourceDatabaseUrl)}`
-                    : '/meets'
-                navigate(destination)
-            }, 1500)
+            setShowSuccessModal(true)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'No fue posible registrar la asistencia')
         }
@@ -158,11 +153,29 @@ function ChekinPage() {
                     </div>
                 </div>
 
-                {checkedIn && (
-                    <div className="p-6 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-2xl mb-6 text-center">
-                        <CheckCircle className="w-12 h-12 text-emerald-600 dark:text-emerald-400 mx-auto mb-4" />
-                        <p className="text-emerald-700 dark:text-emerald-400 font-semibold text-xl">Asistencia Registrada</p>
-                        <p className="text-emerald-600 dark:text-emerald-400 text-sm mt-2">Redirigiendo a actividades...</p>
+                {checkedIn && showSuccessModal && (
+                    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4">
+                        <div className="w-full max-w-md rounded-3xl border border-[#edeeed] bg-white shadow-[0_24px_48px_rgba(15,23,42,0.18)] overflow-hidden">
+                            <div className="px-6 py-5 border-b border-[#edeeed] bg-[#f8faf8]">
+                                <h2 className="text-xl font-bold text-[#191c1c]">Asistencia registrada</h2>
+                                <p className="text-sm text-[#5f6560] mt-2">Tu check-in se registró correctamente.</p>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-[#5f6560]">Pulsa cerrar para volver a la lista de actividades.</p>
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowSuccessModal(false)
+                                            navigate(-1)
+                                        }}
+                                        className="inline-flex items-center justify-center rounded-xl bg-[#1b3022] px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#14251a] transition-colors"
+                                    >
+                                        Cerrar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
 
