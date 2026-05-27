@@ -67,6 +67,7 @@ function MeetsPage() {
     const { database, databaseUrl, availableDatabases, recinto } = useDatabase()
     const navigate = useNavigate()
     const canViewAllTab = hasPermission('meetings_manage_any')
+    const canCreateMeetings = hasPermission('meetings_create')
 
     const [loading, setLoading] = useState<boolean>(true)
     const [error, setError] = useState<string | null>(null)
@@ -463,13 +464,18 @@ function MeetsPage() {
                 <Calendar className="w-8 h-8 text-muted-foreground" />
             </div>
             <h3 className="text-lg font-semibold text-foreground mb-2">No hay actividades</h3>
-            <p className="text-muted-foreground mb-6">Comienza creando tu primera actividad</p>
-            <Link
-                to="/new-meeting"
-                className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:shadow-md inline-block"
-            >
-                Crear Primera Actividad
-            </Link>
+            {canCreateMeetings && (
+                <>
+                    <p className="text-muted-foreground mb-6">Comienza creando tu primera actividad</p>
+                    <Link
+                        to="/new-meeting"
+                        className="px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:shadow-md inline-block"
+                    >
+                        Crear Primera Actividad
+                    </Link>
+                </>
+            )}
+
         </div>
     )
 
