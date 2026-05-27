@@ -147,10 +147,10 @@ export class Graph {
                 },
                 type: attendee.type ?? "required",
             })),
-            location: {
-                displayName: options.location,
-            },
-            isOnlineMeeting: true,
+            ...(options.location ? { location: { displayName: options.location } } : {}),
+            ...(options.isOnlineMeeting ? {
+                isOnlineMeeting: true,
+            } : {}),
             onlineMeetingProvider: "teamsForBusiness",
         };
 
@@ -213,8 +213,9 @@ export interface CreateTeamsMeetingOptions {
      * Zona horaria compatible con Graph, por ejemplo "America/Bogota".
      */
     readonly timeZone: string;
-    readonly location: string;
+    readonly location?: string;
     readonly attendees: readonly MeetingAttendee[];
+    readonly isOnlineMeeting?: boolean;
 }
 
 export interface GraphEvent {
@@ -255,11 +256,11 @@ interface GraphCreateEventRequest {
         };
         readonly type: "required" | "optional";
     }[];
-    readonly location: {
+    readonly location?: {
         readonly displayName: string;
     };
-    readonly isOnlineMeeting: true;
-    readonly onlineMeetingProvider: "teamsForBusiness";
+    readonly isOnlineMeeting?: true;
+    readonly onlineMeetingProvider?: "teamsForBusiness";
 }
 
 export interface MailRecipient {

@@ -90,6 +90,7 @@ function NewMeetPage() {
     const [creatingTeams, setCreatingTeams] = useState<boolean>(false)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
+    const [isOnlineMeeting, setIsOnlineMeeting] = useState<boolean>(false)
 
     type UserItem = {
         uid: string
@@ -133,7 +134,7 @@ function NewMeetPage() {
             list.sort((a, b) => a.name.localeCompare(b.name))
             setAllUsers(list)
         }
-        loadUsers().catch(() => {})
+        loadUsers().catch(() => { })
         return () => { cancelled = true }
     }, [])
 
@@ -173,7 +174,7 @@ function NewMeetPage() {
             }
         }
 
-        loadTrainingSurveys().catch(() => {})
+        loadTrainingSurveys().catch(() => { })
 
         return () => {
             cancelled = true
@@ -330,7 +331,7 @@ function NewMeetPage() {
             }
         }
 
-        loadGroupings().catch(() => {})
+        loadGroupings().catch(() => { })
 
         return () => {
             cancelled = true
@@ -375,7 +376,7 @@ function NewMeetPage() {
             const startMs = toEpochMs(form.startTime)
             const endMs = toEpochMs(form.endTime)
             if (!form.title.trim()) throw new Error('El título es obligatorio')
-            if (!form.location.trim()) throw new Error('La ubicación es obligatoria')
+            if (!isOnlineMeeting && !form.location.trim()) throw new Error('La ubicación es obligatoria')
             if (!form.startTime || !form.endTime) throw new Error('Hora de inicio y fin son obligatorias')
             if (Number.isNaN(startMs) || Number.isNaN(endMs)) throw new Error('Fechas inválidas')
             if (startMs >= endMs) throw new Error('La hora de inicio debe ser menor que la de fin')
@@ -423,12 +424,12 @@ function NewMeetPage() {
                     startTime: meeting.startTime,
                     endTime: meeting.endTime,
                     timeZone,
-                    location: meeting.location,
                     attendees: selected.map(participant => ({
                         email: participant.email,
                         name: participant.name,
                         type: 'required',
                     })),
+                    ...(isOnlineMeeting === true ? { isOnlineMeeting: true } : { location: meeting.location, })
                 })
 
                 setSuccess('Actividad creada correctamente y sincronizada con Teams')
@@ -456,6 +457,7 @@ function NewMeetPage() {
     const helperFieldClassName = 'w-full bg-[#fcfcfb] border border-[#edeeed] rounded-xl py-3 px-4 text-sm text-[#191c1c] placeholder:text-[#8b918d] focus:outline-none focus:ring-2 focus:ring-primary-container'
     const listContainerClassName = 'mt-3 h-80 overflow-y-auto border border-[#edeeed] rounded-2xl bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]'
 
+
     return (
         <Layout
             header={{
@@ -472,134 +474,152 @@ function NewMeetPage() {
                                 <p className="text-[10px] uppercase tracking-widest text-outline font-bold mb-2">Datos de la actividad</p>
                             </div>
                             <div className="grid md:grid-cols-2 gap-6">
-                            <div>
-                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Título *</label>
-                                <input
-                                    type="text"
-                                    name="title"
-                                    value={form.title}
-                                    onChange={handleChange}
-                                    placeholder="Título de la reunión"
-                                    className={fieldClassName}
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Tipo *</label>
-                                <select
-                                    name="type"
-                                    value={form.type}
-                                    onChange={handleChange}
-                                    className={fieldClassName}
-                                >
-                                    <option value="meeting">Reunión</option>
-                                    <option value="training">Capacitación</option>
-                                    <option value="custom">Personalizado</option>
-                                </select>
-                            </div>
-                            </div>
-
-                        {form.type === 'training' && (
-                            <div className="grid md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Encuesta de satisfacción</label>
-                                    {trainingSurveys.length === 0 ? (
-                                        <p className="text-sm text-[#5f6560] bg-white rounded-xl px-4 py-3">
-                                            No hay encuestas de capacitación configuradas en esta base de datos.
-                                        </p>
-                                    ) : (
-                                        <select
-                                            name="satisfactionSurveyId"
-                                            value={form.satisfactionSurveyId}
-                                            onChange={handleChange}
-                                            className={fieldClassName}
-                                        >
-                                            {trainingSurveys.map(survey => (
-                                                <option key={survey.id} value={survey.id}>
-                                                    {survey.name}{survey.predetermined ? ' (Predeterminada)' : ''}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    )}
-                                </div>
-
-                                <div>
-                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Capacitador</label>
+                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Título *</label>
                                     <input
                                         type="text"
-                                        name="trainerName"
-                                        value={form.trainerName}
+                                        name="title"
+                                        value={form.title}
                                         onChange={handleChange}
-                                        placeholder="Nombre del capacitador si no está registrado"
+                                        placeholder="Título de la reunión"
                                         className={fieldClassName}
                                     />
-                                    <p className="text-[11px] text-[#5f6560] mt-2 px-1">
-                                        Si dejas este campo vacío, se usará automáticamente el participante marcado como capacitador.
-                                    </p>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Tipo *</label>
+                                    <select
+                                        name="type"
+                                        value={form.type}
+                                        onChange={handleChange}
+                                        className={fieldClassName}
+                                    >
+                                        <option value="meeting">Reunión</option>
+                                        <option value="training">Capacitación</option>
+                                        <option value="custom">Personalizado</option>
+                                    </select>
                                 </div>
                             </div>
-                        )}
 
-                        {form.type === 'custom' && (
+                            {form.type === 'training' && (
+                                <div className="grid md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Encuesta de satisfacción</label>
+                                        {trainingSurveys.length === 0 ? (
+                                            <p className="text-sm text-[#5f6560] bg-white rounded-xl px-4 py-3">
+                                                No hay encuestas de capacitación configuradas en esta base de datos.
+                                            </p>
+                                        ) : (
+                                            <select
+                                                name="satisfactionSurveyId"
+                                                value={form.satisfactionSurveyId}
+                                                onChange={handleChange}
+                                                className={fieldClassName}
+                                            >
+                                                {trainingSurveys.map(survey => (
+                                                    <option key={survey.id} value={survey.id}>
+                                                        {survey.name}{survey.predetermined ? ' (Predeterminada)' : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Capacitador</label>
+                                        <input
+                                            type="text"
+                                            name="trainerName"
+                                            value={form.trainerName}
+                                            onChange={handleChange}
+                                            placeholder="Nombre del capacitador si no está registrado"
+                                            className={fieldClassName}
+                                        />
+                                        <p className="text-[11px] text-[#5f6560] mt-2 px-1">
+                                            Si dejas este campo vacío, se usará automáticamente el participante marcado como capacitador.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {form.type === 'custom' && (
+                                <div>
+                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Tipo personalizado *</label>
+                                    <input
+                                        type="text"
+                                        name="customType"
+                                        value={form.customType}
+                                        onChange={handleChange}
+                                        placeholder="Ej. Taller, Charla"
+                                        className={fieldClassName}
+                                    />
+                                </div>
+                            )}
+
                             <div>
-                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Tipo personalizado *</label>
-                                <input
-                                    type="text"
-                                    name="customType"
-                                    value={form.customType}
+                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Descripción</label>
+                                <textarea
+                                    name="description"
+                                    value={form.description}
                                     onChange={handleChange}
-                                    placeholder="Ej. Taller, Charla"
+                                    placeholder="Descripción de la reunión"
+                                    rows={4}
                                     className={fieldClassName}
                                 />
                             </div>
-                        )}
 
-                        <div>
-                            <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Descripción</label>
-                            <textarea
-                                name="description"
-                                value={form.description}
-                                onChange={handleChange}
-                                placeholder="Descripción de la reunión"
-                                rows={4}
-                                className={fieldClassName}
-                            />
-                        </div>
-
-                        <div>
-                            <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Ubicación *</label>
-                            <input
-                                type="text"
-                                name="location"
-                                value={form.location}
-                                onChange={handleChange}
-                                placeholder="Sala de conferencias o ubicación"
-                                className={fieldClassName}
-                            />
-                        </div>
-
-                        <div className="grid md:grid-cols-2 gap-6">
-                            <div>
-                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Hora de Inicio *</label>
-                                <input
-                                    type="datetime-local"
-                                    name="startTime"
-                                    value={form.startTime}
-                                    onChange={handleChange}
-                                    className={fieldClassName}
-                                />
+                            <div className="flex items-center space-x-2">
+                                <span className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-0.5 ml-1">Es virtual?</span>
+                                <button
+                                    type="button"
+                                    aria-pressed={isOnlineMeeting}
+                                    onClick={() => setIsOnlineMeeting(prev => !prev)}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40 ${isOnlineMeeting ? 'bg-primary' : 'bg-gray-300'}`}
+                                >
+                                    <span
+                                        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${isOnlineMeeting ? 'translate-x-5' : 'translate-x-1'}`}
+                                    />
+                                </button>
                             </div>
 
-                            <div>
-                                <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Hora de Fin *</label>
-                                <input
-                                    type="datetime-local"
-                                    name="endTime"
-                                    value={form.endTime}
-                                    onChange={handleChange}
-                                    className={fieldClassName}
-                                />
+                            {!isOnlineMeeting && (
+                                <>
+                                    <div>
+                                        <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Ubicación *</label>
+                                        <input
+                                            type="text"
+                                            name="location"
+                                            value={form.location}
+                                            onChange={handleChange}
+                                            placeholder="Sala de conferencias o ubicación"
+                                            className={fieldClassName}
+                                        />
+                                    </div>
+                                </>
+                            )}
+
+                            <div className="grid md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Hora de Inicio *</label>
+                                    <input
+                                        type="datetime-local"
+                                        name="startTime"
+                                        value={form.startTime}
+                                        onChange={handleChange}
+                                        className={fieldClassName}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] uppercase tracking-widest text-outline font-bold block mb-2 ml-1">Hora de Fin *</label>
+                                    <input
+                                        type="datetime-local"
+                                        name="endTime"
+                                        value={form.endTime}
+                                        onChange={handleChange}
+                                        className={fieldClassName}
+                                    />
+                                </div>
                             </div>
-                        </div>
                         </section>
 
                         <section className="bg-white rounded-2xl shadow-[0_20px_20px_rgba(25,28,28,0.04)] overflow-hidden">
@@ -780,7 +800,7 @@ function NewMeetPage() {
 
             </div>
 
-        </Layout>
+        </Layout >
     )
 }
 

@@ -178,8 +178,9 @@ interface CreateTeamsMeetingRequest {
 	readonly startTime: number;
 	readonly endTime: number;
 	readonly timeZone: string;
-	readonly location: string;
+	readonly location?: string;
 	readonly attendees: readonly MeetingAttendeeRequest[];
+	readonly isOnlineMeeting?: boolean;
 }
 
 interface MeetingAttendeeRequest {
@@ -260,8 +261,8 @@ export const createTeamsMeeting = onCall<CreateTeamsMeetingRequest>(
 				startDateTime: formatDateTimeForTimeZone(data.startTime, data.timeZone),
 				endDateTime: formatDateTimeForTimeZone(data.endTime, data.timeZone),
 				timeZone: data.timeZone,
-				location: data.location,
 				attendees: sanitizedAttendees,
+				...(data.isOnlineMeeting ? { isOnlineMeeting: true } : {location: data.location,}), // controlamos si es una reunion presencial o online
 			};
 
 			const event: GraphEvent = await graph.createTeamsMeeting(options);
