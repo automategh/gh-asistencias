@@ -16,7 +16,7 @@ import {
 } from "@/services/authorization/role-permissions.service"
 import type { ManageableRoleDefinition } from "@/types/authorization"
 import type { CrossDbUserItem } from "@/types/user"
-import { ChevronRight, Users } from "lucide-react"
+import { Users } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 const isLeaderRoleId = (roleId: string): boolean => roleId.trim().toLowerCase() === "lider"
@@ -230,20 +230,14 @@ export default function UsersPage() {
   }
 
   return (
-    <Layout>
+    <Layout
+      header={{
+        breadcrumbs: [{ label: "Configuracion" }, { label: "Usuarios" }],
+        title: "Gestion de Usuarios",
+        description: "Administra usuarios solo del recinto base actualmente seleccionado.",
+      }}
+    >
       <div className="bg-linear-to-br from-background via-muted/5 to-background min-h-screen">
-        <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs border-b border-[#edeeed]">
-          <nav className="px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto">
-            <div className="flex items-center gap-2 text-xs text-outline mb-1 font-label tracking-wide uppercase">
-              <span>Configuracion</span>
-              <ChevronRight className="w-4 h-4" />
-              <span>Usuarios</span>
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight text-[#191c1c]">Gestion de Usuarios</h1>
-            <p className="text-sm text-[#5f6560] mt-1">Administra usuarios solo del recinto base actualmente seleccionado.</p>
-          </nav>
-        </header>
-
         <div className="px-4 md:px-12 py-10 space-y-10 max-w-7xl mx-auto">
           {loading && (
             <div className="bg-white rounded-2xl p-6 text-sm text-[#5f6560] shadow-[0_20px_20px_rgba(25,28,28,0.04)]">

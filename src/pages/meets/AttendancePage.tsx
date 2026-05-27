@@ -274,37 +274,38 @@ function AttendancePage() {
         navigate(-1)
     }
 
-    return (
-        <Layout>
-            <div className="min-h-screen bg-linear-to-br from-background via-muted/10 to-background">
-                <header className="bg-card/80 border-b border-border shadow-sm sticky top-0 z-20 backdrop-blur-xl print:hidden">
-                    <nav className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <Button
-                                type="button"
-                                size="icon"
-                                variant="outline"
-                                onClick={handleGoBack}
-                                aria-label="Volver atrás"
-                            >
-                                <ArrowLeft className="w-4 h-4" />
-                            </Button>
-                            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground">
-                                Asistencia: <span className="font-semibold text-muted-foreground">{meeting?.title ?? '—'}</span>
-                            </h1>
-                        </div>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={handleExportPdf}
-                            disabled={isExporting || attendance.length === 0}
-                        >
-                            {isExporting ? 'Generando PDF…' : 'Descargar PDF'}
-                        </Button>
-                    </nav>
-                </header>
+    const headerActions = (
+        <div className="flex items-center gap-3">
+            <Button
+                type="button"
+                size="icon"
+                variant="outline"
+                onClick={handleGoBack}
+                aria-label="Volver atrás"
+            >
+                <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleExportPdf}
+                disabled={isExporting || attendance.length === 0}
+            >
+                {isExporting ? 'Generando PDF…' : 'Descargar PDF'}
+            </Button>
+        </div>
+    )
 
+    return (
+        <Layout
+            header={{
+                breadcrumbs: [{ label: 'Actividades', to: '/meets' }, { label: 'Asistencia' }],
+                title: `Asistencia: ${meeting?.title ?? '—'}`,
+                actions: headerActions,
+            }}
+        >
+            <div className="min-h-screen bg-linear-to-br from-background via-muted/10 to-background">
                 {loading && <div className="px-4 pt-4 text-sm text-muted-foreground">Cargando…</div>}
                 {error && <div className="px-4 pt-4 text-sm text-red-600">{error}</div>}
 

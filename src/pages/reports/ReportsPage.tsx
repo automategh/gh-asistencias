@@ -36,15 +36,14 @@ function ReportsPage() {
     }, [database])
 
     return (
-        <Layout>
+        <Layout
+            header={{
+                breadcrumbs: [{ label: 'Reportes' }],
+                title: 'Panel de Reportes',
+                description: 'Resumen y análisis centralizado de la asistencia en toda la organización.',
+            }}
+        >
             <div className='bg-linear-to-br from-background via-muted/5 to-background'>
-                <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs">
-                    <nav className='px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto'>
-                        <h1 className="text-3xl font-bold tracking-tight">Panel de Reportes</h1>
-                        <p className="font-body text-on-surface-variant text-sm mt-1">Resumen y análisis centralizado de la asistencia en toda la organización.</p>
-                    </nav>
-                </header>
-
                 <div className='px-4 md:px-12 py-10 md:py-16 space-y-10'>
                     <section className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-7xl md:mx-auto">
 

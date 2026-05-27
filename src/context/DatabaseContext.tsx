@@ -28,7 +28,7 @@ export const DatabaseProvider: React.FC<PropsWithChildren> = ({ children }) => {
     const initialRecinto: RecintoKey =
         savedSelection && JSON.parse(savedSelection).key
             ? JSON.parse(savedSelection).key as RecintoKey
-            : "corporativo";
+            : "gh";
 
     const initialUrl: string | null =
         savedSelection && JSON.parse(savedSelection).url
@@ -114,7 +114,7 @@ export const DatabaseProvider: React.FC<PropsWithChildren> = ({ children }) => {
                 console.error("No fue posible resolver la base de datos del recinto", error);
                 if (!cancelled) {
                     setDatabaseUrl(null);
-                    setRecinto("corporativo");
+                    setRecinto("gh");
                 }
             } finally {
                 if (!cancelled) {
@@ -126,7 +126,7 @@ export const DatabaseProvider: React.FC<PropsWithChildren> = ({ children }) => {
         resolveDatabaseSelection().catch(() => {
             if (!cancelled) {
                 setDatabaseUrl(null);
-                setRecinto("corporativo");
+                setRecinto("gh");
                 setResolved(true);
             }
         });

@@ -139,15 +139,14 @@ export default function DepartmentsPage() {
   }
 
   return (
-    <Layout>
+    <Layout
+      header={{
+        breadcrumbs: [{ label: 'Configuracion' }, { label: 'Areas' }],
+        title: 'Áreas',
+        description: 'Administra las áreas del recinto actual.',
+      }}
+    >
       <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
-        <header className="bg-card border-b border-border sticky top-0 z-20 backdrop-blur-xl">
-          <nav className="max-w-4xl mx-auto px-6 py-4">
-            <h1 className="text-3xl font-bold mt-4 text-foreground">Áreas</h1>
-            <p className="text-sm text-muted-foreground">Administra las áreas del recinto actual.</p>
-          </nav>
-        </header>
-
         <div className="max-w-4xl mx-auto p-6 mt-8 space-y-8">
           {loading && <div className="p-3 text-sm text-muted-foreground">Cargando…</div>}
           {error && <div className="p-3 text-sm text-red-600 border border-red-300 rounded">{error}</div>}

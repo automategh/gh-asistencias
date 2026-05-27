@@ -20,7 +20,7 @@ import { getSurveys, type Survey } from '@/services/forms.service'
 import { createTeamsMeetingViaCloudFunction } from '@/services/teams.service'
 import { buildUserGroups, buildUserGroupsByField, getUserGroupingDefinitions, type GroupingFieldKey, type UserGroupingId } from '@/lib/userGrouping'
 import { getUserGroupingConfig, type UserGroupingConfig } from '@/services/user-grouping.service'
-import { ChevronRight, Users } from 'lucide-react'
+import { Users } from 'lucide-react'
 
 /**
  * Convierte un valor `datetime-local` a epoch ms, interpretándolo en zona local
@@ -454,22 +454,14 @@ function NewMeetPage() {
     const listContainerClassName = 'mt-3 h-80 overflow-y-auto border border-[#edeeed] rounded-2xl bg-white shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]'
 
     return (
-        <Layout>
+        <Layout
+            header={{
+                breadcrumbs: [{ label: 'Actividades', to: '/meets' }, { label: 'Nueva actividad' }],
+                title: 'Nueva Actividad',
+                description: 'Crea reuniones, capacitaciones o actividades personalizadas con sus participantes.',
+            }}
+        >
             <div className="bg-linear-to-br from-background via-muted/5 to-background min-h-screen">
-                <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs border-b border-[#edeeed]">
-                    <nav className="px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto">
-                        <div className="flex items-center gap-2 text-xs text-outline mb-1 font-label tracking-wide uppercase">
-                            <span>Actividades</span>
-                            <ChevronRight className="w-4 h-4" />
-                            <span>Nueva actividad</span>
-                        </div>
-                        <h1 className="text-3xl font-bold tracking-tight text-[#191c1c]">Nueva Actividad</h1>
-                        <p className="text-sm text-[#5f6560] mt-1">
-                            Crea reuniones, capacitaciones o actividades personalizadas con sus participantes.
-                        </p>
-                    </nav>
-                </header>
-
                 <div className="px-4 md:px-12 py-10 md:py-10 max-w-7xl mx-auto">
                     <form className="space-y-8" onSubmit={handleSubmit}>
                         <section className="bg-[#f3f4f3] p-6 rounded-xl space-y-6">

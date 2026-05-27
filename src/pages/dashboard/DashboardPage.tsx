@@ -1,5 +1,4 @@
 import Layout from '@/components/layouts/layout'
-import { useAuth } from '@/context/AuthContext'
 import { useDatabase } from '@/context/DatabaseContext'
 import { BarChart3, Calendar, Loader2, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -50,7 +49,6 @@ const MONTH_LABELS = [
  * para usuarios corporativos).
  */
 function DashboardPage() {
-    const { logout, user } = useAuth()
     const { databaseUrl, availableDatabases, recinto, loading: dbLoading, isCorporateUser } = useDatabase()
     const emptySummary = useMemo(() => getEmptyAttendanceSummary(), [])
 
@@ -211,40 +209,16 @@ function DashboardPage() {
         },
     ]
 
-    return (
-        <Layout>
-            <div className="bg-linear-to-br from-background via-muted/5 to-background min-h-screen">
-                <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs border-b border-[#edeeed]">
-                    <nav className="px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto flex justify-between items-center gap-6">
-                        <div>
-                            <div className="flex items-center gap-2 text-xs text-outline mb-1 font-label tracking-wide uppercase">
-                                <span>Inicio</span>
-                                <span>/</span>
-                                <span>Dashboard</span>
-                            </div>
-                            <h1 className="text-3xl font-bold tracking-tight text-[#191c1c] flex items-center gap-3">
-                                <BarChart3 className="w-7 h-7 text-[#1b3022]" />
-                                Dashboard de Asistencias
-                            </h1>
-                            <p className="text-sm text-[#5f6560] mt-1">
-                                Resumen mensual de actividades: asistencias vs citados.
-                            </p>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                            {user?.displayName && (
-                                <span className="text-sm text-[#5f6560]">{user.displayName}</span>
-                            )}
-                            <button
-                                type="button"
-                                onClick={logout}
-                                className="px-4 py-2.5 bg-zinc-300 rounded-2xl cursor-pointer text-sm font-medium text-foreground hover:bg-zinc-200 transition-colors"
-                            >
-                                Cerrar sesión
-                            </button>
-                        </div>
-                    </nav>
-                </header>
 
+    return (
+        <Layout
+            header={{
+                breadcrumbs: [{ label: "Inicio", to: "/" }, { label: "Dashboard" }],
+                title: "Dashboard de Asistencias",
+                description: "Resumen mensual de actividades: asistencias vs citados.",
+            }}
+        >
+            <div className="bg-linear-to-br from-background via-muted/5 to-background min-h-screen">
                 <div className="px-4 md:px-12 py-10 md:py-10 space-y-10 max-w-7xl mx-auto">
                     <section className="bg-[#f3f4f3] p-6 rounded-xl space-y-4">
                         <div className="flex flex-wrap items-end gap-6">

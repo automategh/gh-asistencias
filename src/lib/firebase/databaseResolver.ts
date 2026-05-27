@@ -2,7 +2,7 @@
 import { DEFAULT_DATABASE_URL, getDatabaseForUrl } from "@/services/firebase";
 import type { Database } from "firebase/database";
 
-export type RecintoKey = "corporativo" | "ccci" | "cccr" | "cevp";
+export type RecintoKey = "gh" | "ccci" | "cccr" | "cevp";
 
 interface DatabaseResolution {
     databaseUrl: string;
@@ -49,15 +49,15 @@ export const resolveDatabaseByEmail = (email?: string | null): DatabaseResolutio
 
     if (!domain) {
         return {
-            databaseUrl: ensureUrl(corporateUrl, "Corporativo"),
-            recinto: "corporativo",
+            databaseUrl: ensureUrl(corporateUrl, "GH"),
+            recinto: "gh",
         };
     }
 
     if (domain === CORPORATE_DOMAIN) {
         return {
-            databaseUrl: ensureUrl(corporateUrl, "Corporativo"),
-            recinto: "corporativo",
+            databaseUrl: ensureUrl(corporateUrl, "GH"),
+            recinto: "gh",
         };
     }
 
@@ -84,8 +84,8 @@ export const resolveDatabaseByEmail = (email?: string | null): DatabaseResolutio
 
     // Por defecto, si el dominio no coincide con ninguno conocido, usar corporativo
     return {
-        databaseUrl: ensureUrl(corporateUrl, "Corporativo (default)"),
-        recinto: "corporativo",
+        databaseUrl: ensureUrl(corporateUrl, "GH"),
+        recinto: "gh",
     };
 };
 
@@ -93,16 +93,16 @@ export const getAllAvailableDatabases = (): Array<{ key: RecintoKey; name: strin
     const databases: Array<{ key: RecintoKey; name: string; url: string }> = [];
 
     if (corporateUrl) {
-        databases.push({ key: "corporativo", name: "Corporativo", url: corporateUrl });
+        databases.push({ key: "gh", name: "Grupo Heroica", url: corporateUrl });
     }
     if (ccciUrl) {
-        databases.push({ key: "ccci", name: "Centro de Convenciones Cartagena de Indias", url: ccciUrl });
+        databases.push({ key: "ccci", name: "CCCI", url: ccciUrl });
     }
     if (cccrUrl) {
-        databases.push({ key: "cccr", name: "Centro de Convenciones Costa Rica", url: cccrUrl });
+        databases.push({ key: "cccr", name: "CCCR", url: cccrUrl });
     }
     if (cevpUrl) {
-        databases.push({ key: "cevp", name: "Centro de Eventos Valle del Pacífico", url: cevpUrl });
+        databases.push({ key: "cevp", name: "CEVP", url: cevpUrl });
     }
 
     return databases;
@@ -117,8 +117,8 @@ export const getAllAvailableDatabases = (): Array<{ key: RecintoKey; name: strin
 export const resolveDatabaseByRecintoName = (recintoName?: string | null): DatabaseResolution => {
     if (!recintoName) {
         return {
-            databaseUrl: ensureUrl(corporateUrl, "Corporativo"),
-            recinto: "corporativo",
+            databaseUrl: ensureUrl(corporateUrl, "Grupo Heroica"),
+            recinto: "gh",
         };
     }
 
@@ -151,8 +151,8 @@ export const resolveDatabaseByRecintoName = (recintoName?: string | null): Datab
     // Por defecto, usar corporativo
     console.warn(`Recinto "${recintoName}" no reconocido, usando base de datos corporativa`);
     return {
-        databaseUrl: ensureUrl(corporateUrl, "Corporativo (default)"),
-        recinto: "corporativo",
+        databaseUrl: ensureUrl(corporateUrl, "Grupo Heroica"),
+        recinto: "gh",
     };
 };
 

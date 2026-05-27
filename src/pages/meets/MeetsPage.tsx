@@ -473,84 +473,78 @@ function MeetsPage() {
         </div>
     )
 
-    // Se reemplazan items inline por el componente reutilizable MeetingCard
-
     return (
-        <Layout>
+        <Layout
+            header={{
+                breadcrumbs: [{ label: 'Actividades' }],
+                title: 'Actividades',
+                description: 'Visualiza y coordina tus próximas sesiones.',
+            }}
+        >
             <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
-                <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs">
-                    <nav className='px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto'>
-                        <div className='flex justify-between items-center'>
-                            <div>
-                                <h1 className="text-3xl font-bold tracking-tight">Actividades</h1>
-                                <p className="font-body text-[#434843] text-sm mt-1">Visualiza y coordina tus próximas sesiones.</p>
-                            </div>
-                            <div>
-                                <div className="flex bg-[#edeeed] p-1 rounded-xl shadow-sm">
-                                    <button
-                                        onClick={() => {
-                                            setViewMode('grid')
-                                        }}
-                                        className={`px-4 py-2 text-sm cursor-pointer font-medium transition-colors rounded-lg ${viewMode === 'grid'
-                                            ? 'bg-white text-[#1b3022] font-bold'
-                                            : 'text-[#434843] hover:text-[#1b3022]'
-                                            }`}>
-                                        Vista de cuadricula
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            setViewMode('list')
-                                        }}
-                                        className={`px-4 py-2 text-sm cursor-pointer rounded-lg font-medium transition-colors ${viewMode === 'list'
-                                            ? 'bg-white text-[#1b3022] font-bold'
-                                            : 'text-[#434843] hover:text-[#1b3022]'
-                                            }`}>
-                                        Vista de lista
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </nav>
-                </header>
-
                 <div className='px-4 md:px-12 py-5 space-y-10'>
                     <div className="max-w-7xl mx-auto">
-
-
-                        <div className="mb-4 flex gap-4">
-                            <button
-                                type="button"
-                                onClick={() => setActiveTab('invited')}
-                                className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'invited'
-                                    ? 'border-primary text-primary'
-                                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                                    }`}
-                            >
-                                Citadas a mí
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setActiveTab('created')}
-                                className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'created'
-                                    ? 'border-primary text-primary'
-                                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                                    }`}
-                            >
-                                Creadas por mí
-                            </button>
-                            {canViewAllTab && (
+                        <div className='flex justify-between items-center'>
+                            <div className="mb-4 flex gap-4">
                                 <button
                                     type="button"
-                                    onClick={() => setActiveTab('all')}
-                                    className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'all'
+                                    onClick={() => setActiveTab('invited')}
+                                    className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'invited'
                                         ? 'border-primary text-primary'
                                         : 'border-transparent text-muted-foreground hover:text-foreground'
                                         }`}
                                 >
-                                    Todas
+                                    Citadas a mí
                                 </button>
-                            )}
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab('created')}
+                                    className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'created'
+                                        ? 'border-primary text-primary'
+                                        : 'border-transparent text-muted-foreground hover:text-foreground'
+                                        }`}
+                                >
+                                    Creadas por mí
+                                </button>
+                                {canViewAllTab && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab('all')}
+                                        className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'all'
+                                            ? 'border-primary text-primary'
+                                            : 'border-transparent text-muted-foreground hover:text-foreground'
+                                            }`}
+                                    >
+                                        Todas
+                                    </button>
+                                )}
+                            </div>
+                            <div className="flex bg-[#edeeed] p-1 rounded-xl shadow-sm">
+                                <button
+                                    onClick={() => {
+                                        setViewMode('grid')
+                                    }}
+                                    className={`px-4 py-2 text-sm cursor-pointer font-medium transition-colors rounded-lg ${viewMode === 'grid'
+                                        ? 'bg-white text-[#1b3022] font-bold'
+                                        : 'text-[#434843] hover:text-[#1b3022]'
+                                        }`}
+                                >
+                                    Vista de cuadricula
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setViewMode('list')
+                                    }}
+                                    className={`px-4 py-2 text-sm cursor-pointer rounded-lg font-medium transition-colors ${viewMode === 'list'
+                                        ? 'bg-white text-[#1b3022] font-bold'
+                                        : 'text-[#434843] hover:text-[#1b3022]'
+                                        }`}
+                                >
+                                    Vista de lista
+                                </button>
+                            </div>
                         </div>
+
 
                         <div className='bg-[#f3f4f3] rounded-xl p-4 my-8 flex  items-center gap-4'>
 
@@ -714,71 +708,71 @@ function MeetsPage() {
                                         ) : (
                                             <div className="overflow-x-auto rounded-xl border border-border bg-card">
                                                 <table className="min-w-full text-sm">
-                                                <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
-                                                    <tr>
-                                                        <th className="px-4 py-2 text-left font-semibold">Título</th>
-                                                        <th className="px-4 py-2 text-left font-semibold">Tipo</th>
-                                                        <th className="px-4 py-2 text-left font-semibold">Fecha</th>
-                                                        <th className="px-4 py-2 text-left font-semibold">Estado</th>
-                                                        <th className="px-4 py-2 text-left font-semibold">Lugar</th>
-                                                        <th className="px-4 py-2 text-left font-semibold">Acciones</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {pageItems.map((meeting) => {
-                                                        const canComplete = canUserCompleteMeeting(meeting, user?.uid)
-                                                        const { label, className } = getStatusPill(meeting.status)
-                                                        const meetingKey = getMeetingKey(meeting)
-                                                        return (
-                                                            <tr key={meetingKey} className="border-t border-border hover:bg-muted/40">
-                                                                <td className="px-4 py-2 align-top">
-                                                                    <div className="font-medium text-foreground">{meeting.title}</div>
-                                                                    <div className="text-xs text-muted-foreground line-clamp-1">{meeting.description || 'Sin descripción'}</div>
-                                                                </td>
-                                                                <td className="px-4 py-2 align-top text-xs text-muted-foreground">
-                                                                    {meeting.type === 'training' ? 'Capacitación' : meeting.type === 'custom' ? 'Personalizado' : 'Reunión'}
-                                                                </td>
-                                                                <td className="px-4 py-2 align-top text-xs text-foreground">
-                                                                    {formatDateTimeLabel(meeting.startTime)}
-                                                                </td>
-                                                                <td className="px-4 py-2 align-top">
-                                                                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${className}`}>
-                                                                        {label}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-4 py-2 align-top text-xs text-foreground">
-                                                                    {meeting.location}
-                                                                </td>
-                                                                <td className="px-4 py-2 align-top">
-                                                                    <div className="flex flex-wrap gap-2">
-                                                                        <Link
-                                                                            to={buildMeetingPath('/meeting', meeting)}
-                                                                            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted/60"
-                                                                        >
-                                                                            Detalles
-                                                                        </Link>
-                                                                        <Link
-                                                                            to={buildMeetingPath('/checkin', meeting)}
-                                                                            className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
-                                                                        >
-                                                                            Asistencia
-                                                                        </Link>
-                                                                        {canComplete && (
-                                                                            <button
-                                                                                type="button"
-                                                                                disabled={completing[meetingKey]}
-                                                                                onClick={async () => handleCompleteMeeting(meeting)}
-                                                                                className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                    <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+                                                        <tr>
+                                                            <th className="px-4 py-2 text-left font-semibold">Título</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Tipo</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Fecha</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Estado</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Lugar</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Acciones</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {pageItems.map((meeting) => {
+                                                            const canComplete = canUserCompleteMeeting(meeting, user?.uid)
+                                                            const { label, className } = getStatusPill(meeting.status)
+                                                            const meetingKey = getMeetingKey(meeting)
+                                                            return (
+                                                                <tr key={meetingKey} className="border-t border-border hover:bg-muted/40">
+                                                                    <td className="px-4 py-2 align-top">
+                                                                        <div className="font-medium text-foreground">{meeting.title}</div>
+                                                                        <div className="text-xs text-muted-foreground line-clamp-1">{meeting.description || 'Sin descripción'}</div>
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top text-xs text-muted-foreground">
+                                                                        {meeting.type === 'training' ? 'Capacitación' : meeting.type === 'custom' ? 'Personalizado' : 'Reunión'}
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top text-xs text-foreground">
+                                                                        {formatDateTimeLabel(meeting.startTime)}
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top">
+                                                                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${className}`}>
+                                                                            {label}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top text-xs text-foreground">
+                                                                        {meeting.location}
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top">
+                                                                        <div className="flex flex-wrap gap-2">
+                                                                            <Link
+                                                                                to={buildMeetingPath('/meeting', meeting)}
+                                                                                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted/60"
                                                                             >
-                                                                                {completing[meetingKey] ? 'Finalizando…' : 'Completar'}
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        )
-                                                    })}
-                                                </tbody>
+                                                                                Detalles
+                                                                            </Link>
+                                                                            <Link
+                                                                                to={buildMeetingPath('/checkin', meeting)}
+                                                                                className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+                                                                            >
+                                                                                Asistencia
+                                                                            </Link>
+                                                                            {canComplete && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={completing[meetingKey]}
+                                                                                    onClick={async () => handleCompleteMeeting(meeting)}
+                                                                                    className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                                                >
+                                                                                    {completing[meetingKey] ? 'Finalizando…' : 'Completar'}
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            )
+                                                        })}
+                                                    </tbody>
                                                 </table>
                                                 {totalPages > 1 && (
                                                     <div className="px-4 py-3 flex items-center justify-between text-xs text-muted-foreground border-t border-border">
@@ -874,71 +868,71 @@ function MeetsPage() {
                                         ) : (
                                             <div className="overflow-x-auto rounded-xl border border-border bg-card">
                                                 <table className="min-w-full text-sm">
-                                                <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
-                                                    <tr>
-                                                        <th className="px-4 py-2 text-left font-semibold">Título</th>
-                                                        <th className="px-4 py-2 text-left font-semibold">Tipo</th>
-                                                        <th className="px-4 py-2 text-left font-semibold">Fecha</th>
-                                                        <th className="px-4 py-2 text-left font-semibold">Estado</th>
-                                                        <th className="px-4 py-2 text-left font-semibold">Lugar</th>
-                                                        <th className="px-4 py-2 text-left font-semibold">Acciones</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {pageItems.map((meeting) => {
-                                                        const canComplete = canUserCompleteMeeting(meeting, user?.uid)
-                                                        const { label, className } = getStatusPill(meeting.status)
-                                                        const meetingKey = getMeetingKey(meeting)
-                                                        return (
-                                                            <tr key={meetingKey} className="border-t border-border hover:bg-muted/40">
-                                                                <td className="px-4 py-2 align-top">
-                                                                    <div className="font-medium text-foreground">{meeting.title}</div>
-                                                                    <div className="text-xs text-muted-foreground line-clamp-1">{meeting.description || 'Sin descripción'}</div>
-                                                                </td>
-                                                                <td className="px-4 py-2 align-top text-xs text-muted-foreground">
-                                                                    {meeting.type === 'training' ? 'Capacitación' : meeting.type === 'custom' ? 'Personalizado' : 'Reunión'}
-                                                                </td>
-                                                                <td className="px-4 py-2 align-top text-xs text-foreground">
-                                                                    {formatDateTimeLabel(meeting.startTime)}
-                                                                </td>
-                                                                <td className="px-4 py-2 align-top">
-                                                                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${className}`}>
-                                                                        {label}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-4 py-2 align-top text-xs text-foreground">
-                                                                    {meeting.location}
-                                                                </td>
-                                                                <td className="px-4 py-2 align-top">
-                                                                    <div className="flex flex-wrap gap-2">
-                                                                        <Link
-                                                                            to={buildMeetingPath('/meeting', meeting)}
-                                                                            className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted/60"
-                                                                        >
-                                                                            Detalles
-                                                                        </Link>
-                                                                        <Link
-                                                                            to={buildMeetingPath('/checkin', meeting)}
-                                                                            className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
-                                                                        >
-                                                                            Asistencia
-                                                                        </Link>
-                                                                        {canComplete && (
-                                                                            <button
-                                                                                type="button"
-                                                                                disabled={completing[meetingKey]}
-                                                                                onClick={async () => handleCompleteMeeting(meeting)}
-                                                                                className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                    <thead className="bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+                                                        <tr>
+                                                            <th className="px-4 py-2 text-left font-semibold">Título</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Tipo</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Fecha</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Estado</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Lugar</th>
+                                                            <th className="px-4 py-2 text-left font-semibold">Acciones</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {pageItems.map((meeting) => {
+                                                            const canComplete = canUserCompleteMeeting(meeting, user?.uid)
+                                                            const { label, className } = getStatusPill(meeting.status)
+                                                            const meetingKey = getMeetingKey(meeting)
+                                                            return (
+                                                                <tr key={meetingKey} className="border-t border-border hover:bg-muted/40">
+                                                                    <td className="px-4 py-2 align-top">
+                                                                        <div className="font-medium text-foreground">{meeting.title}</div>
+                                                                        <div className="text-xs text-muted-foreground line-clamp-1">{meeting.description || 'Sin descripción'}</div>
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top text-xs text-muted-foreground">
+                                                                        {meeting.type === 'training' ? 'Capacitación' : meeting.type === 'custom' ? 'Personalizado' : 'Reunión'}
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top text-xs text-foreground">
+                                                                        {formatDateTimeLabel(meeting.startTime)}
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top">
+                                                                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${className}`}>
+                                                                            {label}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top text-xs text-foreground">
+                                                                        {meeting.location}
+                                                                    </td>
+                                                                    <td className="px-4 py-2 align-top">
+                                                                        <div className="flex flex-wrap gap-2">
+                                                                            <Link
+                                                                                to={buildMeetingPath('/meeting', meeting)}
+                                                                                className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium text-foreground hover:bg-muted/60"
                                                                             >
-                                                                                {completing[meetingKey] ? 'Finalizando…' : 'Completar'}
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        )
-                                                    })}
-                                                </tbody>
+                                                                                Detalles
+                                                                            </Link>
+                                                                            <Link
+                                                                                to={buildMeetingPath('/checkin', meeting)}
+                                                                                className="inline-flex items-center gap-1 rounded-md border border-primary/40 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10"
+                                                                            >
+                                                                                Asistencia
+                                                                            </Link>
+                                                                            {canComplete && (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    disabled={completing[meetingKey]}
+                                                                                    onClick={async () => handleCompleteMeeting(meeting)}
+                                                                                    className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                                                                >
+                                                                                    {completing[meetingKey] ? 'Finalizando…' : 'Completar'}
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            )
+                                                        })}
+                                                    </tbody>
                                                 </table>
                                                 {totalPages > 1 && (
                                                     <div className="px-4 py-3 flex items-center justify-between text-xs text-muted-foreground border-t border-border">

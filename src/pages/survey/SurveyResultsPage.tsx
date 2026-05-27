@@ -15,9 +15,9 @@ import {
 import { getDatabaseForUrl } from "@/services/firebase"
 import { getMeetingById } from "@/services/meetings.service"
 import type { UserProfile } from "@/types/user"
-import { BarChart3, ChevronRight, Clock, MessageSquareText, Star, Users } from "lucide-react"
+import { BarChart3, Clock, MessageSquareText, Star, Users } from "lucide-react"
 import { useEffect, useState } from "react"
-import { useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { useParams, useSearchParams } from "react-router-dom"
 import { get, ref, type Database } from "firebase/database"
 import { DistributionDonutCard, RatingDistributionChart, SelectionDistributionChart } from "./components/SurveyResultsCharts"
 import { SurveyResponseCard } from "./components/SurveyResponseCard"
@@ -146,7 +146,6 @@ function SurveyResultsPage() {
     const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState<string>(ALL_FILTER_VALUE)
     const [selectedCargoFilter, setSelectedCargoFilter] = useState<string>(ALL_FILTER_VALUE)
 
-    const navigate = useNavigate()
 
     useEffect(() => {
         let cancelled = false
@@ -447,29 +446,14 @@ function SurveyResultsPage() {
     )
 
     return (
-        <Layout>
+        <Layout
+            header={{
+                breadcrumbs: [{ label: 'Encuestas', to: '/survey' }, { label: 'Resultados' }],
+                title: 'Resultados de Encuesta',
+                description: 'Analiza cada capacitación por separado y revisa sus resultados pregunta por pregunta.',
+            }}
+        >
             <div className="bg-linear-to-br from-background via-muted/5 to-background min-h-screen">
-                <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs">
-                    <nav className="px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto flex justify-between items-center">
-                        <div>
-                            <div className="flex items-center gap-2 text-xs text-outline mb-1 font-label tracking-wide uppercase">
-                                <span
-                                    className="hover:text-secondary cursor-pointer transition-colors"
-                                    onClick={() => navigate("/survey")}
-                                >
-                                    Encuestas
-                                </span>
-                                <ChevronRight className="w-4 h-4" />
-                                <span>Resultados</span>
-                            </div>
-                            <h1 className="text-3xl font-bold tracking-tight">Resultados de Encuesta</h1>
-                            <p className="font-body text-[#434843] text-sm mt-1">
-                                Analiza cada capacitación por separado y revisa sus resultados pregunta por pregunta.
-                            </p>
-                        </div>
-                    </nav>
-                </header>
-
                 <div className="px-4 md:px-12 py-10 md:py-16 max-w-7xl mx-auto space-y-8">
                     <section className="bg-white rounded-xl  p-6">
                         {isLoadingSurvey ? (

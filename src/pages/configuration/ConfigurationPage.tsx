@@ -431,7 +431,13 @@ function ConfigurationProfilePage() {
     }, [database, resolvedRoleId])
 
     return (
-        <Layout>
+        <Layout
+            header={{
+                breadcrumbs: [{ label: 'Configuracion', to: '/configure-profile' }, { label: 'Perfil' }],
+                title: 'Configuración del perfil',
+                description: 'Gestiona tu información personal y credenciales de acceso.',
+            }}
+        >
             <div className="bg-linear-to-br from-background via-muted/5 to-background">
                 {showIncompleteProfileModal && missingProfileFields.length > 0 && (
                     <div className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px] flex items-center justify-center px-4">
@@ -471,13 +477,6 @@ function ConfigurationProfilePage() {
                         </div>
                     </div>
                 )}
-                <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs">
-                    <nav className='px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto'>
-                        <h1 className="text-3xl font-bold tracking-tight">Configuración del perfil</h1>
-                        <p className="font-body text-[#434843] text-sm mt-1">Gestiona tu información personal y credenciales de acceso.</p>
-                    </nav>
-                </header>
-
                 <div className='px-4 md:px-12 py-10 md:py-16 space-y-10'>
                     <div className="max-w-7xl md:mx-auto">
                         {isMyDatabase === false && (

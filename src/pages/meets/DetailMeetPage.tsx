@@ -273,24 +273,27 @@ function DetailMeetPage() {
         navigate(destination)
     }
 
-    return (
-        <Layout>
-            <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
-                <header className="bg-card border-b border-border sticky top-0 z-20 backdrop-blur-xl">
-                    <nav className="max-w-6xl mx-auto px-6 py-4">
-                        <button
-                            type="button"
-                            onClick={handleGoBack}
-                            className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                            <ArrowLeft className="w-4 h-4" />
-                            Volver
-                        </button>
-                        <h1 className="text-3xl font-bold mt-4 text-foreground">{meeting?.title}</h1>
-                    </nav>
-                </header>
 
-                <div className="max-w-6xl mx-auto p-6 mt-8">
+    return (
+        <Layout
+            header={{
+                breadcrumbs: [{ label: 'Actividades', to: '/meets' }, { label: 'Detalle' }],
+                title: meeting?.title ?? 'Detalle de actividad',
+            }}
+        >
+            <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
+                <div className="max-w-6xl mx-auto px-6 pt-6">
+                    <button
+                        type="button"
+                        onClick={handleGoBack}
+                        className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors bg-muted hover:bg-primary/20 rounded-lg px-3 py-2"
+                    >
+                        <ArrowLeft className="w-4 h-4" />
+                        Volver atrás
+                    </button>
+                </div>
+                <div className="max-w-6xl mx-auto p-6 ">
+
                     <div className="grid md:grid-cols-3 gap-6">
                         {/* Detalles de la Reunión */}
                         <div className="md:col-span-2 bg-card rounded-2xl border border-border p-6">

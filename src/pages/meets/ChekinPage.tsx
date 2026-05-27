@@ -125,19 +125,22 @@ function ChekinPage() {
         }
     }
     return (
-        <Layout>
+        <Layout
+            header={{
+                breadcrumbs: [{ label: 'Actividades', to: '/meets' }, { label: 'Check-in' }],
+                title: meeting?.title ?? 'Registrar asistencia',
+                actions: (
+                    <Link
+                        to={sourceDatabaseUrl ? `/meets?db=${encodeURIComponent(sourceDatabaseUrl)}` : '/meets'}
+                        className="inline-flex items-center gap-2 text-secondary hover:text-secondary-light transition-colors font-semibold"
+                    >
+                        <ArrowLeft className="w-5 h-5" />
+                        Volver
+                    </Link>
+                ),
+            }}
+        >
             <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
-                <header className="bg-card border-b border-border sticky top-0 z-20 backdrop-blur-xl">
-                    <nav className="max-w-2xl mx-auto px-6 py-4">
-                        <Link
-                            to={sourceDatabaseUrl ? `/meets?db=${encodeURIComponent(sourceDatabaseUrl)}` : '/meets'}
-                            className="inline-flex items-center gap-2 text-secondary hover:text-secondary-light transition-colors font-semibold"
-                        >
-                            <ArrowLeft className="w-5 h-5" />
-                            Volver
-                        </Link>
-                    </nav>
-                </header>
                 <div className="max-w-2xl mx-auto p-6 mt-8">
                     <div className="bg-card rounded-2xl border border-border p-6">
                         <h1 className="text-3xl font-bold text-foreground mb-2">{meeting?.title ?? '—'}</h1>

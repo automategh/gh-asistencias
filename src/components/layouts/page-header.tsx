@@ -90,7 +90,7 @@ export default function PageHeader({ config }: PageHeaderProps) {
                         </button>
                         <div className="shrink-0">
                             {availableDatabases && (
-                                <div className={`relative inline-flex items-center gap-2 rounded-xl border border-[#124734] bg-white px-3 py-2 text-[#124734] shadow-sm ${isCorporateUser ? "cursor-pointer" : "cursor-not-allowed opacity-70"}`}>
+                                <div className={`relative inline-flex items-center gap-2 rounded-xl border border-[#124734] bg-white px-2 py-1.5 text-[#124734] shadow-sm ${isCorporateUser ? "cursor-pointer" : "cursor-not-allowed opacity-70"}`}>
                                     <Database className="w-4 h-4" />
                                     <span className="text-sm font-semibold">Base:</span>
                                     <span className="text-sm font-semibold">{selectedDatabase?.name ?? ""}</span>

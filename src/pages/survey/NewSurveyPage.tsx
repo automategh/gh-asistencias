@@ -3,7 +3,7 @@ import { useDatabase } from "@/context/DatabaseContext"
 import { createOption, createQuestion, createSurvey, type QuestionType, type Survey, type SurveyQuestion } from "@/services/forms.service"
 import type { MeetingKind } from "@/types/meeting"
 
-import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, ChevronRight, Copy, PlusCircle, Trash } from "lucide-react"
+import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, Copy, PlusCircle, Trash } from "lucide-react"
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 
@@ -400,25 +400,14 @@ function NewSurveyPage() {
     }
 
     return (
-        <Layout>
+        <Layout
+            header={{
+                breadcrumbs: [{ label: 'Encuestas', to: '/survey' }, { label: 'Nueva' }],
+                title: 'Crea nueva encuesta',
+                description: 'Diseña y configura los parámetros de la encuesta según tus necesidades.',
+            }}
+        >
             <div className='bg-linear-to-br from-background via-muted/5 to-background'>
-                <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs">
-                    <nav className='px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto flex justify-between items-center'>
-                        <div>
-                            <div className="flex items-center gap-2 text-xs text-outline mb-1 font-label tracking-wide uppercase">
-                                <span
-                                    className="hover:text-secondary cursor-pointer transition-colors"
-                                    onClick={() => navigate("/survey")}>Encuestas</span>
-                                <ChevronRight className="w-4 h-4" />
-                                <span>Nueva</span>
-                            </div>
-                            <h1 className="text-3xl font-bold tracking-tight">Crea nueva encuesta</h1>
-                            <p className="font-body text-[#434843] text-sm mt-1">Diseña y configura los parámetros de la encuesta según tus necesidades.</p>
-                        </div>
-                    </nav>
-                </header>
-
-
                 <div className='px-4 md:px-12 py-10 md:py-16 space-y-10'>
                     <div className="mx-auto max-w-7xl">
                         {error.label === 'General' && error.message && (

@@ -123,28 +123,25 @@ function SurveyAdminPage() {
     }
 
     return (
-        <Layout>
+        <Layout
+            header={{
+                breadcrumbs: [{ label: 'Encuestas' }],
+                title: 'Panel de Encuestas',
+                description: 'Administra, crea y analiza las encuestas de la organización desde un solo lugar.',
+            }}
+        >
+
             <div className='bg-linear-to-br from-background via-muted/5 to-background'>
-
-                <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs">
-                    <nav className='px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto flex justify-between items-center'>
-                        <div>
-                            <h1 className="text-3xl font-bold tracking-tight">Panel de Encuestas</h1>
-                            <p className="font-body text-[#434843] text-sm mt-1">Administra, crea y analiza las encuestas de la organización desde un solo lugar.</p>
-                        </div>
-                        <div className="relative">
-                            <button
-                                onClick={() => navigate('/survey/create')}
-                                className="flex items-center gap-x-4 px-4 py-2.5 bg-primary rounded-2xl cursor-pointer text-primary-foreground text-sm font-medium hover:bg-primary-light transition-colors"
-                            >
-                                <Plus className="w-4 h-4" />
-                                <span>Crear Nueva Encuesta</span>
-                            </button>
-                        </div>
-                    </nav>
-                </header>
-
-                <div className='px-4 md:px-12 py-10 md:py-16 space-y-10'>
+                <div className='px-4 md:px-12 py-10 md:py-16 space-y-6'>
+                    <div className="flex justify-end">
+                        <button
+                            onClick={() => navigate('/survey/create')}
+                            className="flex items-center gap-x-4 px-4 py-2.5 bg-primary rounded-2xl cursor-pointer text-primary-foreground text-sm font-medium hover:bg-primary-light transition-colors"
+                        >
+                            <Plus className="w-4 h-4" />
+                            <span>Crear Nueva Encuesta</span>
+                        </button>
+                    </div>
                     <div className="bg-[#f3f4f3] rounded-xl p-6 mb-8 flex flex-wrap items-center gap-4 max-w-7xl mx-auto">
                         <div className="relative flex-1 min-w-75">
                             <Search className="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />

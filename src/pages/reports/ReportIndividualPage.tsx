@@ -5,10 +5,9 @@ import { getMeetingYearsForDatabase } from "@/services/meetings.analytics.servic
 import { getUserInvitedMeetings } from "@/services/meetings.listing.service"
 import { getUsersForReports, type ReportUserItem } from "@/services/user.service"
 import type { Meeting, MeetingParticipant } from "@/types/meeting"
-import { CalendarDays, ChevronRight, Search } from "lucide-react"
+import { CalendarDays, Search } from "lucide-react"
 import { get, ref } from "firebase/database"
 import { useEffect, useMemo, useState } from "react"
-import { useNavigate } from "react-router-dom"
 
 const MONTH_LABELS: readonly string[] = [
     "Enero",
@@ -27,7 +26,6 @@ const MONTH_LABELS: readonly string[] = [
 
 function ReportIndividualPage() {
 
-    const navigate = useNavigate()
     const { user, hasPermission } = useAuth()
     const { database } = useDatabase()
     const canViewTeamReports = hasPermission("reports_view_team")
@@ -260,24 +258,13 @@ function ReportIndividualPage() {
     )
 
     return (
-        <Layout>
+        <Layout
+            header={{
+                breadcrumbs: [{ label: 'Reportes', to: '/reports' }, { label: 'Individual' }],
+                title: 'Reporte Individual',
+            }}
+        >
             <div className='bg-linear-to-br from-background via-muted/5 to-background'>
-                <header className="sticky top-0 z-10 bg-zinc-50/85 backdrop-blur-xs">
-                    <nav className='px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto flex justify-between items-center'>
-                        <div>
-                            <div className="flex items-center gap-2 text-xs text-outline mb-1 font-label tracking-wide uppercase">
-                                <span
-                                    className="hover:text-secondary cursor-pointer transition-colors"
-                                    onClick={() => navigate("/reports")}>Reportes</span>
-                                <ChevronRight className="w-4 h-4" />
-                                <span>Individual</span>
-                            </div>
-                            <h1 className="text-3xl font-bold tracking-tight">Reporte Individual</h1>
-                        </div>
-                    </nav>
-                </header>
-
-
                 <div className='px-4 md:px-12 py-10 md:py-10 space-y-10'>
                     <div className="mx-auto max-w-7xl space-y-8">
                         <section className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">

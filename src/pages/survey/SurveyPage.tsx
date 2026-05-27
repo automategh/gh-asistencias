@@ -288,26 +288,18 @@ function SurveyPage() {
     }
 
     return (
-        <Layout>
+        <Layout
+            header={{
+                breadcrumbs: [{ label: 'Encuestas', to: '/survey' }, { label: 'Responder' }],
+                title: survey?.name ?? 'Encuesta',
+                description: survey?.description,
+            }}
+        >
             <div className='bg-linear-to-br from-background via-muted/5 to-background'>
-                <header className="sticky top-0 z-20 bg-zinc-50/85 backdrop-blur-xs">
-                    <nav className='px-4 md:px-12 py-4 md:py-8 max-w-7xl mx-auto flex justify-between items-center'>
-                        <div>
-                            <span className="inline-block px-3 py-1 bg-amber-400/50 text-primary text-xs font-semibold rounded-full">
-                                Encuestas de Satisfacción
-                            </span>
-                            <h1 className="text-3xl font-bold tracking-tight">
-                                {survey?.name ?? "Encuesta"}
-                            </h1>
-                            <p className="font-body text-[#434843] text-sm mt-1">
-                                {survey?.description ?? "Diseña y configura los parámetros de la encuesta según tus necesidades."}
-                            </p>
-                        </div>
-                    </nav>
-                </header>
-
-
                 <div className='px-4 md:px-12 py-10 md:py-16 space-y-10'>
+                    <span className="inline-block px-3 py-1 bg-amber-400/50 text-primary text-xs font-semibold rounded-full">
+                        Encuestas de Satisfacción
+                    </span>
                     <div className="mx-auto max-w-7xl space-y-8">
                         {isCheckingAttendance ? (
                             <div className="rounded-2xl bg-white border border-[#edeeed] px-6 py-8 text-center shadow-sm">
