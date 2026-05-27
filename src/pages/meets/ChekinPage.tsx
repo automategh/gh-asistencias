@@ -6,7 +6,7 @@ import type { Meeting, MeetingParticipant } from "@/types/meeting"
 import { AlertCircle, ArrowLeft } from "lucide-react"
 import { get, ref } from "firebase/database"
 import { useEffect, useMemo, useState } from "react"
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
+import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useAuth } from "@/context/AuthContext"
 
 type methodType = "qr" | "manual"
@@ -134,15 +134,6 @@ function ChekinPage() {
             header={{
                 breadcrumbs: [{ label: 'Actividades', to: '/meets' }, { label: 'Check-in' }],
                 title: meeting?.title ?? 'Registrar asistencia',
-                actions: (
-                    <Link
-                        to={sourceDatabaseUrl ? `/meets?db=${encodeURIComponent(sourceDatabaseUrl)}` : '/meets'}
-                        className="inline-flex items-center gap-2 text-secondary hover:text-secondary-light transition-colors font-semibold"
-                    >
-                        <ArrowLeft className="w-5 h-5" />
-                        Volver
-                    </Link>
-                ),
             }}
         >
             <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
