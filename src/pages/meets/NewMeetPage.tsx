@@ -21,6 +21,7 @@ import { createTeamsMeetingViaCloudFunction } from '@/services/teams.service'
 import { buildUserGroups, buildUserGroupsByField, getUserGroupingDefinitions, type GroupingFieldKey, type UserGroupingId } from '@/lib/userGrouping'
 import { getUserGroupingConfig, type UserGroupingConfig } from '@/services/user-grouping.service'
 import { Users } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 /**
  * Convierte un valor `datetime-local` a epoch ms, interpretándolo en zona local
@@ -57,6 +58,8 @@ function toEpochMs(datetimeLocal: string): number {
 function NewMeetPage() {
     const { user } = useAuth()
     const { database } = useDatabase()
+
+    const navigate = useNavigate()
 
     /** Estado del formulario de creación */
     type FormState = {
@@ -530,7 +533,7 @@ function NewMeetPage() {
                                         className={fieldClassName}
                                     />
                                     <p className="text-[11px] text-[#5f6560] mt-2 px-1">
-                                        Si dejas este campo vacío, se usará automáticamente el participante marcado como ponente.
+                                        Si dejas este campo vacío, se usará automáticamente el participante marcado como capacitador.
                                     </p>
                                 </div>
                             </div>
@@ -714,7 +717,7 @@ function NewMeetPage() {
                                                     <div>
                                                         <select value={p.role} onChange={(e) => changeRole(p.uid, e.target.value as ParticipantRole)} className="w-full px-3 py-2 bg-white border border-[#edeeed] rounded-lg text-sm font-medium text-[#191c1c]">
                                                             <option value="attendee">Asistente</option>
-                                                            <option value="speaker">Ponente</option>
+                                                            <option value="speaker">Capacitador</option>
                                                             <option value="host">Anfitrión</option>
                                                         </select>
                                                     </div>
@@ -729,13 +732,6 @@ function NewMeetPage() {
                             </div>
                         </section>
 
-                        {error && (
-                            <div className="p-4 border border-[#f0c7c2] text-[#8c1d18] rounded-2xl bg-[#fff6f5]">{error}</div>
-                        )}
-                        {success && (
-                            <div className="p-4 border border-[#b7d6be] text-[#1b5e20] rounded-2xl bg-[#f3fbf4]">{success}</div>
-                        )}
-
                         <div className='flex justify-center items-center'>
                             <div>
                                 <button
@@ -748,6 +744,38 @@ function NewMeetPage() {
                             </div>
                         </div>
                     </form>
+
+                    {(error || success) && (
+                        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4">
+                            <div className="w-full max-w-md rounded-3xl border border-[#edeeed] bg-white shadow-[0_24px_48px_rgba(15,23,42,0.18)] overflow-hidden">
+                                <div className="px-6 py-5 border-b border-[#edeeed] bg-[#f8faf8]">
+                                    <h2 className="text-xl font-bold text-[#191c1c]">{success ? 'Actividad creada exitosamente' : 'Error'}</h2>
+                                </div>
+                                <div className="p-6 space-y-4">
+                                    <p className={`text-sm ${success ? 'text-[#1b5e20]' : 'text-[#8c1d18]'}`}>
+                                        {success ?? error}
+                                    </p>
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (success) {
+                                                    setSuccess(null)
+                                                    navigate('/meets')
+                                                }
+                                                if (error) {
+                                                    setError(null)
+                                                }
+                                            }}
+                                            className="inline-flex items-center justify-center rounded-xl bg-[#1b3022] px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#14251a] transition-colors"
+                                        >
+                                            Cerrar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
             </div>
