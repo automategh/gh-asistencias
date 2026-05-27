@@ -6,7 +6,7 @@ import { getDatabaseForUrl } from '@/services/firebase'
 import { getSurveys, getSurveyById, type Survey } from '@/services/forms.service'
 import { cancelMeeting, closeMeeting, completeMeeting, getMeetingById, reopenMeeting } from '@/services/meetings.service'
 import type { Meeting } from '@/types/meeting'
-import { ArrowLeft, BarChart3, Calendar, Clock, FileText, MapPin } from 'lucide-react'
+import { ArrowLeft, BarChart3, Calendar, Clock, Copy, FileText, MapPin } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
@@ -23,6 +23,7 @@ function DetailMeetPage() {
     const [completing, setCompleting] = useState(false)
     const [cancel, setCancel] = useState(false)
     const [reopening, setReopening] = useState(false)
+    const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
     const sourceDatabaseUrl = searchParams.get('db')
 
     const meetingDatabase = useMemo(() => {
@@ -273,6 +274,20 @@ function DetailMeetPage() {
         navigate(destination)
     }
 
+    const checkinLink = meeting ? `${window.location.origin}/checkin/${meeting.id}?method=qr` : ''
+
+    const handleCopyLink = async (): Promise<void> => {
+        if (!checkinLink) return
+
+        try {
+            await navigator.clipboard.writeText(checkinLink)
+            setCopyFeedback('Enlace copiado correctamente')
+        } catch {
+            setCopyFeedback('No se pudo copiar el enlace. Intenta manualmente.')
+        }
+
+        window.setTimeout(() => setCopyFeedback(null), 2500)
+    }
 
     return (
         <Layout
@@ -425,8 +440,31 @@ function DetailMeetPage() {
                         </div>
                         <div className="bg-card rounded-2xl border border-border p-6 text-center h-fit sticky top-24">
                             <h3 className="text-lg font-bold text-foreground mb-4">Código QR</h3>
-                            <QRCodeDisplay meetingId={meeting?.id || ''} />
-                            <p className="text-xs text-muted-foreground mt-4">Escanea este código para registrar asistencia</p>
+                            <QRCodeDisplay meetingId={meeting?.id || ''} dbUrl={sourceDatabaseUrl} />
+                            <p className="text-xs text-muted-foreground mt-4">Escanea este código para registrar asistencia o usa el siguiente enlace.</p>
+                            <div className="mt-4 space-y-3 text-left">
+                                <label className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">Enlace de Asistencia</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={checkinLink}
+                                        onFocus={(event) => event.currentTarget.select()}
+                                        className="flex-1 rounded-xl border border-border bg-[#f7faf7] px-3 py-2 text-sm text-foreground outline-none"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => { void handleCopyLink() }}
+                                        className="inline-flex items-center justify-center rounded-xl bg-[#1b3022] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#14251a] transition-colors cursor-pointer"
+                                        title='Copiar'
+                                    >
+                                        <Copy className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                {copyFeedback && (
+                                    <p className="text-sm text-emerald-700">{copyFeedback}</p>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
