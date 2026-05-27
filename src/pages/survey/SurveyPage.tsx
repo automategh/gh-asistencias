@@ -20,7 +20,7 @@ import { get, ref } from "firebase/database"
 import { AlertCircle } from "lucide-react"
 import { PencilLine } from "lucide-react"
 import { useEffect, useState } from "react"
-import { useParams } from "react-router-dom"
+import { useNavigate, useParams } from "react-router-dom"
 
 function SurveyPage() {
     const { id, trainingId } = useParams<{ id: string; trainingId: string }>()
@@ -31,9 +31,10 @@ function SurveyPage() {
     const [answers, setAnswers] = useState<Record<string, SurveyAnswerValue | null>>({})
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
     const [submitError, setSubmitError] = useState<string | null>(null)
-    const [submitSuccess, setSubmitSuccess] = useState<boolean>(false)
+    const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false)
     const [hasResponded, setHasResponded] = useState<boolean>(false)
     const [hasAttendance, setHasAttendance] = useState<boolean>(false)
+    const navigate = useNavigate()
     const [isCheckingAttendance, setIsCheckingAttendance] = useState<boolean>(true)
 
     useEffect(() => {
@@ -213,7 +214,6 @@ function SurveyPage() {
 
     const handleSubmit = async (): Promise<void> => {
         setSubmitError(null)
-        setSubmitSuccess(false)
 
         if (hasResponded) {
             setSubmitError("Ya has respondido esta encuesta para esta capacitación.")
@@ -278,7 +278,7 @@ function SurveyPage() {
             })
 
             setHasResponded(true)
-            setSubmitSuccess(true)
+            setShowSuccessModal(true)
         } catch (error) {
             console.error("No fue posible guardar la respuesta de la encuesta:", error)
             setSubmitError("No fue posible guardar tus respuestas. Inténtalo nuevamente.")
@@ -425,11 +425,6 @@ function SurveyPage() {
                                     {submitError}
                                 </p>
                             )}
-                            {submitSuccess && (
-                                <p className="text-sm text-emerald-700 mt-4">
-                                    ¡Gracias! Tu respuesta ha sido registrada correctamente.
-                                </p>
-                            )}
                             {!hasResponded && (
                                 <div className="mt-8 flex justify-end">
                                     <button
@@ -447,6 +442,31 @@ function SurveyPage() {
                         )}
                     </div>
                 </div>
+                {showSuccessModal && (
+                    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4">
+                        <div className="w-full max-w-md rounded-3xl border border-[#edeeed] bg-white shadow-[0_24px_48px_rgba(15,23,42,0.18)] overflow-hidden">
+                            <div className="px-6 py-5 border-b border-[#edeeed] bg-[#f8f9f8]">
+                                <h2 className="text-xl font-bold text-[#191c1c]">¡Encuesta enviada!</h2>
+                                <p className="text-sm text-[#5f6560] mt-2">Tu respuesta ha sido registrada correctamente.</p>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-[#5f6560]">Gracias por compartir tu experiencia. Pulsa cerrar para volver a la página anterior.</p>
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowSuccessModal(false)
+                                            navigate(-1)
+                                        }}
+                                        className="inline-flex items-center justify-center rounded-xl bg-[#1b3022] px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#14251a] transition-colors"
+                                    >
+                                        Cerrar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </Layout>
     )
