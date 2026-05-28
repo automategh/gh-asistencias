@@ -1,14 +1,15 @@
 import Layout from '@/components/layouts/layout'
 import { Button } from '@/components/ui/button'
 import { useDatabase } from '@/context/DatabaseContext'
-import { useNavigate, useParams } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { get, ref } from 'firebase/database'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas-pro'
 import type { MeetingParticipant, Meeting } from '@/types/meeting'
 import type { UserProfile } from '@/types/user'
-import { getMeetingById, updateParticipantStatus } from '@/services/meetings.service'
+import { getMeetingById, updateAttendanceAcrossDatabases } from '@/services/meetings.service'
+import { getDatabaseForUrl } from '@/services/firebase'
 import { ArrowLeft } from 'lucide-react'
 
 /**
@@ -73,7 +74,9 @@ function loadImageAsDataUrl(url: string): Promise<string> {
  */
 function AttendancePage() {
     const { id } = useParams<{ id: string }>()
-    const { database } = useDatabase()
+    const { database, databaseUrl } = useDatabase()
+    const [searchParams] = useSearchParams()
+    const sourceDatabaseUrl = searchParams.get('db')
     const navigate = useNavigate()
 
     const [meeting, setMeeting] = useState<Meeting | null>(null)
@@ -83,6 +86,18 @@ function AttendancePage() {
     const [error, setError] = useState<string | null>(null)
     const [isExporting, setIsExporting] = useState<boolean>(false)
     const attendanceRef = useRef<HTMLDivElement | null>(null)
+
+    const meetingDatabase = useMemo(() => {
+        if (sourceDatabaseUrl) {
+            const resolved = getDatabaseForUrl(sourceDatabaseUrl)
+            if (resolved) return resolved
+        }
+        return database
+    }, [database, sourceDatabaseUrl])
+
+    const meetingDatabaseUrl = useMemo(() => {
+        return sourceDatabaseUrl ?? databaseUrl ?? null
+    }, [sourceDatabaseUrl, databaseUrl])
 
     useEffect(() => {
         let cancelled = false
@@ -96,14 +111,14 @@ function AttendancePage() {
                 setLoading(true)
                 setError(null)
 
-                if (!database || !id) {
+                if (!meetingDatabase || !id) {
                     setAttendance([])
                     setMeeting(null)
                     return
                 }
 
                 try {
-                    const meetingData = await getMeetingById(database, id)
+                    const meetingData = await getMeetingById(meetingDatabase, id)
                     if (!cancelled) {
                         setMeeting(meetingData)
                     }
@@ -111,7 +126,7 @@ function AttendancePage() {
                     // Es válido que falle la reunión y solo queramos mostrar la asistencia
                 }
 
-                const participantsSnap = await get(ref(database, `meetingParticipants/${id}`))
+                const participantsSnap = await get(ref(meetingDatabase, `meetingParticipants/${id}`))
                 if (cancelled) return
 
                 const participantsVal = participantsSnap.val() as Record<string, MeetingParticipant> | null
@@ -132,7 +147,7 @@ function AttendancePage() {
                     .filter((participant) => participant.attendance === 'present' || participant.attendance === 'late')
                     .sort((a, b) => a.name.localeCompare(b.name))
 
-                const usersSnap = await get(ref(database, 'users'))
+                const usersSnap = await get(ref(meetingDatabase, 'users'))
                 const usersVal = usersSnap.val() as Record<string, UserProfile> | null
                 const usersByUid: Record<string, UserProfile> = usersVal ?? {}
 
@@ -183,7 +198,7 @@ function AttendancePage() {
         return () => {
             cancelled = true
         }
-    }, [database, id])
+    }, [meetingDatabase, id])
 
     /**
      * Genera un PDF a partir de la vista actual de la hoja de asistencia.
@@ -246,7 +261,7 @@ function AttendancePage() {
      * Actualiza estado local y persiste el flag `noShow` en RTDB.
      */
     const handleToggleNoShow = async (row: AttendanceRow, checked: boolean): Promise<void> => {
-        if (!database || !id) return
+        if (!id) return
 
         // Actualización optimista en UI
         setAttendance((prev) =>
@@ -254,7 +269,13 @@ function AttendancePage() {
         )
 
         try {
-            await updateParticipantStatus(database, id, row.uid, { noShow: checked })
+            await updateAttendanceAcrossDatabases(
+                id,
+                row.uid,
+                meetingDatabaseUrl,
+                databaseUrl,
+                { noShow: checked },
+            )
         } catch (updateError) {
             console.error('No fue posible actualizar la marca de asistencia manual:', updateError)
             // Revertir en caso de error para mantener consistencia visual

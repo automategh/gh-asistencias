@@ -1,6 +1,6 @@
 import Layout from "@/components/layouts/layout"
 import { useDatabase } from "@/context/DatabaseContext"
-import { getMeetingById, updateParticipantStatus } from "@/services/meetings.service"
+import { getMeetingById, updateAttendanceAcrossDatabases } from "@/services/meetings.service"
 import { getDatabaseForUrl } from "@/services/firebase"
 import type { Meeting, MeetingParticipant } from "@/types/meeting"
 import { AlertCircle, ArrowLeft } from "lucide-react"
@@ -17,7 +17,7 @@ function ChekinPage() {
     const method = searchParams.get('method') as methodType | null
     const sourceDatabaseUrl = searchParams.get('db')
 
-    const { database } = useDatabase()
+    const { database, databaseUrl } = useDatabase()
     const { user } = useAuth()
     const navigate = useNavigate()
     const [meeting, setMeeting] = useState<Meeting | null>(null)
@@ -37,6 +37,10 @@ function ChekinPage() {
 
         return database
     }, [database, sourceDatabaseUrl])
+
+    const meetingDatabaseUrl = useMemo(() => {
+        return sourceDatabaseUrl ?? databaseUrl ?? null
+    }, [sourceDatabaseUrl, databaseUrl])
 
     useEffect(() => {
         let cancelled = false
@@ -108,11 +112,17 @@ function ChekinPage() {
             setError(null)
             const now = Date.now()
             const attendance = computeAttendanceStatus(meeting, now)
-            await updateParticipantStatus(meetingDatabase, id, user.uid, {
-                attendance,
-                checkedInAt: now,
-                checkinMethod: method ?? 'manual',
-            })
+            await updateAttendanceAcrossDatabases(
+                id,
+                user.uid,
+                meetingDatabaseUrl,
+                databaseUrl,
+                {
+                    attendance,
+                    checkedInAt: now,
+                    checkinMethod: method ?? 'manual',
+                },
+            )
             setCheckedIn(true)
             setShowSuccessModal(true)
         } catch (err) {

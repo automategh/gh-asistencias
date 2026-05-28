@@ -1,6 +1,8 @@
 import { ref, push, set, update, type Database, get } from "firebase/database"
+import { httpsCallable } from "firebase/functions"
 import type { Meeting, MeetingCreateInput, MeetingParticipant, ParticipantInput, MeetingStatus } from "@/types/meeting"
 import type { User } from "firebase/auth"
+import { functions } from "@/services/firebase"
 
 /**
  * Asegura que la instancia de Database es válida en tiempo de ejecución.
@@ -229,6 +231,46 @@ export async function updateParticipantStatus(
     }
 
     await update(participantRef, updates)
+}
+
+interface UpdateAttendanceAcrossDatabasesRequest {
+    readonly meetingId: string
+    readonly participantUid: string
+    readonly meetingDatabaseUrl: string
+    readonly userDatabaseUrl?: string | null
+    readonly changes: Partial<Pick<MeetingParticipant, "attendance" | "checkedInAt" | "checkinMethod" | "noShow">>
+}
+
+interface UpdateAttendanceAcrossDatabasesResponse {
+    readonly ok: true
+}
+
+export async function updateAttendanceAcrossDatabases(
+    meetingId: string,
+    participantUid: string,
+    meetingDatabaseUrl: string | null,
+    userDatabaseUrl: string | null,
+    changes: Partial<Pick<MeetingParticipant, "attendance" | "checkedInAt" | "checkinMethod" | "noShow">>,
+): Promise<void> {
+    if (!functions) {
+        throw new Error("Cloud Functions no está disponible")
+    }
+    if (!meetingDatabaseUrl) {
+        throw new Error("No se pudo resolver la base de datos de la actividad")
+    }
+
+    const callable = httpsCallable<UpdateAttendanceAcrossDatabasesRequest, UpdateAttendanceAcrossDatabasesResponse>(
+        functions,
+        "updateAttendanceAcrossDatabases",
+    )
+
+    await callable({
+        meetingId,
+        participantUid,
+        meetingDatabaseUrl,
+        userDatabaseUrl,
+        changes,
+    })
 }
 
 /** Obtiene una reunión por su ID.

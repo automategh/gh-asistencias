@@ -19,6 +19,38 @@ interface RolePermissions {
 	readonly [permissionId: string]: boolean;
 }
 
+interface AttendanceUpdateRequest {
+	readonly meetingId: string;
+	readonly participantUid: string;
+	readonly meetingDatabaseUrl: string;
+	readonly userDatabaseUrl?: string | null;
+	readonly changes: AttendanceUpdateChanges;
+}
+
+interface AttendanceUpdateChanges {
+	readonly attendance?: "absent" | "present" | "late" | null;
+	readonly checkedInAt?: number | null;
+	readonly checkinMethod?: "qr" | "manual" | null;
+	readonly noShow?: boolean | null;
+}
+
+interface StoredMeetingRecord {
+	readonly startTime?: number | null;
+	readonly status?: string | null;
+}
+
+interface StoredParticipantRecord {
+	readonly uid?: string | null;
+	readonly name?: string | null;
+	readonly email?: string | null;
+	readonly role?: string | null;
+	readonly inviteStatus?: string | null;
+	readonly attendance?: "absent" | "present" | "late" | null;
+	readonly checkedInAt?: number | null;
+	readonly checkinMethod?: "qr" | "manual" | null;
+	readonly noShow?: boolean | null;
+}
+
 interface RoleUpsertPayload {
 	readonly id: string;
 	readonly name: string;
@@ -66,6 +98,27 @@ const resolveDatabaseUrlByRecinto = (recinto?: RecintoKey): string | null => {
 	}
 	const map = getDatabaseUrlMap();
 	return map[recinto] ?? null;
+};
+
+const hasPermissionInDatabase = async (databaseUrl: string, uid: string, permissionId: string): Promise<boolean> => {
+	const db = admin.app().database(databaseUrl);
+	const userSnapshot = await db.ref(`users/${uid}`).get();
+	if (!userSnapshot.exists()) {
+		return false;
+	}
+
+	const legacyRole = userSnapshot.child("role").val();
+	if (legacyRole === "Admin") {
+		return true;
+	}
+
+	const roleId = userSnapshot.child("roleId").val();
+	if (typeof roleId !== "string" || roleId.trim().length === 0) {
+		return false;
+	}
+
+	const permissionSnapshot = await db.ref(`roles/${roleId}/permissions/${permissionId}`).get();
+	return permissionSnapshot.val() === true;
 };
 
 const hasRolesManagePermission = async (uid: string): Promise<boolean> => {
@@ -168,6 +221,109 @@ export const upsertRoleAcrossDatabases = onCall<RoleUpsertRequest>(
 		}
 
 		return primaryRole;
+	},
+);
+
+export const updateAttendanceAcrossDatabases = onCall<AttendanceUpdateRequest>(
+	async (request): Promise<{ ok: true }> => {
+		if (!request.auth?.uid) {
+			throw new HttpsError("unauthenticated", "Debes iniciar sesion para actualizar asistencia.");
+		}
+
+		const meetingId = request.data?.meetingId;
+		const participantUid = request.data?.participantUid;
+		const meetingDatabaseUrl = request.data?.meetingDatabaseUrl;
+		const userDatabaseUrl = request.data?.userDatabaseUrl ?? null;
+		const changes = request.data?.changes;
+
+		if (!meetingId || typeof meetingId !== "string") {
+			throw new HttpsError("invalid-argument", "meetingId es requerido.");
+		}
+		if (!participantUid || typeof participantUid !== "string") {
+			throw new HttpsError("invalid-argument", "participantUid es requerido.");
+		}
+		if (!meetingDatabaseUrl || typeof meetingDatabaseUrl !== "string") {
+			throw new HttpsError("invalid-argument", "meetingDatabaseUrl es requerido.");
+		}
+		if (!changes || typeof changes !== "object") {
+			throw new HttpsError("invalid-argument", "changes es requerido.");
+		}
+
+		const authUid = request.auth.uid;
+		const canSelfUpdate = authUid === participantUid;
+		if (!canSelfUpdate) {
+			const canManageInMeetingDb = await hasPermissionInDatabase(meetingDatabaseUrl, authUid, "meetings_attendance_view");
+			const canManageInUserDb = userDatabaseUrl
+				? await hasPermissionInDatabase(userDatabaseUrl, authUid, "meetings_attendance_view")
+				: false;
+			if (!canManageInMeetingDb && !canManageInUserDb) {
+				throw new HttpsError("permission-denied", "No tienes permisos para actualizar asistencia.");
+			}
+		}
+
+		const meetingDb = admin.app().database(meetingDatabaseUrl);
+		const meetingRef = meetingDb.ref(`meetings/${meetingId}`);
+		const meetingSnap = await meetingRef.get();
+		if (!meetingSnap.exists()) {
+			throw new HttpsError("not-found", "La actividad no existe.");
+		}
+		const meeting = meetingSnap.val() as StoredMeetingRecord & Record<string, unknown>;
+
+		const participantRef = meetingDb.ref(`meetingParticipants/${meetingId}/${participantUid}`);
+		const participantSnap = await participantRef.get();
+		if (!participantSnap.exists()) {
+			throw new HttpsError("not-found", "El participante no existe en esta actividad.");
+		}
+		const participant = participantSnap.val() as StoredParticipantRecord & Record<string, unknown>;
+
+		const updates: Record<string, unknown> = {};
+		if (typeof changes.attendance !== "undefined") {
+			updates[`meetingParticipants/${meetingId}/${participantUid}/attendance`] = changes.attendance;
+			updates[`userMeetings/${participantUid}/${meetingId}/attendance`] = changes.attendance;
+		}
+		if (typeof changes.checkedInAt !== "undefined") {
+			updates[`meetingParticipants/${meetingId}/${participantUid}/checkedInAt`] = changes.checkedInAt;
+		}
+		if (typeof changes.checkinMethod !== "undefined") {
+			updates[`meetingParticipants/${meetingId}/${participantUid}/checkinMethod`] = changes.checkinMethod;
+		}
+		if (typeof changes.noShow !== "undefined") {
+			updates[`meetingParticipants/${meetingId}/${participantUid}/noShow`] = changes.noShow;
+		}
+
+		if (Object.keys(updates).length > 0) {
+			await meetingDb.ref().update(updates);
+		}
+
+		if (userDatabaseUrl && userDatabaseUrl !== meetingDatabaseUrl) {
+			const userDb = admin.app().database(userDatabaseUrl);
+			const userMeetingRef = userDb.ref(`meetings/${meetingId}`);
+			const userMeetingSnap = await userMeetingRef.get();
+			if (!userMeetingSnap.exists()) {
+				await userMeetingRef.set(meeting);
+			}
+
+			const userUpdates: Record<string, unknown> = {};
+			userUpdates[`meetingParticipants/${meetingId}/${participantUid}`] = {
+				...participant,
+				attendance: typeof changes.attendance !== "undefined" ? changes.attendance : participant.attendance ?? null,
+				checkedInAt: typeof changes.checkedInAt !== "undefined" ? changes.checkedInAt : participant.checkedInAt ?? null,
+				checkinMethod: typeof changes.checkinMethod !== "undefined" ? changes.checkinMethod : participant.checkinMethod ?? null,
+				noShow: typeof changes.noShow !== "undefined" ? changes.noShow : participant.noShow ?? null,
+			};
+			userUpdates[`userMeetings/${participantUid}/${meetingId}`] = {
+				meetingId,
+				startTime: meeting.startTime ?? null,
+				status: meeting.status ?? null,
+				role: participant.role ?? null,
+				inviteStatus: participant.inviteStatus ?? null,
+				attendance: typeof changes.attendance !== "undefined" ? changes.attendance : participant.attendance ?? null,
+			};
+
+			await userDb.ref().update(userUpdates);
+		}
+
+		return { ok: true };
 	},
 );
 
