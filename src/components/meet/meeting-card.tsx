@@ -14,6 +14,8 @@ export default function MeetingCard({
     completing,
     onOpenDetails,
     onOpenCheckin,
+    canEdit,
+    onOpenEdit,
 }: {
     meeting: Meeting
     canComplete?: boolean
@@ -21,6 +23,8 @@ export default function MeetingCard({
     completing?: boolean
     onOpenDetails?: (meetingId: string) => void
     onOpenCheckin?: (meetingId: string) => void
+    canEdit?: boolean
+    onOpenEdit?: (meetingId: string) => void
 }) {
     const startDate = new Date(meeting.startTime)
     const endDate = new Date(meeting.endTime)
@@ -123,6 +127,17 @@ export default function MeetingCard({
                         </Link>
                     )}
                 </div>
+                {canEdit && onOpenEdit && (
+                    <div className="mt-3">
+                        <button
+                            type="button"
+                            onClick={() => onOpenEdit(meeting.id)}
+                            className="w-full px-6 py-2 bg-transparent border-2 border-emerald-700/40 text-emerald-700 font-semibold rounded-lg transition-all duration-300 hover:bg-emerald-700 hover:text-white hover:shadow-lg active:scale-95 text-sm"
+                        >
+                            Editar
+                        </button>
+                    </div>
+                )}
                 {canComplete && onComplete && ownerMeet && (
                     <div className="mt-3">
                         <button

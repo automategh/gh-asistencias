@@ -12,6 +12,7 @@ import DepartmentsPage from './pages/configuration/DepartmentsPage'
 import UserGroupingPage from './pages/configuration/UserGroupingPage'
 import MeetsPage from './pages/meets/MeetsPage'
 import DetailMeetPage from './pages/meets/DetailMeetPage'
+import EditMeetPage from './pages/meets/EditMeetPage'
 import AttendancePage from './pages/meets/AttendancePage'
 import ChekinPage from './pages/meets/ChekinPage'
 import RegisterPage from './pages/auth/RegisterPage'
@@ -55,6 +56,14 @@ function App() {
                         </RoleRoute>
                     )} />
                     <Route path="/meets" element={<MeetsPage />} />
+                    <Route
+                        path="/meeting/:id/edit"
+                        element={(
+                            <RoleRoute requireAny={["meetings_manage_any", "meetings_manage_owned"]}>
+                                <EditMeetPage />
+                            </RoleRoute>
+                        )}
+                    />
                     <Route path="/meeting/:id" element={<DetailMeetPage />} />
                     <Route path="/attendance/:id" element={(
                         <RoleRoute requireAny={["meetings_attendance_view"]}>

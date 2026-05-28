@@ -398,7 +398,8 @@ function NewMeetPage() {
                     ? form.satisfactionSurveyId
                     : null,
                 description: form.description || null,
-                location: form.location,
+                location: isOnlineMeeting ? 'Virtual' : form.location,
+                isOnlineMeeting,
                 startTime: startMs,
                 endTime: endMs,
                 trainerName: resolvedTrainerName,
@@ -410,7 +411,6 @@ function NewMeetPage() {
             }
 
             const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-
             const hostParticipant = selected.find(participant => participant.role === 'host')
             const organizerEmail = hostParticipant?.email ?? user.email ?? null
 
@@ -429,20 +429,27 @@ function NewMeetPage() {
                         name: participant.name,
                         type: 'required',
                     })),
-                    ...(isOnlineMeeting === true ? { isOnlineMeeting: true } : { location: meeting.location, })
+                    ...(isOnlineMeeting === true ? { isOnlineMeeting: true } : { location: meeting.location }),
                 })
 
                 setSuccess('Actividad creada correctamente y sincronizada con Teams')
             } catch (teamsError) {
                 const message = teamsError instanceof Error ? teamsError.message : 'Error al crear la actividad en Teams'
-                // No interrumpe la creación local; solo informa el problema con Teams.
-                setSuccess('Actividad creada correctamente, pero hubo un problema al crearla en Teams')
-                console.error('Error al crear actividad en Teams:', message)
+                setError(message)
             } finally {
                 setCreatingTeams(false)
             }
+
             setForm({
-                title: '', type: 'meeting', customType: '', satisfactionSurveyId: '', trainerName: '', description: '', location: '', startTime: '', endTime: '',
+                title: '',
+                type: 'meeting',
+                customType: '',
+                satisfactionSurveyId: '',
+                trainerName: '',
+                description: '',
+                location: '',
+                startTime: '',
+                endTime: '',
             })
             setSelected([])
         } catch (err) {

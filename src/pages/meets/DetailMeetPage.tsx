@@ -154,6 +154,13 @@ function DetailMeetPage() {
     const canManageOwnedMeeting = hasPermission('meetings_manage_owned')
     const canViewAttendance = hasPermission('meetings_attendance_view')
 
+    const canEditMeeting = useMemo(() => {
+        if (!meeting || !user) return false
+        const isCreator = meeting.createdBy === user.uid
+        const isManager = Array.isArray(meeting.managers) ? meeting.managers.includes(user.uid) : false
+        return canManageAnyMeeting || (canManageOwnedMeeting && (isCreator || isManager))
+    }, [meeting, user, canManageAnyMeeting, canManageOwnedMeeting])
+
     // Permiso de cierre: manage_any o manage_owned (si es creador/manager)
     const canClose = useMemo(() => {
         if (!meeting || !user) return false
@@ -294,6 +301,14 @@ function DetailMeetPage() {
             header={{
                 breadcrumbs: [{ label: 'Actividades', to: '/meets' }, { label: 'Detalle' }],
                 title: meeting?.title ?? 'Detalle de actividad',
+                actions: canEditMeeting ? (
+                    <Link
+                        to={sourceDatabaseUrl ? `/meeting/${id}/edit?db=${encodeURIComponent(sourceDatabaseUrl)}` : `/meeting/${id}/edit`}
+                        className="inline-flex items-center gap-2 rounded-xl border border-[#124734] bg-white px-4 py-2 text-sm font-semibold text-[#124734] shadow-sm hover:bg-[#124734]/10 transition-colors"
+                    >
+                        Editar
+                    </Link>
+                ) : undefined,
             }}
         >
             <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
@@ -306,6 +321,15 @@ function DetailMeetPage() {
                         <ArrowLeft className="w-4 h-4" />
                         Volver atrás
                     </button>
+
+                    {canEditMeeting ? (
+                    <Link
+                        to={sourceDatabaseUrl ? `/meeting/${id}/edit?db=${encodeURIComponent(sourceDatabaseUrl)}` : `/meeting/${id}/edit`}
+                        className="inline-flex items-center gap-2 rounded-xl border border-[#124734] bg-white px-4 py-2 text-sm font-semibold text-[#124734] shadow-sm hover:bg-[#124734]/10 transition-colors"
+                    >
+                        Editar
+                    </Link>
+                ) : undefined}
                 </div>
                 <div className="max-w-6xl mx-auto p-6 ">
 

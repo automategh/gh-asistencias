@@ -37,6 +37,8 @@ export interface Meeting {
   readonly description?: string | null
   /** Ubicación donde se lleva a cabo */
   readonly location: string
+  /** Indica si la reunión es virtual en lugar de presencial */
+  readonly isOnline?: boolean
   /** Inicio en epoch ms (para ordenar/filtrar por fecha) */
   readonly startTime: number
   /** Fin en epoch ms (para ordenar/filtrar por fecha) */
@@ -115,6 +117,10 @@ export interface MeetingCreateInput {
   readonly description?: string | null
   /** Ubicación */
   readonly location: string
+  /** Indica si la reunión es virtual en lugar de presencial (alias). */
+  readonly isVirtual?: boolean
+  /** Indica si la reunión es virtual en lugar de presencial para sincronización con Teams */
+  readonly isOnlineMeeting?: boolean
   /** Inicio epoch ms */
   readonly startTime: number
   /** Fin epoch ms */

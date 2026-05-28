@@ -35,6 +35,7 @@ export async function createMeeting(
     }
 
     const now = Date.now()
+    const isOnline = input.isOnlineMeeting ?? input.isVirtual ?? false
     const meeting: Meeting = {
         id,
         title: input.title.trim(),
@@ -42,7 +43,7 @@ export async function createMeeting(
         customType: input.customType ?? null,
         satisfactionSurveyId: input.satisfactionSurveyId ?? null,
         description: input.description?.trim() ?? null,
-        location: input.location.trim(),
+        location: isOnline ? input.location.trim() || 'Virtual' : input.location.trim(),
         startTime: input.startTime,
         endTime: input.endTime,
         trainerName: input.trainerName?.trim() || null,
@@ -52,6 +53,7 @@ export async function createMeeting(
         createdByEmail: creator.email ?? null,
         managers: input.managers ?? null,
         createdAt: now,
+        isOnline,
     }
 
     await set(newRef, meeting)
@@ -100,6 +102,87 @@ export async function addParticipants(
     }
 
     await update(ref(database), updates)
+}
+
+/**
+ * Obtiene los participantes de una reunión.
+ *
+ * @param database Instancia RTDB
+ * @param meetingId ID de la reunión
+ * @returns Mapa uid -> participante
+ */
+export async function getMeetingParticipants(
+    database: Database | null,
+    meetingId: string,
+): Promise<Record<string, MeetingParticipant>> {
+    assertDatabase(database)
+    const participantsRef = ref(database, `meetingParticipants/${meetingId}`)
+    const snapshot = await get(participantsRef)
+    if (!snapshot.exists()) {
+        return {}
+    }
+    return snapshot.val() as Record<string, MeetingParticipant>
+}
+
+/**
+ * Sincroniza los participantes de una reunión con la lista deseada.
+ *
+ * - Añade participantes nuevos.
+ * - Actualiza roles de participantes existentes.
+ * - Elimina participantes que ya no están en la lista.
+ * - Propaga cambios al índice `userMeetings/{uid}/{meetingId}`.
+ */
+export async function syncMeetingParticipants(
+    database: Database | null,
+    meetingId: string,
+    participants: ParticipantInput[],
+    indexMeta: { startTime: number; status: MeetingStatus },
+): Promise<void> {
+    assertDatabase(database)
+
+    const participantsRef = ref(database, `meetingParticipants/${meetingId}`)
+    const snapshot = await get(participantsRef)
+    const currentParticipants = snapshot.exists() ? snapshot.val() as Record<string, MeetingParticipant> : {}
+
+    const updates: Record<string, unknown> = {}
+    const desiredUids = new Set<string>()
+
+    for (const participant of participants) {
+        const existing = currentParticipants[participant.uid]
+        desiredUids.add(participant.uid)
+
+        updates[`meetingParticipants/${meetingId}/${participant.uid}`] = {
+            uid: participant.uid,
+            name: participant.name,
+            email: participant.email,
+            role: participant.role,
+            inviteStatus: existing?.inviteStatus ?? 'invited',
+            attendance: existing?.attendance ?? null,
+            noShow: existing?.noShow ?? null,
+            checkedInAt: existing?.checkedInAt ?? null,
+            checkinMethod: existing?.checkinMethod ?? null,
+        }
+
+        updates[`userMeetings/${participant.uid}/${meetingId}`] = {
+            meetingId,
+            startTime: indexMeta.startTime,
+            status: indexMeta.status,
+            role: participant.role,
+            inviteStatus: existing?.inviteStatus ?? 'invited',
+            attendance: existing?.attendance ?? null,
+        }
+    }
+
+    Object.keys(currentParticipants).forEach((uid) => {
+        if (!desiredUids.has(uid)) {
+            updates[`meetingParticipants/${meetingId}/${uid}`] = null
+            updates[`userMeetings/${uid}/${meetingId}`] = null
+        }
+    })
+
+    if (Object.keys(updates).length > 0) {
+        await update(ref(database), updates)
+    }
 }
 
 /**
@@ -155,6 +238,8 @@ export async function updateParticipantStatus(
  * @returns Reunión o null si no existe
  * @throws Error si la reunión no existe
  */
+export type MeetingUpdateInput = Partial<MeetingCreateInput>
+
 export async function getMeetingById(
     database: Database | null,
     meetingId: string,
@@ -167,6 +252,87 @@ export async function getMeetingById(
     }
     const meeting = snapshot.val() as Meeting
     return meeting
+}
+
+export async function updateMeeting(
+    database: Database | null,
+    meetingId: string,
+    changes: MeetingUpdateInput,
+): Promise<Meeting> {
+    assertDatabase(database)
+    const meetingRef = ref(database, `meetings/${meetingId}`)
+    const meetingSnap = await get(meetingRef)
+    if (!meetingSnap.exists()) {
+        throw new Error('La actividad no existe')
+    }
+
+    const meeting = meetingSnap.val() as Meeting
+    const updates: Record<string, unknown> = {}
+
+    if (typeof changes.title === 'string') {
+        updates['title'] = changes.title.trim()
+    }
+    if (typeof changes.type === 'string') {
+        updates['type'] = changes.type
+        if (changes.type !== 'custom') {
+            updates['customType'] = null
+        }
+        if (changes.type !== 'training') {
+            updates['satisfactionSurveyId'] = null
+        }
+    }
+    if (typeof changes.customType !== 'undefined') {
+        updates['customType'] = changes.customType?.trim() ?? null
+    }
+    if (typeof changes.satisfactionSurveyId !== 'undefined') {
+        updates['satisfactionSurveyId'] = changes.satisfactionSurveyId?.trim() || null
+    }
+    if (typeof changes.description !== 'undefined') {
+        updates['description'] = changes.description?.trim() ?? null
+    }
+    if (typeof changes.location === 'string') {
+        updates['location'] = changes.location.trim()
+    }
+    if (typeof changes.startTime === 'number') {
+        updates['startTime'] = changes.startTime
+    }
+    if (typeof changes.endTime === 'number') {
+        updates['endTime'] = changes.endTime
+    }
+    if (typeof changes.trainerName !== 'undefined') {
+        updates['trainerName'] = changes.trainerName?.trim() || null
+    }
+    if (typeof changes.isOnlineMeeting !== 'undefined') {
+        updates['isOnline'] = changes.isOnlineMeeting
+    } else if (typeof changes.isVirtual !== 'undefined') {
+        updates['isOnline'] = changes.isVirtual
+    }
+
+    if (Object.keys(updates).length === 0) {
+        return meeting
+    }
+
+    updates['updatedAt'] = Date.now()
+
+    const fanOutUpdates: Record<string, unknown> = {}
+    if (typeof changes.startTime === 'number' && changes.startTime !== meeting.startTime) {
+        const participantsRef = ref(database, `meetingParticipants/${meetingId}`)
+        const participantsSnap = await get(participantsRef)
+        if (participantsSnap.exists()) {
+            const participants = participantsSnap.val() as Record<string, MeetingParticipant>
+            Object.keys(participants).forEach((uid) => {
+                fanOutUpdates[`/userMeetings/${uid}/${meetingId}/startTime`] = changes.startTime as number
+            })
+        }
+    }
+
+    await update(meetingRef, updates)
+    if (Object.keys(fanOutUpdates).length > 0) {
+        await update(ref(database), fanOutUpdates)
+    }
+
+    const updatedSnap = await get(meetingRef)
+    return updatedSnap.val() as Meeting
 }
 
 /** Cierra una reunión cambiando su estado a `closed`.

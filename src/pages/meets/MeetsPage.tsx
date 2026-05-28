@@ -67,6 +67,7 @@ function MeetsPage() {
     const { database, databaseUrl, availableDatabases, recinto } = useDatabase()
     const navigate = useNavigate()
     const canViewAllTab = hasPermission('meetings_manage_any')
+    const canEditAnyMeeting = hasPermission('meetings_manage_any')
     const canCreateMeetings = hasPermission('meetings_create')
 
     const [loading, setLoading] = useState<boolean>(true)
@@ -101,6 +102,14 @@ function MeetsPage() {
         return `${basePath}/${meeting.id}?db=${encodeURIComponent(meeting.source.url)}`
     }
 
+    const buildMeetingEditPath = (meeting: MeetingWithIndex): string => {
+        if (!meeting.source?.url) {
+            return `/meeting/${meeting.id}/edit`
+        }
+
+        return `/meeting/${meeting.id}/edit?db=${encodeURIComponent(meeting.source.url)}`
+    }
+
     const getMeetingKey = useCallback((meeting: MeetingWithIndex): string => {
         const sourceKey = meeting.source?.url ?? 'current-db'
         return `${sourceKey}::${meeting.id}`
@@ -117,6 +126,20 @@ function MeetsPage() {
     const openMeetingCheckin = (meeting: MeetingWithIndex): void => {
         navigate(buildMeetingPath('/checkin', meeting))
     }
+
+    const openMeetingEdit = (meeting: MeetingWithIndex): void => {
+        navigate(buildMeetingEditPath(meeting))
+    }
+
+    const canEditMeeting = useCallback((meeting: MeetingWithIndex): boolean => {
+        if (!user?.uid) {
+            return false
+        }
+        if (meeting.status === 'closed' || meeting.status === 'completed') {
+            return false
+        }
+        return meeting.createdBy === user.uid || canEditAnyMeeting
+    }, [user?.uid, canEditAnyMeeting])
 
     useEffect(() => {
         let cancelled = false
@@ -671,16 +694,19 @@ function MeetsPage() {
                                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                                     {pageItems.map((m) => {
                                                         const canComplete = canUserCompleteMeeting(m, user?.uid)
+                                                        const canEdit = canEditMeeting(m)
                                                         const meetingKey = getMeetingKey(m)
                                                         return (
                                                             <MeetingCard
                                                                 key={meetingKey}
                                                                 meeting={m}
                                                                 canComplete={canComplete}
+                                                                canEdit={canEdit}
                                                                 completing={completing[meetingKey]}
                                                                 onComplete={async () => handleCompleteMeeting(m)}
                                                                 onOpenDetails={() => openMeetingDetails(m)}
                                                                 onOpenCheckin={() => openMeetingCheckin(m)}
+                                                                onOpenEdit={() => openMeetingEdit(m)}
                                                             />
                                                         )
                                                     })}
@@ -729,6 +755,7 @@ function MeetsPage() {
                                                             const canComplete = canUserCompleteMeeting(meeting, user?.uid)
                                                             const { label, className } = getStatusPill(meeting.status)
                                                             const meetingKey = getMeetingKey(meeting)
+                                                            const canEdit = canEditMeeting(meeting)
                                                             return (
                                                                 <tr key={meetingKey} className="border-t border-border hover:bg-muted/40">
                                                                     <td className="px-4 py-2 align-top">
@@ -763,6 +790,14 @@ function MeetsPage() {
                                                                             >
                                                                                 Asistencia
                                                                             </Link>
+                                                                            {canEdit && (
+                                                                                <Link
+                                                                                    to={buildMeetingEditPath(meeting)}
+                                                                                    className="inline-flex items-center gap-1 rounded-md border border-emerald-700/40 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-700/10"
+                                                                                >
+                                                                                    Editar
+                                                                                </Link>
+                                                                            )}
                                                                             {canComplete && (
                                                                                 <button
                                                                                     type="button"
@@ -831,16 +866,19 @@ function MeetsPage() {
                                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                                     {pageItems.map((m) => {
                                                         const canComplete = canUserCompleteMeeting(m, user?.uid)
+                                                        const canEdit = canEditMeeting(m)
                                                         const meetingKey = getMeetingKey(m)
                                                         return (
                                                             <MeetingCard
                                                                 key={meetingKey}
                                                                 meeting={m}
                                                                 canComplete={canComplete}
+                                                                canEdit={canEdit}
                                                                 completing={completing[meetingKey]}
                                                                 onComplete={async () => handleCompleteMeeting(m)}
                                                                 onOpenDetails={() => openMeetingDetails(m)}
                                                                 onOpenCheckin={() => openMeetingCheckin(m)}
+                                                                onOpenEdit={() => openMeetingEdit(m)}
                                                             />
                                                         )
                                                     })}
@@ -889,6 +927,7 @@ function MeetsPage() {
                                                             const canComplete = canUserCompleteMeeting(meeting, user?.uid)
                                                             const { label, className } = getStatusPill(meeting.status)
                                                             const meetingKey = getMeetingKey(meeting)
+                                                            const canEdit = canEditMeeting(meeting)
                                                             return (
                                                                 <tr key={meetingKey} className="border-t border-border hover:bg-muted/40">
                                                                     <td className="px-4 py-2 align-top">
@@ -923,6 +962,14 @@ function MeetsPage() {
                                                                             >
                                                                                 Asistencia
                                                                             </Link>
+                                                                            {canEdit && (
+                                                                                <Link
+                                                                                    to={buildMeetingEditPath(meeting)}
+                                                                                    className="inline-flex items-center gap-1 rounded-md border border-emerald-700/40 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-700/10"
+                                                                                >
+                                                                                    Editar
+                                                                                </Link>
+                                                                            )}
                                                                             {canComplete && (
                                                                                 <button
                                                                                     type="button"
@@ -991,16 +1038,19 @@ function MeetsPage() {
                                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                                     {pageItems.map((meeting) => {
                                                         const canComplete = canUserCompleteMeeting(meeting, user?.uid)
+                                                        const canEdit = canEditMeeting(meeting)
                                                         const meetingKey = getMeetingKey(meeting)
                                                         return (
                                                             <MeetingCard
                                                                 key={meetingKey}
                                                                 meeting={meeting}
                                                                 canComplete={canComplete}
+                                                                canEdit={canEdit}
                                                                 completing={completing[meetingKey]}
                                                                 onComplete={async () => handleCompleteMeeting(meeting)}
                                                                 onOpenDetails={() => openMeetingDetails(meeting)}
                                                                 onOpenCheckin={() => openMeetingCheckin(meeting)}
+                                                                onOpenEdit={() => openMeetingEdit(meeting)}
                                                             />
                                                         )
                                                     })}
@@ -1049,6 +1099,7 @@ function MeetsPage() {
                                                             const canComplete = canUserCompleteMeeting(meeting, user?.uid)
                                                             const { label, className } = getStatusPill(meeting.status)
                                                             const meetingKey = getMeetingKey(meeting)
+                                                            const canEdit = canEditMeeting(meeting)
                                                             return (
                                                                 <tr key={meetingKey} className="border-t border-border hover:bg-muted/40">
                                                                     <td className="px-4 py-2 align-top">
@@ -1083,6 +1134,14 @@ function MeetsPage() {
                                                                             >
                                                                                 Asistencia
                                                                             </Link>
+                                                                            {canEdit && (
+                                                                                <Link
+                                                                                    to={buildMeetingEditPath(meeting)}
+                                                                                    className="inline-flex items-center gap-1 rounded-md border border-emerald-700/40 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-700/10"
+                                                                                >
+                                                                                    Editar
+                                                                                </Link>
+                                                                            )}
                                                                             {canComplete && (
                                                                                 <button
                                                                                     type="button"
