@@ -4,7 +4,7 @@ import * as admin from "firebase-admin";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import PDFDocument from "pdfkit";
-import { Graph, type CreateTeamsMeetingOptions, type GraphEvent, type MeetingAttendee } from "./graph";
+import { Graph, type CreateTeamsMeetingOptions, type GraphEvent, type MeetingAttendee, type UpdateTeamsMeetingOptions } from "./graph";
 export { getAttendanceSummary } from "./attendance-summary";
 export { getUserMeetings } from "./user-meetings";
 
@@ -351,6 +351,25 @@ interface CreateTeamsMeetingResponse {
 	readonly subject?: string;
 }
 
+interface UpdateTeamsMeetingRequest {
+	readonly eventId: string;
+	readonly organizerEmail?: string | null;
+	readonly subject: string;
+	readonly bodyHtml?: string;
+	readonly startTime: number;
+	readonly endTime: number;
+	readonly timeZone: string;
+	readonly location?: string;
+	readonly attendees: readonly MeetingAttendeeRequest[];
+	readonly isOnlineMeeting?: boolean;
+}
+
+interface UpdateTeamsMeetingResponse {
+	readonly eventId: string;
+	readonly joinUrl?: string;
+	readonly subject?: string;
+}
+
 function formatDateTimeForTimeZone(epochMs: number, timeZone: string): string {
 	const date = new Date(epochMs);
 	const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -434,6 +453,71 @@ export const createTeamsMeeting = onCall<CreateTeamsMeetingRequest>(
 				throw error;
 			}
 			throw new HttpsError("internal", "Error al crear la reunión en Teams");
+		}
+	},
+);
+
+export const updateTeamsMeeting = onCall<UpdateTeamsMeetingRequest>(
+	async (request): Promise<UpdateTeamsMeetingResponse> => {
+		try {
+			const data = request.data;
+
+			if (!data.eventId || typeof data.eventId !== "string") {
+				throw new HttpsError("invalid-argument", "El eventId es obligatorio.");
+			}
+			if (!data.subject || typeof data.subject !== "string") {
+				throw new HttpsError("invalid-argument", "El asunto de la reunión es obligatorio.");
+			}
+			if (typeof data.startTime !== "number" || typeof data.endTime !== "number") {
+				throw new HttpsError(
+					"invalid-argument",
+					"Las fechas de inicio y fin deben ser numéricas (epoch ms).",
+				);
+			}
+			if (data.startTime >= data.endTime) {
+				throw new HttpsError("invalid-argument", "La hora de inicio debe ser menor que la de fin.");
+			}
+			if (!data.timeZone || typeof data.timeZone !== "string") {
+				throw new HttpsError("invalid-argument", "La zona horaria es obligatoria.");
+			}
+			if (!Array.isArray(data.attendees)) {
+				throw new HttpsError("invalid-argument", "La lista de asistentes debe ser un arreglo.");
+			}
+
+			const sanitizedAttendees: MeetingAttendee[] = data.attendees
+				.filter((attendee) => Boolean(attendee.email))
+				.map((attendee) => ({
+					email: attendee.email,
+					name: attendee.name,
+					type: attendee.type ?? "required",
+				}));
+
+			const graph = new Graph();
+			const options: UpdateTeamsMeetingOptions = {
+				eventId: data.eventId,
+				organizerEmail: data.organizerEmail ?? null,
+				subject: data.subject,
+				bodyHtml: data.bodyHtml ?? "",
+				startDateTime: formatDateTimeForTimeZone(data.startTime, data.timeZone),
+				endDateTime: formatDateTimeForTimeZone(data.endTime, data.timeZone),
+				timeZone: data.timeZone,
+				attendees: sanitizedAttendees,
+				...(data.isOnlineMeeting ? { isOnlineMeeting: true } : { location: data.location }),
+			};
+
+			const event: GraphEvent = await graph.updateTeamsMeeting(options);
+
+			return {
+				eventId: event.id,
+				joinUrl: event.onlineMeeting?.joinUrl,
+				subject: event.subject,
+			};
+		} catch (error) {
+			console.error("Error en updateTeamsMeeting:", error);
+			if (error instanceof HttpsError) {
+				throw error;
+			}
+			throw new HttpsError("internal", "Error al actualizar la reunión en Teams");
 		}
 	},
 );

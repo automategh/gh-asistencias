@@ -9,7 +9,7 @@ import { listAllUsersAcrossDatabases } from '@/services/roles.service'
 import { getUserGroupingConfig, type UserGroupingConfig } from '@/services/user-grouping.service'
 import type { RecintoKey } from '@/lib/firebase/databaseResolver'
 import { buildUserGroups, buildUserGroupsByField, getUserGroupingDefinitions, type GroupingFieldKey, type UserGroupingId } from '@/lib/userGrouping'
-import { createTeamsMeetingViaCloudFunction } from '@/services/teams.service'
+import { createTeamsMeetingViaCloudFunction, updateTeamsMeetingViaCloudFunction } from '@/services/teams.service'
 import { Users } from 'lucide-react'
 import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -414,6 +414,16 @@ function EditMeetPage() {
                 ? (form.trainerName?.trim() || selectedTrainer?.name?.trim() || null)
                 : null
 
+            let updatedTeamsEventId = meeting.teamsEventId ?? null
+            let updatedTeamsJoinUrl = meeting.teamsJoinUrl ?? null
+            let updatedTeamsOrganizerEmail = meeting.teamsOrganizerEmail ?? null
+
+            const shouldClearTeams = !form.isOnlineMeeting
+            if (shouldClearTeams) {
+                updatedTeamsEventId = null
+                updatedTeamsJoinUrl = null
+                updatedTeamsOrganizerEmail = null
+            }
             await updateMeeting(meetingDatabase, id, {
                 title: form.title,
                 type: form.type,
@@ -425,6 +435,9 @@ function EditMeetPage() {
                 startTime: startMs,
                 endTime: endMs,
                 trainerName: resolvedTrainerName,
+                ...(shouldClearTeams
+                    ? { teamsEventId: null, teamsJoinUrl: null, teamsOrganizerEmail: null }
+                    : {}),
             })
 
             await syncMeetingParticipants(meetingDatabase, id, selectedParticipants, {
@@ -432,28 +445,65 @@ function EditMeetPage() {
                 status: meeting.status,
             })
 
-            const hostParticipant = selectedParticipants.find((participant) => participant.role === 'host')
-            const organizerEmail = hostParticipant?.email ?? user?.email ?? null
-            if (organizerEmail) {
+            if (form.isOnlineMeeting) {
+                const hostParticipant = selectedParticipants.find((participant) => participant.role === 'host')
+                const organizerEmail = meeting.teamsOrganizerEmail ?? hostParticipant?.email ?? user?.email ?? null
                 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
                 try {
                     setCreatingTeams(true)
 
-                    await createTeamsMeetingViaCloudFunction({
-                        organizerEmail,
-                        subject: form.title,
-                        bodyHtml: form.description ?? undefined,
-                        startTime: startMs,
-                        endTime: endMs,
-                        timeZone,
-                        attendees: selectedParticipants.map((participant) => ({
-                            email: participant.email,
-                            name: participant.name,
-                            type: 'required',
-                        })),
-                        ...(form.isOnlineMeeting ? { isOnlineMeeting: true } : { location: form.location }),
-                    })
+                    if (meeting.teamsEventId) {
+                        const updateResult = await updateTeamsMeetingViaCloudFunction({
+                            eventId: meeting.teamsEventId,
+                            organizerEmail,
+                            subject: form.title,
+                            bodyHtml: form.description ?? undefined,
+                            startTime: startMs,
+                            endTime: endMs,
+                            timeZone,
+                            attendees: selectedParticipants.map((participant) => ({
+                                email: participant.email,
+                                name: participant.name,
+                                type: 'required',
+                            })),
+                            isOnlineMeeting: true,
+                        })
+
+                        await updateMeeting(meetingDatabase, id, {
+                            teamsJoinUrl: updateResult.joinUrl ?? meeting.teamsJoinUrl ?? null,
+                            teamsOrganizerEmail: meeting.teamsOrganizerEmail ?? organizerEmail,
+                        })
+
+                        updatedTeamsEventId = meeting.teamsEventId
+                        updatedTeamsJoinUrl = updateResult.joinUrl ?? meeting.teamsJoinUrl ?? null
+                        updatedTeamsOrganizerEmail = meeting.teamsOrganizerEmail ?? organizerEmail
+                    } else {
+                        const createResult = await createTeamsMeetingViaCloudFunction({
+                            organizerEmail,
+                            subject: form.title,
+                            bodyHtml: form.description ?? undefined,
+                            startTime: startMs,
+                            endTime: endMs,
+                            timeZone,
+                            attendees: selectedParticipants.map((participant) => ({
+                                email: participant.email,
+                                name: participant.name,
+                                type: 'required',
+                            })),
+                            isOnlineMeeting: true,
+                        })
+
+                        await updateMeeting(meetingDatabase, id, {
+                            teamsEventId: createResult.eventId,
+                            teamsJoinUrl: createResult.joinUrl ?? null,
+                            teamsOrganizerEmail: organizerEmail,
+                        })
+
+                        updatedTeamsEventId = createResult.eventId
+                        updatedTeamsJoinUrl = createResult.joinUrl ?? null
+                        updatedTeamsOrganizerEmail = organizerEmail
+                    }
                 } catch (teamsError) {
                     const message = teamsError instanceof Error ? teamsError.message : 'Error al actualizar la actividad en Teams'
                     setError(message)
@@ -475,6 +525,9 @@ function EditMeetPage() {
                 startTime: startMs,
                 endTime: endMs,
                 trainerName: resolvedTrainerName,
+                teamsEventId: updatedTeamsEventId,
+                teamsJoinUrl: updatedTeamsJoinUrl,
+                teamsOrganizerEmail: updatedTeamsOrganizerEmail,
             } : prev)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'No fue posible guardar los cambios.')

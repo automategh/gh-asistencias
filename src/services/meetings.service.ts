@@ -280,7 +280,11 @@ export async function updateAttendanceAcrossDatabases(
  * @returns Reunión o null si no existe
  * @throws Error si la reunión no existe
  */
-export type MeetingUpdateInput = Partial<MeetingCreateInput>
+export type MeetingUpdateInput = Partial<MeetingCreateInput> & {
+    readonly teamsEventId?: string | null
+    readonly teamsJoinUrl?: string | null
+    readonly teamsOrganizerEmail?: string | null
+}
 
 export async function getMeetingById(
     database: Database | null,
@@ -348,6 +352,15 @@ export async function updateMeeting(
         updates['isOnline'] = changes.isOnlineMeeting
     } else if (typeof changes.isVirtual !== 'undefined') {
         updates['isOnline'] = changes.isVirtual
+    }
+    if (typeof changes.teamsEventId !== 'undefined') {
+        updates['teamsEventId'] = changes.teamsEventId?.trim() ?? null
+    }
+    if (typeof changes.teamsJoinUrl !== 'undefined') {
+        updates['teamsJoinUrl'] = changes.teamsJoinUrl?.trim() ?? null
+    }
+    if (typeof changes.teamsOrganizerEmail !== 'undefined') {
+        updates['teamsOrganizerEmail'] = changes.teamsOrganizerEmail?.trim() ?? null
     }
 
     if (Object.keys(updates).length === 0) {

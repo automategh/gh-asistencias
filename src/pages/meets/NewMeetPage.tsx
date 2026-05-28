@@ -13,7 +13,7 @@ import { useDatabase } from '@/context/DatabaseContext'
 import type { ChangeEvent, FormEvent } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import type { MeetingKind, ParticipantInput, ParticipantRole } from '@/types/meeting'
-import { createMeeting, addParticipants } from '@/services/meetings.service'
+import { createMeeting, addParticipants, updateMeeting } from '@/services/meetings.service'
 import { listAllUsersAcrossDatabases } from '@/services/roles.service'
 import type { RecintoKey } from '@/lib/firebase/databaseResolver'
 import { getSurveys, type Survey } from '@/services/forms.service'
@@ -410,34 +410,44 @@ function NewMeetPage() {
                 await addParticipants(database, meeting.id, selected, { startTime: meeting.startTime, status: meeting.status })
             }
 
-            const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-            const hostParticipant = selected.find(participant => participant.role === 'host')
-            const organizerEmail = hostParticipant?.email ?? user.email ?? null
+            if (isOnlineMeeting) {
+                const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+                const hostParticipant = selected.find(participant => participant.role === 'host')
+                const organizerEmail = hostParticipant?.email ?? user.email ?? null
 
-            try {
-                setCreatingTeams(true)
+                try {
+                    setCreatingTeams(true)
 
-                await createTeamsMeetingViaCloudFunction({
-                    organizerEmail,
-                    subject: meeting.title,
-                    bodyHtml: meeting.description ?? undefined,
-                    startTime: meeting.startTime,
-                    endTime: meeting.endTime,
-                    timeZone,
-                    attendees: selected.map(participant => ({
-                        email: participant.email,
-                        name: participant.name,
-                        type: 'required',
-                    })),
-                    ...(isOnlineMeeting === true ? { isOnlineMeeting: true } : { location: meeting.location }),
-                })
+                    const teamsResult = await createTeamsMeetingViaCloudFunction({
+                        organizerEmail,
+                        subject: meeting.title,
+                        bodyHtml: meeting.description ?? undefined,
+                        startTime: meeting.startTime,
+                        endTime: meeting.endTime,
+                        timeZone,
+                        attendees: selected.map(participant => ({
+                            email: participant.email,
+                            name: participant.name,
+                            type: 'required',
+                        })),
+                        isOnlineMeeting: true,
+                    })
 
-                setSuccess('Actividad creada correctamente y sincronizada con Teams')
-            } catch (teamsError) {
-                const message = teamsError instanceof Error ? teamsError.message : 'Error al crear la actividad en Teams'
-                setError(message)
-            } finally {
-                setCreatingTeams(false)
+                    await updateMeeting(database, meeting.id, {
+                        teamsEventId: teamsResult.eventId,
+                        teamsJoinUrl: teamsResult.joinUrl ?? null,
+                        teamsOrganizerEmail: organizerEmail,
+                    })
+
+                    setSuccess('Actividad creada correctamente y sincronizada con Teams')
+                } catch (teamsError) {
+                    const message = teamsError instanceof Error ? teamsError.message : 'Error al crear la actividad en Teams'
+                    setError(message)
+                } finally {
+                    setCreatingTeams(false)
+                }
+            } else {
+                setSuccess('Actividad creada correctamente')
             }
 
             setForm({

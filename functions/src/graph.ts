@@ -183,6 +183,70 @@ export class Graph {
             return await createForOrganizer(this.defaultOrganizerEmail);
         }
     }
+
+    /**
+     * Actualiza una reunión existente en Teams para un organizador específico.
+     */
+    public async updateTeamsMeeting(options: UpdateTeamsMeetingOptions): Promise<GraphEvent> {
+        const token = await this.getToken();
+
+        const organizerFromOptions = options.organizerEmail?.trim();
+        const organizer = organizerFromOptions || this.defaultOrganizerEmail;
+
+        if (!organizer) {
+            throw new Error(
+                "No se pudo determinar un organizador para actualizar la reunión. Proporcione organizerEmail o configure AZURE_DEFAULT_ORGANIZER_EMAIL.",
+            );
+        }
+
+        const eventPayload: GraphCreateEventRequest = {
+            subject: options.subject,
+            body: {
+                contentType: "HTML",
+                content: options.bodyHtml ?? "",
+            },
+            start: {
+                dateTime: options.startDateTime,
+                timeZone: options.timeZone,
+            },
+            end: {
+                dateTime: options.endDateTime,
+                timeZone: options.timeZone,
+            },
+            attendees: options.attendees.map((attendee) => ({
+                emailAddress: {
+                    address: attendee.email,
+                    name: attendee.name ?? attendee.email,
+                },
+                type: attendee.type ?? "required",
+            })),
+            ...(options.location ? { location: { displayName: options.location } } : {}),
+            ...(options.isOnlineMeeting ? {
+                isOnlineMeeting: true,
+            } : {}),
+            onlineMeetingProvider: "teamsForBusiness",
+        };
+
+        const response = await fetch(
+            `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(organizer)}/events/${encodeURIComponent(options.eventId)}`,
+            {
+                method: "PATCH",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(eventPayload),
+            },
+        );
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Error al actualizar el evento en Graph: ${response.status} ${errorText}`);
+        }
+
+        const data = (await response.json()) as GraphEvent;
+        return data;
+    }
 }
 
 export interface MeetingAttendee {
@@ -212,6 +276,25 @@ export interface CreateTeamsMeetingOptions {
     /**
      * Zona horaria compatible con Graph, por ejemplo "America/Bogota".
      */
+    readonly timeZone: string;
+    readonly location?: string;
+    readonly attendees: readonly MeetingAttendee[];
+    readonly isOnlineMeeting?: boolean;
+}
+
+export interface UpdateTeamsMeetingOptions {
+    /**
+     * ID del evento en Graph.
+     */
+    readonly eventId: string;
+    /**
+     * Correo del organizador que posee el evento.
+     */
+    readonly organizerEmail?: string | null;
+    readonly subject: string;
+    readonly bodyHtml?: string;
+    readonly startDateTime: string;
+    readonly endDateTime: string;
     readonly timeZone: string;
     readonly location?: string;
     readonly attendees: readonly MeetingAttendee[];

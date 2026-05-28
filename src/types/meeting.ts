@@ -39,6 +39,12 @@ export interface Meeting {
   readonly location: string
   /** Indica si la reunión es virtual en lugar de presencial */
   readonly isOnline?: boolean
+  /** ID del evento en Microsoft Teams/Graph (solo cuando es virtual) */
+  readonly teamsEventId?: string | null
+  /** URL de unión a Teams (solo cuando es virtual) */
+  readonly teamsJoinUrl?: string | null
+  /** Correo del organizador asociado en Teams */
+  readonly teamsOrganizerEmail?: string | null
   /** Inicio en epoch ms (para ordenar/filtrar por fecha) */
   readonly startTime: number
   /** Fin en epoch ms (para ordenar/filtrar por fecha) */
