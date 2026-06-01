@@ -225,7 +225,6 @@ function RegisterPage() {
                             <button
                                 type="button"
                                 aria-pressed={formData.worksAtHeroica}
-                                aria-label={formData.worksAtHeroica ? 'Marcar como no obligatoria' : 'Marcar como obligatoria'}
                                 onClick={toggleWorksAtHeroica}
                                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40 ${formData.worksAtHeroica ? 'bg-primary' : 'bg-gray-300'}`}
                             >
