@@ -1,8 +1,9 @@
 import { createUserWithEmailAndPassword, OAuthProvider, type OAuthCredential, type User, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile } from "firebase/auth";
-import { auth, DATABASE_CCCI_URL, DATABASE_CCCR_URL, DATABASE_CEVP_URL, DEFAULT_DATABASE_URL, getDatabaseForUrl } from "../firebase";
-import { getDatabaseByRecinto, resolveDatabaseByEmail, type RecintoKey } from "@/lib/firebase/databaseResolver";
+import { auth, DATABASE_CCCI_URL, DATABASE_CCCR_URL, DATABASE_CEVP_URL, DEFAULT_DATABASE_URL, functions, getDatabaseForUrl } from "../firebase";
+import { getDatabaseByRecinto, getDatabaseUrlByRecinto, resolveDatabaseByEmail, type RecintoKey } from "@/lib/firebase/databaseResolver";
 import { validatePasswordPolicy } from "@/lib/password-policy";
 import { get, ref, set } from "firebase/database";
+import { httpsCallable } from "firebase/functions";
 import type { RegisterFormData } from "@/types/user";
 
 interface UserRecord {
@@ -20,6 +21,17 @@ interface UserRecord {
     companyName?: string | null;
     createdAt: string;
     lastLogin: string;
+}
+
+interface NotifyHrPendingActivationRequest {
+    readonly uid: string
+    readonly databaseUrl: string
+    readonly recinto: RecintoKey
+}
+
+interface NotifyHrPendingActivationResponse {
+    readonly sent: boolean
+    readonly recipientsCount: number
 }
 
 // Configuración del proveedor de OAuth para Microsoft
@@ -226,6 +238,8 @@ export const registerWithEmailPassword = async (data: RegisterFormData) => {
         }
 
         const userRef = ref(db, `users/${user.uid}`);
+        const selectedRecinto = data.recint as RecintoKey
+        const targetDatabaseUrl = getDatabaseUrlByRecinto(selectedRecinto)
 
         // Crear el registro del usuario en la base de datos correspondiente
         const newUserRecord: UserRecord = {
@@ -246,6 +260,24 @@ export const registerWithEmailPassword = async (data: RegisterFormData) => {
         };
 
         await set(userRef, newUserRecord);
+
+        if (functions && targetDatabaseUrl) {
+            try {
+                const notifyHrPendingActivationCallable = httpsCallable<NotifyHrPendingActivationRequest, NotifyHrPendingActivationResponse>(
+                    functions,
+                    "notifyHrPendingActivation",
+                )
+
+                await notifyHrPendingActivationCallable({
+                    uid: user.uid,
+                    databaseUrl: targetDatabaseUrl,
+                    recinto: selectedRecinto,
+                })
+            } catch (notificationError) {
+                console.error("No fue posible enviar la notificación de activación a Talento Humano:", notificationError)
+            }
+        }
+
         return { user };
     } catch (error) {
         console.error("Error durante el registro de usuario:", error);

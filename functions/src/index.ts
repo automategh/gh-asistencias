@@ -27,6 +27,17 @@ interface AttendanceUpdateRequest {
 	readonly changes: AttendanceUpdateChanges;
 }
 
+interface NotifyHrPendingActivationRequest {
+	readonly uid: string;
+	readonly databaseUrl: string;
+	readonly recinto?: string | null;
+}
+
+interface NotifyHrPendingActivationResponse {
+	readonly sent: boolean;
+	readonly recipientsCount: number;
+}
+
 interface AttendanceUpdateChanges {
 	readonly attendance?: "absent" | "present" | "late" | null;
 	readonly checkedInAt?: number | null;
@@ -133,6 +144,25 @@ interface StoredParticipantRecord {
 	readonly checkedInAt?: number | null;
 	readonly checkinMethod?: "qr" | "manual" | null;
 	readonly noShow?: boolean | null;
+}
+
+interface PendingActivationUserRecord {
+	readonly uid?: string | null;
+	readonly name?: string | null;
+	readonly email?: string | null;
+	readonly role?: string | null;
+	readonly roleId?: string | null;
+	readonly active?: boolean | null;
+	readonly identify?: string | null;
+	readonly department?: string | null;
+	readonly cargo?: string | null;
+	readonly companyName?: string | null;
+}
+
+interface PendingActivationRoleRecord {
+	readonly name?: string | null;
+	readonly displayName?: string | null;
+	readonly permissions?: Partial<Record<string, boolean>> | null;
 }
 
 interface RoleUpsertPayload {
@@ -273,6 +303,68 @@ const normalizeRequiredString = (value: unknown): string => {
 		return "";
 	}
 	return value.trim();
+};
+
+const normalizeOptionalString = (value: unknown): string | null => {
+	if (typeof value !== "string") {
+		return null;
+	}
+	const clean = value.trim();
+	return clean.length > 0 ? clean : null;
+};
+
+const escapeHtml = (value: string): string => {
+	return value
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/\"/g, "&quot;")
+		.replace(/'/g, "&#39;");
+};
+
+const containsHumanTalentLabel = (value: string | null | undefined): boolean => {
+	if (!value) {
+		return false;
+	}
+	const normalized = value.trim().toLowerCase();
+	if (normalized.length === 0) {
+		return false;
+	}
+
+	return normalized.includes("talento humano")
+		|| normalized.includes("human resources")
+		|| normalized === "hr";
+};
+
+const isHumanTalentUser = (
+	user: PendingActivationUserRecord,
+	rolesMap: Record<string, PendingActivationRoleRecord> | null,
+): boolean => {
+	if (user.active !== true) {
+		return false;
+	}
+
+	const roleId = normalizeIdentity(user.roleId ?? null);
+	if (roleId === "hr") {
+		return true;
+	}
+
+	if (containsHumanTalentLabel(user.role)) {
+		return true;
+	}
+
+	if (!roleId || !rolesMap) {
+		return false;
+	}
+
+	const role = rolesMap[roleId] ?? null;
+	if (!role) {
+		return false;
+	}
+
+	return containsHumanTalentLabel(role.displayName)
+		|| containsHumanTalentLabel(role.name)
+		|| roleId === "hr";
 };
 
 const normalizeOptionalText = (value: unknown): string | null => {
@@ -579,6 +671,102 @@ export const updateAttendanceAcrossDatabases = onCall<AttendanceUpdateRequest>(
 		}
 
 		return { ok: true };
+	},
+);
+
+export const notifyHrPendingActivation = onCall<NotifyHrPendingActivationRequest>(
+	async (request): Promise<NotifyHrPendingActivationResponse> => {
+		if (!request.auth?.uid) {
+			throw new HttpsError("unauthenticated", "Debes iniciar sesión para solicitar la activación.");
+		}
+
+		const requesterUid = request.auth.uid;
+		const targetUid = normalizeRequiredString(request.data?.uid);
+		const databaseUrl = resolveKnownDatabaseUrlOrThrow(request.data?.databaseUrl);
+		const recinto = normalizeOptionalString(request.data?.recinto) ?? "sin-recinto";
+
+		if (!targetUid) {
+			throw new HttpsError("invalid-argument", "uid es requerido.");
+		}
+
+		if (targetUid !== requesterUid) {
+			throw new HttpsError("permission-denied", "Solo puedes solicitar activación para tu propio usuario.");
+		}
+
+		const db = admin.app().database(databaseUrl);
+		const [targetUserSnapshot, usersSnapshot, rolesSnapshot] = await Promise.all([
+			db.ref(`users/${targetUid}`).get(),
+			db.ref("users").get(),
+			db.ref("roles").get(),
+		]);
+
+		if (!targetUserSnapshot.exists()) {
+			throw new HttpsError("not-found", "El usuario registrado no existe en la base de datos seleccionada.");
+		}
+
+		const targetUser = targetUserSnapshot.val() as PendingActivationUserRecord;
+		if (targetUser.active === true) {
+			return {
+				sent: false,
+				recipientsCount: 0,
+			};
+		}
+
+		const usersMap = usersSnapshot.val() as Record<string, PendingActivationUserRecord> | null;
+		const rolesMap = rolesSnapshot.val() as Record<string, PendingActivationRoleRecord> | null;
+
+		const recipients = Object.values(usersMap ?? {})
+			.filter((user) => isHumanTalentUser(user, rolesMap))
+			.map((user) => {
+				const email = normalizeOptionalString(user.email);
+				if (!email) {
+					return null;
+				}
+				return {
+					email,
+					name: normalizeOptionalString(user.name) ?? email,
+				};
+			})
+			.filter((value): value is { email: string; name: string } => value !== null);
+
+		if (recipients.length === 0) {
+			return {
+				sent: false,
+				recipientsCount: 0,
+			};
+		}
+
+		const userName = escapeHtml(normalizeOptionalString(targetUser.name) ?? "Sin nombre");
+		const userEmail = escapeHtml(normalizeOptionalString(targetUser.email) ?? "Sin correo");
+		const userIdentify = escapeHtml(normalizeOptionalString(targetUser.identify) ?? "No registrada");
+		const userDepartment = escapeHtml(normalizeOptionalString(targetUser.department) ?? "No registrada");
+		const userCargo = escapeHtml(normalizeOptionalString(targetUser.cargo) ?? "No registrado");
+		const userCompany = escapeHtml(normalizeOptionalString(targetUser.companyName) ?? "Grupo Heroica");
+		const cleanRecinto = escapeHtml(recinto.toUpperCase());
+
+		const graph = new Graph();
+		await graph.sendMailWithAttachment({
+			to: recipients,
+			subject: `Activación pendiente de usuario (${cleanRecinto})`,
+			htmlBody: `
+				<p>Hola equipo de Talento Humano,</p>
+				<p>Se registró un nuevo usuario y requiere activación en el recinto <strong>${cleanRecinto}</strong>.</p>
+				<ul>
+					<li><strong>Nombre:</strong> ${userName}</li>
+					<li><strong>Correo:</strong> ${userEmail}</li>
+					<li><strong>Identificación:</strong> ${userIdentify}</li>
+					<li><strong>Área:</strong> ${userDepartment}</li>
+					<li><strong>Cargo:</strong> ${userCargo}</li>
+					<li><strong>Empresa:</strong> ${userCompany}</li>
+				</ul>
+				<p>Por favor, revisen y activen el usuario en el módulo de usuarios.</p>
+			`,
+		});
+
+		return {
+			sent: true,
+			recipientsCount: recipients.length,
+		};
 	},
 );
 
