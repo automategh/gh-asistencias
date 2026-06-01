@@ -27,6 +27,8 @@ function ExternalSurveyPage() {
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
     const [submitError, setSubmitError] = useState<string | null>(null)
     const [success, setSuccess] = useState<boolean>(false)
+    const [showErrorModal, setShowErrorModal] = useState<boolean>(false)
+    const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false)
 
     const canLoadSurvey = Boolean(id && trainingId && sourceDatabaseUrl && externalId)
 
@@ -37,6 +39,7 @@ function ExternalSurveyPage() {
             if (!id || !trainingId || !sourceDatabaseUrl || !externalId) {
                 setLoading(false)
                 setSubmitError("No fue posible validar el acceso a la encuesta externa.")
+                setShowErrorModal(true)
                 return
             }
 
@@ -61,6 +64,7 @@ function ExternalSurveyPage() {
             } catch (error) {
                 if (!cancelled) {
                     setSubmitError(error instanceof Error ? error.message : "No fue posible cargar la encuesta")
+                    setShowErrorModal(true)
                 }
             } finally {
                 if (!cancelled) {
@@ -125,6 +129,7 @@ function ExternalSurveyPage() {
     const handleSubmit = async (): Promise<void> => {
         if (!id || !trainingId || !sourceDatabaseUrl || !externalId) {
             setSubmitError("No fue posible validar el acceso a la encuesta externa.")
+            setShowErrorModal(true)
             return
         }
 
@@ -148,6 +153,7 @@ function ExternalSurveyPage() {
 
         if (missingRequired.length > 0) {
             setSubmitError("Por favor responde todas las preguntas obligatorias.")
+            setShowErrorModal(true)
             return
         }
 
@@ -164,8 +170,10 @@ function ExternalSurveyPage() {
             })
 
             setSuccess(true)
+            setShowSuccessModal(true)
         } catch (error) {
             setSubmitError(error instanceof Error ? error.message : "No fue posible guardar la encuesta")
+            setShowErrorModal(true)
         } finally {
             setIsSubmitting(false)
         }
@@ -184,6 +192,66 @@ function ExternalSurveyPage() {
     return (
         <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background px-4 py-10">
             <div className="mx-auto max-w-4xl space-y-6">
+                {submitError && showErrorModal && (
+                    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4">
+                        <div className="w-full max-w-md rounded-3xl border border-red-200 bg-white shadow-[0_24px_48px_rgba(15,23,42,0.18)] overflow-hidden">
+                            <div className="px-6 py-5 border-b border-red-100 bg-red-50">
+                                <h2 className="text-xl font-bold text-red-800 flex items-center gap-2">
+                                    <AlertCircle className="w-5 h-5" />
+                                    Error de validación
+                                </h2>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-red-700 font-medium">{submitError}</p>
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowErrorModal(false)
+                                            setSubmitError(null)
+                                        }}
+                                        className="inline-flex items-center justify-center rounded-xl bg-[#1b3022] px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#14251a] transition-colors"
+                                    >
+                                        Cerrar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {success && showSuccessModal && (
+                    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4">
+                        <div className="w-full max-w-md rounded-3xl border border-[#edeeed] bg-white shadow-[0_24px_48px_rgba(15,23,42,0.18)] overflow-hidden">
+                            <div className="px-6 py-5 border-b border-[#edeeed] bg-[#f8faf8]">
+                                <h2 className="text-xl font-bold text-[#191c1c]">Encuesta enviada</h2>
+                                <p className="text-sm text-[#5f6560] mt-2">Gracias por completar la encuesta de satisfacción.</p>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-[#5f6560]">Tu proceso quedó finalizado. Puedes cerrar esta ventana.</p>
+                                <div className="flex justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowSuccessModal(false)
+                                        }}
+                                        className="inline-flex items-center justify-center rounded-xl border border-[#d4d7d5] bg-white px-5 py-3 text-sm font-semibold text-[#1b3022] hover:bg-[#f2f4f3] transition-colors"
+                                    >
+                                        Cerrar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate("/")}
+                                        className="inline-flex items-center justify-center rounded-xl bg-[#1b3022] px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#14251a] transition-colors"
+                                    >
+                                        Finalizar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="rounded-3xl bg-[#1b3022] p-8 text-white shadow-lg">
                     <h1 className="text-2xl font-bold">{survey?.name ?? "Encuesta de satisfacción"}</h1>
                     <p className="mt-2 text-sm text-[#d6e4d8]">
@@ -194,26 +262,6 @@ function ExternalSurveyPage() {
                 {loading && (
                     <div className="rounded-2xl border border-border bg-white px-6 py-8 text-sm text-muted-foreground">
                         Cargando encuesta...
-                    </div>
-                )}
-
-                {!loading && submitError && (
-                    <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-5 text-red-800 flex gap-3">
-                        <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-                        <p className="text-sm font-medium">{submitError}</p>
-                    </div>
-                )}
-
-                {!loading && success && (
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-6 py-6 text-emerald-800 space-y-3">
-                        <p className="text-base font-semibold">Encuesta enviada correctamente.</p>
-                        <button
-                            type="button"
-                            onClick={() => navigate("/")}
-                            className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 transition-colors"
-                        >
-                            Finalizar
-                        </button>
                     </div>
                 )}
 

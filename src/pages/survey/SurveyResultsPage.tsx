@@ -125,6 +125,11 @@ const loadRespondentProfiles = async (
     return profileMap
 }
 
+const normalizeRespondentTypeLabel = (response: SurveyResponse): string => {
+    const rawType = typeof response.respondentType === "string" ? response.respondentType.trim().toLowerCase() : ""
+    return rawType === "external" ? "Externo" : "Interno"
+}
+
 function SurveyResultsPage() {
     const { id } = useParams<{ id: string }>()
     const { database } = useDatabase()
@@ -409,6 +414,14 @@ function SurveyResultsPage() {
     const respondentRecintoDistribution = buildDistribution(
         selectedResponses.map((response) => response.recinto),
     )
+    const respondentTypeDistribution = buildDistribution(
+        selectedResponses.map((response) => normalizeRespondentTypeLabel(response)),
+    )
+    const externalCompanyDistribution = buildDistribution(
+        selectedResponses
+            .filter((response) => normalizeRespondentTypeLabel(response) === "Externo")
+            .map((response) => response.companyName),
+    )
     const responseRecintoOptions = buildFilterOptions(selectedResponses.map((response) => response.recinto))
     const responseDepartmentOptions = buildFilterOptions(
         selectedResponses.map((response) => respondentProfiles[response.userId]?.department),
@@ -651,7 +664,13 @@ function SurveyResultsPage() {
                                                 </div>
                                             </div>
 
-                                            <div className="grid gap-4 xl:grid-cols-3">
+                                            <div className="grid gap-4 xl:grid-cols-4">
+                                                <DistributionDonutCard
+                                                    title="Tipo de respondiente"
+                                                    subtitle="Participación entre internos y externos"
+                                                    items={respondentTypeDistribution}
+                                                    emptyMessage="No hay datos de tipo de respondiente para esta capacitación."
+                                                />
                                                 <DistributionDonutCard
                                                     title="Áreas que respondieron"
                                                     subtitle="Distribución de participación por área"
@@ -669,6 +688,12 @@ function SurveyResultsPage() {
                                                     subtitle="Origen de las respuestas por recinto"
                                                     items={respondentRecintoDistribution}
                                                     emptyMessage="No hay recintos registrados en las respuestas de esta capacitación."
+                                                />
+                                                <DistributionDonutCard
+                                                    title="Empresas externas"
+                                                    subtitle="Distribución de respuestas del público externo"
+                                                    items={externalCompanyDistribution}
+                                                    emptyMessage="No hay respuestas de externos con empresa registrada."
                                                 />
                                             </div>
                                         </div>

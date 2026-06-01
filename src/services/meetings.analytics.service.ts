@@ -62,6 +62,11 @@ export interface TrainingHoursByRole {
   hours: number
 }
 
+interface ExternalTrainingParticipantRecord {
+  readonly attendance?: "present" | "late" | "absent" | null
+  readonly noShow?: boolean | null
+}
+
 /**
  * Opciones de consulta para calcular métricas de asistencia.
  * `startTime` y `endTime` se expresan en epoch ms.
@@ -487,34 +492,42 @@ export async function getTrainingKpiForYear(
       continue
     }
 
-    const participantsSnap = await get(ref(database, `meetingParticipants/${meeting.id}`))
+    const [participantsSnap, externalParticipantsSnap] = await Promise.all([
+      get(ref(database, `meetingParticipants/${meeting.id}`)),
+      get(ref(database, `meetingExternalParticipants/${meeting.id}`)),
+    ])
+
     const participantsValue = participantsSnap.val() as Record<string, MeetingParticipant> | null
     const participants: MeetingParticipant[] = participantsValue ? Object.values(participantsValue) : []
+    const externalParticipantsValue = externalParticipantsSnap.val() as Record<string, ExternalTrainingParticipantRecord> | null
+    const externalParticipants: ExternalTrainingParticipantRecord[] = externalParticipantsValue
+      ? Object.values(externalParticipantsValue)
+      : []
 
-    let relevantParticipants: MeetingParticipant[] = participants
+    let relevantInternalParticipants: MeetingParticipant[] = participants
 
     if (normalizedDept) {
-      relevantParticipants = relevantParticipants.filter((participant) => {
+      relevantInternalParticipants = relevantInternalParticipants.filter((participant) => {
         const user = usersByUid[participant.uid]
         const deptRaw = typeof user?.department === "string" ? user.department : null
         if (!deptRaw) return false
         return deptRaw.trim().toLowerCase() === normalizedDept
       })
 
-      if (relevantParticipants.length === 0) {
+      if (relevantInternalParticipants.length === 0) {
         continue
       }
     }
 
     if (normalizedLeader) {
-      relevantParticipants = relevantParticipants.filter((participant) => {
+      relevantInternalParticipants = relevantInternalParticipants.filter((participant) => {
         const user = usersByUid[participant.uid]
         const bossRaw = typeof user?.immediateBoss === "string" ? user.immediateBoss : null
         if (!bossRaw) return false
         return bossRaw.trim().toLowerCase() === normalizedLeader
       })
 
-      if (relevantParticipants.length === 0) {
+      if (relevantInternalParticipants.length === 0) {
         continue
       }
     }
@@ -524,7 +537,14 @@ export async function getTrainingKpiForYear(
     const durationMs = Math.max(0, meeting.endTime - meeting.startTime)
     totalHours += durationMs / (1000 * 60 * 60)
 
-    for (const participant of relevantParticipants) {
+    for (const participant of relevantInternalParticipants) {
+      const attendance = participant.attendance ?? null
+      if (!participant.noShow && (attendance === "present" || attendance === "late")) {
+        totalAttended += 1
+      }
+    }
+
+    for (const participant of externalParticipants) {
       const attendance = participant.attendance ?? null
       if (!participant.noShow && (attendance === "present" || attendance === "late")) {
         totalAttended += 1

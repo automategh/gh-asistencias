@@ -78,6 +78,14 @@ export type SurveyResponse = {
     userEmail?: string | null
     /** Recinto/base de datos donde se almacenó la respuesta */
     recinto?: RecintoKey | null
+    /** Tipo de respondiente para segmentación en resultados */
+    respondentType?: "internal" | "external" | null
+    /** Identificador externo cuando aplica */
+    externalId?: string | null
+    /** Empresa del externo cuando aplica */
+    companyName?: string | null
+    /** Documento del externo cuando aplica */
+    documentId?: string | null
     /** Fecha de creación en formato ISO 8601 */
     createdAt: string
     /** Respuestas por id de pregunta */
@@ -529,6 +537,7 @@ export async function saveSurveyResponse(
         userName: params.userName ?? null,
         userEmail: params.userEmail ?? null,
         recinto: params.recinto ?? null,
+        respondentType: "internal",
         createdAt,
         answers: normalizedAnswers,
     }

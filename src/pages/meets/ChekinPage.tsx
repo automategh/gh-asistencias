@@ -451,8 +451,17 @@ function ChekinPage() {
                             )}
 
                             {externalCheckinDone && (
-                                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                                    Asistencia registrada. Revisa el resumen y continúa.
+                                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-800 space-y-3">
+                                    <p>Asistencia registrada. Revisa el resumen y continúa.</p>
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={handleExternalSuccessContinue}
+                                            className="inline-flex items-center justify-center rounded-xl bg-[#1b3022] px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#14251a] transition-colors"
+                                        >
+                                            {externalSurveyId ? 'Ir a encuesta de satisfacción' : 'Finalizar'}
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>

@@ -3,6 +3,55 @@ import type { Meeting, MeetingParticipant } from "@/types/meeting"
 import type { UserProfile } from "@/types/user"
 import { getTrainerNameFromParticipants } from "@/services/meetings.analytics.service"
 
+interface ExternalTrainingParticipantRecord {
+    readonly id?: string | null
+    readonly name?: string | null
+    readonly email?: string | null
+    readonly attendance?: "present" | "late" | "absent" | null
+    readonly noShow?: boolean | null
+    readonly checkedInAt?: number | null
+    readonly checkinMethod?: "qr" | "manual" | null
+}
+
+function mapExternalTrainingParticipants(
+    records: Record<string, ExternalTrainingParticipantRecord> | null,
+): MeetingParticipant[] {
+    if (!records) {
+        return []
+    }
+
+    const externalParticipants: MeetingParticipant[] = []
+
+    for (const [externalKey, record] of Object.entries(records)) {
+        const externalId = typeof record.id === "string" && record.id.trim().length > 0
+            ? record.id.trim()
+            : externalKey
+        const participantName = typeof record.name === "string" ? record.name.trim() : ""
+
+        if (!externalId || participantName.length === 0) {
+            continue
+        }
+
+        externalParticipants.push({
+            uid: `ext_${externalId}`,
+            name: participantName,
+            email: typeof record.email === "string" && record.email.trim().length > 0
+                ? record.email.trim()
+                : "externo@registro.local",
+            role: "attendee",
+            inviteStatus: "accepted",
+            attendance: record.attendance ?? null,
+            noShow: Boolean(record.noShow),
+            checkedInAt: typeof record.checkedInAt === "number" ? record.checkedInAt : undefined,
+            checkinMethod: record.checkinMethod === "qr" || record.checkinMethod === "manual"
+                ? record.checkinMethod
+                : undefined,
+        })
+    }
+
+    return externalParticipants
+}
+
 export interface TrainingWithParticipants {
     meeting: Meeting
     participants: MeetingParticipant[]
@@ -57,37 +106,48 @@ export async function getTrainingsWithParticipants(
     for (const meeting of Object.values(meetingsMap)) {
         if (meeting.type !== "training") continue
 
-        const participantsSnap = await get(ref(database, `meetingParticipants/${meeting.id}`))
+        const [participantsSnap, externalParticipantsSnap] = await Promise.all([
+            get(ref(database, `meetingParticipants/${meeting.id}`)),
+            get(ref(database, `meetingExternalParticipants/${meeting.id}`)),
+        ])
+
         const participantsValue = participantsSnap.val() as Record<string, MeetingParticipant> | null
         const participants: MeetingParticipant[] = participantsValue ? Object.values(participantsValue) : []
+        const externalParticipantsValue = externalParticipantsSnap.val() as Record<string, ExternalTrainingParticipantRecord> | null
+        const externalParticipants = mapExternalTrainingParticipants(externalParticipantsValue)
+        const participantsWithExternal = [...participants, ...externalParticipants]
 
-        let relevantParticipants = participants
+        let relevantInternalParticipants = participants
 
         if (normalizedDept) {
-            relevantParticipants = relevantParticipants.filter((participant) => {
+            relevantInternalParticipants = relevantInternalParticipants.filter((participant) => {
                 const user = usersByUid[participant.uid]
                 const deptRaw = typeof user?.department === "string" ? user.department : null
                 if (!deptRaw) return false
                 return deptRaw.trim().toLowerCase() === normalizedDept
             })
 
-            if (relevantParticipants.length === 0) continue
+            if (relevantInternalParticipants.length === 0) continue
         }
 
         if (normalizedLeader) {
-            relevantParticipants = relevantParticipants.filter((participant) => {
+            relevantInternalParticipants = relevantInternalParticipants.filter((participant) => {
                 const user = usersByUid[participant.uid]
                 const bossRaw = typeof user?.immediateBoss === "string" ? user.immediateBoss : null
                 if (!bossRaw) return false
                 return bossRaw.trim().toLowerCase() === normalizedLeader
             })
 
-            if (relevantParticipants.length === 0) continue
+            if (relevantInternalParticipants.length === 0) continue
         }
+
+        const relevantParticipants = normalizedDept || normalizedLeader
+            ? [...relevantInternalParticipants, ...externalParticipants]
+            : participantsWithExternal
 
         // Áreas involucradas: todos los departamentos únicos de los participantes
         const areaSet = new Set<string>()
-        for (const p of relevantParticipants) {
+        for (const p of relevantInternalParticipants) {
             const user = usersByUid[p.uid]
             if (user && typeof user.department === "string" && user.department.trim().length > 0) {
                 areaSet.add(user.department.trim())

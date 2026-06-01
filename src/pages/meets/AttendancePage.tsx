@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { useDatabase } from '@/context/DatabaseContext'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { get, ref } from 'firebase/database'
+import { get, ref, update } from 'firebase/database'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas-pro'
 import type { MeetingParticipant, Meeting } from '@/types/meeting'
@@ -25,6 +25,20 @@ interface AttendanceRow extends MeetingParticipant {
     readonly cargo?: string | null
     readonly signatureUrl?: string | null
     readonly signatureDataUrl?: string | null
+    readonly source?: 'internal' | 'external'
+}
+
+interface ExternalAttendanceParticipant {
+    readonly id: string
+    readonly name: string
+    readonly companyName?: string | null
+    readonly email?: string | null
+    readonly documentId?: string | null
+    readonly signatureDataUrl?: string | null
+    readonly attendance?: 'present' | 'late' | 'absent' | null
+    readonly checkedInAt?: number | null
+    readonly checkinMethod?: 'qr' | 'manual' | null
+    readonly noShow?: boolean | null
 }
 
 /**
@@ -147,11 +161,21 @@ function AttendancePage() {
                     .filter((participant) => participant.attendance === 'present' || participant.attendance === 'late')
                     .sort((a, b) => a.name.localeCompare(b.name))
 
-                const usersSnap = await get(ref(meetingDatabase, 'users'))
+                const [usersSnap, externalParticipantsSnap] = await Promise.all([
+                    get(ref(meetingDatabase, 'users')),
+                    get(ref(meetingDatabase, `meetingExternalParticipants/${id}`)),
+                ])
+
                 const usersVal = usersSnap.val() as Record<string, UserProfile> | null
                 const usersByUid: Record<string, UserProfile> = usersVal ?? {}
+                const externalParticipantsVal = externalParticipantsSnap.val() as Record<string, ExternalAttendanceParticipant> | null
+                const externalParticipants = externalParticipantsVal
+                    ? Object.values(externalParticipantsVal)
+                        .filter((participant) => participant.attendance === 'present' || participant.attendance === 'late')
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                    : []
 
-                const enriched: AttendanceRow[] = await Promise.all(
+                const internalEnriched: AttendanceRow[] = await Promise.all(
                     participants.map(async (participant) => {
                         const user = usersByUid[participant.uid]
 
@@ -168,6 +192,7 @@ function AttendancePage() {
 
                         return {
                             ...participant,
+                            source: 'internal',
                             identify: user?.identify ?? null,
                             companyName: user?.companyName ?? null,
                             department: user?.department ?? null,
@@ -176,6 +201,29 @@ function AttendancePage() {
                             signatureDataUrl,
                         }
                     }),
+                )
+
+                const externalEnriched: AttendanceRow[] = externalParticipants.map((participant) => ({
+                    uid: participant.id,
+                    name: participant.name,
+                    email: participant.email ?? null,
+                    role: 'guest',
+                    inviteStatus: 'accepted',
+                    attendance: participant.attendance ?? null,
+                    checkedInAt: participant.checkedInAt ?? null,
+                    checkinMethod: participant.checkinMethod ?? null,
+                    noShow: Boolean(participant.noShow),
+                    source: 'external',
+                    identify: participant.documentId ?? null,
+                    companyName: participant.companyName ?? null,
+                    department: 'Externo',
+                    cargo: 'Externo',
+                    signatureUrl: null,
+                    signatureDataUrl: participant.signatureDataUrl ?? null,
+                }))
+
+                const enriched: AttendanceRow[] = [...internalEnriched, ...externalEnriched].sort((a, b) =>
+                    a.name.localeCompare(b.name),
                 )
 
                 if (!cancelled) {
@@ -269,13 +317,24 @@ function AttendancePage() {
         )
 
         try {
-            await updateAttendanceAcrossDatabases(
-                id,
-                row.uid,
-                meetingDatabaseUrl,
-                databaseUrl,
-                { noShow: checked },
-            )
+            if (row.source === 'external') {
+                if (!meetingDatabase) {
+                    throw new Error('No se pudo resolver la base de datos para actualizar externo')
+                }
+
+                await update(ref(meetingDatabase, `meetingExternalParticipants/${id}/${row.uid}`), {
+                    noShow: checked,
+                    updatedAt: Date.now(),
+                })
+            } else {
+                await updateAttendanceAcrossDatabases(
+                    id,
+                    row.uid,
+                    meetingDatabaseUrl,
+                    databaseUrl,
+                    { noShow: checked },
+                )
+            }
         } catch (updateError) {
             console.error('No fue posible actualizar la marca de asistencia manual:', updateError)
             // Revertir en caso de error para mantener consistencia visual
@@ -417,7 +476,7 @@ function AttendancePage() {
                                                 <td className="px-3 py-3 text-foreground align-top wrap-break-word">{item.cargo ?? '—'}</td>
                                                 <td className="px-3 py-4 align-middle">
                                                     <div className="h-12 w-full flex items-center justify-center">
-                                                        {item.signatureUrl ? (
+                                                        {item.signatureUrl || item.signatureDataUrl ? (
                                                             <img
                                                                 src={item.signatureDataUrl ?? item.signatureUrl}
                                                                 alt={`Firma de ${item.name}`}
