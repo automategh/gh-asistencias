@@ -93,11 +93,11 @@ function RegisterPage() {
      *
      * @param e Evento de cambio del input checkbox.
      * @returns void
-     */    
-    const handleHeroicaCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { checked } = e.target
-        updateField("worksAtHeroica", checked)
-        if (checked) {
+     */
+    const toggleWorksAtHeroica = () => {
+        const nextValue = !formData.worksAtHeroica
+        updateField("worksAtHeroica", nextValue)
+        if (nextValue) {
             updateField("companyName", "")
         } else {
             updateField("leader", "")
@@ -220,6 +220,23 @@ function RegisterPage() {
                             </div>
                         </div>
 
+                        <div className="flex items-center space-x-2 mt-2">
+                            <span className="block text-sm font-semibold text-foreground">¿Eres colaborador de Grupo Heroica?</span>
+                            <button
+                                type="button"
+                                aria-pressed={formData.worksAtHeroica}
+                                aria-label={formData.worksAtHeroica ? 'Marcar como no obligatoria' : 'Marcar como obligatoria'}
+                                onClick={toggleWorksAtHeroica}
+                                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40 ${formData.worksAtHeroica ? 'bg-primary' : 'bg-gray-300'}`}
+                            >
+                                <span
+                                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform duration-200 ${formData.worksAtHeroica ? 'translate-x-5' : 'translate-x-1'}`}
+                                />
+                            </button>
+                        </div>
+                        <div>
+                        </div>
+
                         <div>
                             <label className="block text-sm font-semibold text-foreground mb-2">Recinto *</label>
 
@@ -238,59 +255,56 @@ function RegisterPage() {
                                     <option value="ccci">Centro de convenciones Cartagena de Indias</option>
                                     <option value="cevp">Centro de eventos Valle del Pacifico</option>
                                     <option value="cccr">Centro de convenciones Costa Rica</option>
-                                    <option value="corporativo">Corporativo</option>
+                                    <option value="gh">Corporativo</option>
                                 </select>
                                 <ChevronDown className="absolute right-3 top-3.5 w-5 h-5 text-muted-foreground pointer-events-none" />
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-semibold text-foreground mb-2">
-                                Área {formData.worksAtHeroica ? "*" : ""}
-                            </label>
+                            {formData.worksAtHeroica && (
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-semibold text-foreground mb-2">
+                                            Área {formData.worksAtHeroica ? "*" : ""}
+                                        </label>
 
-                            <div className="relative">
-                                <Building2 className="absolute left-3 top-3.5 w-5 h-5 text-muted-foreground pointer-events-none" />
-                                <select
-                                    name="department"
-                                    defaultValue=""
-                                    value={formData.department}
-                                    onChange={handleChange}
-                                    className="w-full bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 focus:border-transparent hover:bg-white dark:hover:bg-slate-800 pl-10 pr-10 appearance-none cursor-pointer py-3"
-                                    required={formData.worksAtHeroica}
-                                    disabled={!formData.recint || loadingRecintoCatalogs}
-                                >
-                                    <option value="" disabled>
-                                        {!formData.recint
-                                            ? "Primero selecciona un recinto"
-                                            : loadingRecintoCatalogs
-                                                ? "Cargando áreas..."
-                                                : departaments.length === 0
-                                                    ? "No hay áreas disponibles"
-                                                    : "Selecciona tu área"}
-                                    </option>
-                                    {departaments.map((dept) => (
-                                        <option key={dept} value={dept}>{dept}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="absolute right-3 top-3.5 w-5 h-5 text-muted-foreground pointer-events-none" />
-                            </div>
+                                        <div className="relative">
+                                            <Building2 className="absolute left-3 top-3.5 w-5 h-5 text-muted-foreground pointer-events-none" />
+                                            <select
+                                                name="department"
+                                                defaultValue=""
+                                                value={formData.department}
+                                                onChange={handleChange}
+                                                className="w-full bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 focus:border-transparent hover:bg-white dark:hover:bg-slate-800 pl-10 pr-10 appearance-none cursor-pointer py-3"
+                                                required={formData.worksAtHeroica}
+                                                disabled={!formData.recint || loadingRecintoCatalogs}
+                                            >
+                                                <option value="" disabled>
+                                                    {!formData.recint
+                                                        ? "Primero selecciona un recinto"
+                                                        : loadingRecintoCatalogs
+                                                            ? "Cargando áreas..."
+                                                            : departaments.length === 0
+                                                                ? "No hay áreas disponibles"
+                                                                : "Selecciona tu área"}
+                                                </option>
+                                                {departaments.map((dept) => (
+                                                    <option key={dept} value={dept}>{dept}</option>
+                                                ))}
+                                            </select>
+                                            <ChevronDown className="absolute right-3 top-3.5 w-5 h-5 text-muted-foreground pointer-events-none" />
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
                         </div>
 
                         <div className="md:col-span-2 flex flex-col gap-2">
-                            <label className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                                <input
-                                    type="checkbox"
-                                    name="worksAtHeroica"
-                                    checked={formData.worksAtHeroica}
-                                    onChange={handleHeroicaCheckboxChange}
-                                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
-                                />
-                                <span>¿Trabajas en Grupo Heroica?</span>
-                            </label>
                             {!formData.worksAtHeroica && (
                                 <div>
-                                    <label className="block text-xs font-medium text-foreground mb-1">Empresa donde trabajas *</label>
+                                    <label className="block text-sm font-semibold text-foreground mb-1">Empresa donde trabajas *</label>
                                     <input
                                         type="text"
                                         name="companyName"
