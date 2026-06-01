@@ -1,4 +1,5 @@
 import { QRCodeSVG } from "qrcode.react"
+import { buildCheckinUrl } from "@/lib/checkin-link"
 
 interface QRCodeDisplayProps {
     readonly meetingId: string
@@ -6,8 +7,7 @@ interface QRCodeDisplayProps {
 }
 
 export function QRCodeDisplay({ meetingId, dbUrl }: QRCodeDisplayProps) {
-    const dbParam = dbUrl ? `&db=${encodeURIComponent(dbUrl)}` : ''
-    const qrValue = `${window.location.origin}/checkin/${meetingId}?method=qr${dbParam}`
+    const qrValue = buildCheckinUrl(meetingId, { dbUrl, method: "qr" })
 
     return (
         <div className="flex justify-center">

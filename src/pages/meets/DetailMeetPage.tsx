@@ -2,6 +2,7 @@ import Layout from '@/components/layouts/layout'
 import { QRCodeDisplay } from '@/components/meet/qr-code-display'
 import { useDatabase } from '@/context/DatabaseContext'
 import { useAuth } from '@/context/AuthContext'
+import { buildCheckinUrl } from '@/lib/checkin-link'
 import { getDatabaseForUrl } from '@/services/firebase'
 import { getSurveys, getSurveyById, type Survey } from '@/services/forms.service'
 import { cancelMeeting, closeMeeting, completeMeeting, getMeetingById, reopenMeeting } from '@/services/meetings.service'
@@ -281,7 +282,9 @@ function DetailMeetPage() {
         navigate(destination)
     }
 
-    const checkinLink = meeting ? `${window.location.origin}/checkin/${meeting.id}?method=qr` : ''
+    const checkinLink = meeting
+        ? buildCheckinUrl(meeting.id, { dbUrl: sourceDatabaseUrl, method: 'qr' })
+        : ''
 
     const handleCopyLink = async (): Promise<void> => {
         if (!checkinLink) return
