@@ -530,8 +530,11 @@ export const registerExternalCheckin = onCall<RegisterExternalCheckinRequest>(
 		if (!companyName) {
 			throw new HttpsError("invalid-argument", "La empresa es obligatoria.");
 		}
-		if (!email && !documentId) {
-			throw new HttpsError("invalid-argument", "Debes enviar correo o identificación.");
+		if (!email) {
+			throw new HttpsError("invalid-argument", "El correo es obligatorio.");
+		}
+		if (!documentId) {
+			throw new HttpsError("invalid-argument", "La identificación es obligatoria.");
 		}
 		if (!signatureDataUrl || !signatureDataUrl.startsWith("data:image/")) {
 			throw new HttpsError("invalid-argument", "La firma es obligatoria y debe ser una imagen válida.");

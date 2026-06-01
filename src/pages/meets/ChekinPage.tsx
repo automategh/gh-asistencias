@@ -34,6 +34,8 @@ function ChekinPage() {
     const [externalCheckinDone, setExternalCheckinDone] = useState<boolean>(false)
     const [externalSurveyId, setExternalSurveyId] = useState<string | null>(null)
     const [externalParticipantId, setExternalParticipantId] = useState<string | null>(null)
+    const [externalAlreadyRegistered, setExternalAlreadyRegistered] = useState<boolean>(false)
+    const [showExternalSuccessModal, setShowExternalSuccessModal] = useState<boolean>(false)
     const [externalForm, setExternalForm] = useState<{
         name: string
         companyName: string
@@ -235,8 +237,13 @@ function ChekinPage() {
             setShowErrorModal(true)
             return
         }
-        if (!email && !documentId) {
-            setError('Debes ingresar correo o identificación')
+        if (!email) {
+            setError('El correo es obligatorio')
+            setShowErrorModal(true)
+            return
+        }
+        if (!documentId) {
+            setError('La identificación es obligatoria')
             setShowErrorModal(true)
             return
         }
@@ -268,6 +275,8 @@ function ChekinPage() {
             setExternalCheckinDone(true)
             setExternalParticipantId(response.externalId)
             setExternalSurveyId(response.surveyId ?? null)
+            setExternalAlreadyRegistered(response.alreadyRegistered)
+            setShowExternalSuccessModal(true)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'No fue posible registrar el check-in externo')
             setShowErrorModal(true)
@@ -276,19 +285,19 @@ function ChekinPage() {
         }
     }
 
-    useEffect(() => {
-        if (!externalCheckinDone || !externalSurveyId || !id || !externalParticipantId) {
+    function handleExternalSuccessContinue(): void {
+        if (externalSurveyId && id && externalParticipantId) {
+            const params = new URLSearchParams()
+            params.set('externalId', externalParticipantId)
+            if (sourceDatabaseUrl) {
+                params.set('db', sourceDatabaseUrl)
+            }
+            navigate(`/external-survey/${externalSurveyId}/response/${id}?${params.toString()}`)
             return
         }
 
-        const params = new URLSearchParams()
-        params.set('externalId', externalParticipantId)
-        if (sourceDatabaseUrl) {
-            params.set('db', sourceDatabaseUrl)
-        }
-
-        navigate(`/external-survey/${externalSurveyId}/response/${id}?${params.toString()}`)
-    }, [externalCheckinDone, externalSurveyId, id, externalParticipantId, sourceDatabaseUrl, navigate])
+        navigate('/')
+    }
 
     const handleGoBack = (): void => {
         if (window.history.length > 1) {
@@ -300,7 +309,8 @@ function ChekinPage() {
     }
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
+        <div className="bg-linear-to-br from-background via-muted/5 to-background min-h-screen">
+                <div className="px-4 md:px-12 py-10 md:py-10 max-w-5xl mx-auto">
                 {error && showErrorModal && (
                     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4">
                         <div className="w-full max-w-md rounded-3xl border border-red-200 bg-white shadow-[0_24px_48px_rgba(15,23,42,0.18)] overflow-hidden">
@@ -330,24 +340,25 @@ function ChekinPage() {
                 )}
 
                 {!role && (
-                    <div className="max-w-2xl mx-auto p-6 mt-8">
-                        <div className="bg-card rounded-2xl border border-border p-6 space-y-4">
-                            <h1 className="text-2xl font-bold text-foreground">Selecciona tu tipo de acceso</h1>
+                    <div className="bg-[#f3f4f3] p-6 rounded-xl space-y-6">
+                        <div>
+                            <p className="text-[10px] uppercase tracking-widest text-outline font-bold mb-2">Check-in público</p>
+                            <h1 className="text-2xl font-bold text-[#191c1c]">Selecciona tu tipo de acceso</h1>
                             <p className="text-sm text-muted-foreground">
                                 Elige cómo deseas registrar tu asistencia para esta actividad.
                             </p>
-                            <div className="grid gap-3 md:grid-cols-2">
+                            <div className="grid gap-3 md:grid-cols-2 mt-4">
                                 <button
                                     type="button"
                                     onClick={() => handleChooseRole('internal')}
-                                    className="rounded-xl border border-[#1b3022] px-4 py-3 text-sm font-semibold text-[#1b3022] hover:bg-[#1b3022]/10 transition-colors"
+                                    className="rounded-xl border border-[#1b3022] bg-white px-4 py-3 text-sm font-semibold text-[#1b3022] hover:bg-[#1b3022]/10 transition-colors"
                                 >
                                     Soy colaborador
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => handleChooseRole('external')}
-                                    className="rounded-xl border border-[#124734] px-4 py-3 text-sm font-semibold text-[#124734] hover:bg-[#124734]/10 transition-colors"
+                                    className="rounded-xl border border-[#124734] bg-white px-4 py-3 text-sm font-semibold text-[#124734] hover:bg-[#124734]/10 transition-colors"
                                 >
                                     Soy externo
                                 </button>
@@ -357,12 +368,14 @@ function ChekinPage() {
                 )}
 
                 {role === 'external' && (
-                    <div className="max-w-2xl mx-auto p-6 mt-8">
-                        <div className="bg-card rounded-2xl border border-border p-6 space-y-4">
-                            <h2 className="text-xl font-bold text-foreground">Registro de externo</h2>
+                        <div className="bg-[#f3f4f3] p-6 rounded-xl space-y-6">
+                            <div>
+                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold mb-2">Check-in externo</p>
+                                <h2 className="text-xl font-bold text-[#191c1c]">Registro de externo</h2>
                             <p className="text-sm text-muted-foreground">
-                                Completa tus datos y firma para registrar la asistencia en {meeting?.title ?? 'la actividad'}.
+                                Completa tus datos y firma para registrar la asistencia.
                             </p>
+                            </div>
 
                             {!externalCheckinDone && (
                                 <>
@@ -373,7 +386,7 @@ function ChekinPage() {
                                                 type="text"
                                                 value={externalForm.name}
                                                 onChange={(event) => setExternalForm((prev) => ({ ...prev, name: event.target.value }))}
-                                                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                                                className="w-full bg-white border-none rounded-xl py-3 px-4 text-sm font-semibold text-[#191c1c] placeholder:text-[#8b918d] focus:ring-2 focus:ring-primary-container"
                                                 placeholder="Nombre y apellido"
                                             />
                                         </div>
@@ -383,33 +396,33 @@ function ChekinPage() {
                                                 type="text"
                                                 value={externalForm.companyName}
                                                 onChange={(event) => setExternalForm((prev) => ({ ...prev, companyName: event.target.value }))}
-                                                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                                                className="w-full bg-white border-none rounded-xl py-3 px-4 text-sm font-semibold text-[#191c1c] placeholder:text-[#8b918d] focus:ring-2 focus:ring-primary-container"
                                                 placeholder="Empresa donde trabajas"
                                             />
                                         </div>
                                         <div className="space-y-1">
-                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Correo (opcional)</label>
+                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Correo *</label>
                                             <input
                                                 type="email"
                                                 value={externalForm.email}
                                                 onChange={(event) => setExternalForm((prev) => ({ ...prev, email: event.target.value }))}
-                                                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                                                className="w-full bg-white border-none rounded-xl py-3 px-4 text-sm font-semibold text-[#191c1c] placeholder:text-[#8b918d] focus:ring-2 focus:ring-primary-container"
                                                 placeholder="correo@empresa.com"
                                             />
                                         </div>
                                         <div className="space-y-1">
-                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Identificación (opcional)</label>
+                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Identificación *</label>
                                             <input
                                                 type="text"
                                                 value={externalForm.documentId}
                                                 onChange={(event) => setExternalForm((prev) => ({ ...prev, documentId: event.target.value }))}
-                                                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                                                className="w-full bg-white border-none rounded-xl py-3 px-4 text-sm font-semibold text-[#191c1c] placeholder:text-[#8b918d] focus:ring-2 focus:ring-primary-container"
                                                 placeholder="Documento o pasaporte"
                                             />
                                         </div>
                                     </div>
 
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 rounded-2xl border border-[#edeeed] bg-white p-4">
                                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Firma</p>
                                         <SignaturePadCanvas
                                             ref={externalSignatureRef}
@@ -425,7 +438,7 @@ function ChekinPage() {
                                         type="button"
                                         onClick={() => { void handleExternalCheckin() }}
                                         disabled={externalSubmitting || !externalHasSignature || loading}
-                                        className="w-full rounded-xl bg-[#1b3022] px-4 py-3 text-sm font-semibold text-white hover:bg-[#14251a] transition-colors disabled:opacity-60"
+                                        className="w-full rounded-xl bg-[#1b3022] px-4 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#14251a] transition-colors disabled:opacity-60"
                                     >
                                         {externalSubmitting ? 'Registrando asistencia...' : 'Registrar asistencia como externo'}
                                     </button>
@@ -438,19 +451,11 @@ function ChekinPage() {
                             )}
 
                             {externalCheckinDone && (
-                                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 space-y-2">
-                                    <p className="font-semibold">Asistencia registrada correctamente.</p>
-                                    {externalSurveyId ? (
-                                        <p>
-                                            Esta capacitación requiere encuesta de satisfacción. Te redirigiremos automáticamente para completarla.
-                                        </p>
-                                    ) : (
-                                        <p>No hay encuesta de satisfacción obligatoria para esta actividad.</p>
-                                    )}
+                                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                                    Asistencia registrada. Revisa el resumen y continúa.
                                 </div>
                             )}
                         </div>
-                    </div>
                 )}
 
                 {role === 'internal' && (
@@ -520,6 +525,46 @@ function ChekinPage() {
                 )}
                     </>
                 )}
+                {showExternalSuccessModal && (
+                    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4">
+                        <div className="w-full max-w-md rounded-3xl border border-[#edeeed] bg-white shadow-[0_24px_48px_rgba(15,23,42,0.18)] overflow-hidden">
+                            <div className="px-6 py-5 border-b border-[#edeeed] bg-[#f8faf8]">
+                                <h2 className="text-xl font-bold text-[#191c1c]">Registro exitoso</h2>
+                                <p className="text-sm text-[#5f6560] mt-2">
+                                    {externalAlreadyRegistered
+                                        ? 'Ya existía un registro para estos datos y fue actualizado correctamente.'
+                                        : 'Tu asistencia externa fue registrada correctamente.'}
+                                </p>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-[#5f6560]">
+                                    {externalSurveyId
+                                        ? 'Esta capacitación requiere encuesta de satisfacción. Continúa para completarla.'
+                                        : 'No hay encuesta pendiente. Puedes finalizar este proceso.'}
+                                </p>
+                                <div className="flex justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowExternalSuccessModal(false)
+                                        }}
+                                        className="inline-flex items-center justify-center rounded-xl border border-[#d4d7d5] bg-white px-5 py-3 text-sm font-semibold text-[#1b3022] hover:bg-[#f2f4f3] transition-colors"
+                                    >
+                                        Cerrar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleExternalSuccessContinue}
+                                        className="inline-flex items-center justify-center rounded-xl bg-[#1b3022] px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#14251a] transition-colors"
+                                    >
+                                        {externalSurveyId ? 'Continuar a encuesta' : 'Finalizar'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                </div>
         </div>
     )
 }
