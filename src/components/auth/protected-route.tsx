@@ -11,6 +11,7 @@ interface ProfileCompletionPayload {
     readonly immediateBoss?: string | null
     readonly cargo?: string | null
     readonly companyName?: string | null
+    readonly signatureUrl?: string | null
 }
 
 function isProfileComplete(payload: ProfileCompletionPayload | null): boolean {
@@ -22,6 +23,7 @@ function isProfileComplete(payload: ProfileCompletionPayload | null): boolean {
     const requiredFields = [
         payload.identify,
         payload.cargo,
+        payload.signatureUrl,
         worksAtHeroica ? payload.department : "ok",
         worksAtHeroica ? payload.immediateBoss : "ok",
     ]

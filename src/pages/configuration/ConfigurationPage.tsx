@@ -61,6 +61,7 @@ function ConfigurationProfilePage() {
     })
     const [leaders, setLeaders] = useState<string[]>([]);
     const [showIncompleteProfileModal, setShowIncompleteProfileModal] = useState<boolean>(false);
+    const [profileValidationError, setProfileValidationError] = useState<string | null>(null);
     const [passwordForm, setPasswordForm] = useState<{ current: string; next: string; confirm: string }>({ current: '', next: '', confirm: '' });
     const [passwordFeedback, setPasswordFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [showPwd, setShowPwd] = useState<{ current: boolean; next: boolean; confirm: boolean }>({ current: false, next: false, confirm: false });
@@ -70,6 +71,12 @@ function ConfigurationProfilePage() {
 
     const [isMyDatabase, setIsMyDatabase] = useState<boolean | null>(null);
     const isLocked = isMyDatabase === false;
+    const hasRegisteredSignature = useMemo<boolean>(() => {
+        const signatureDraft = typeof signature === 'string' ? signature.trim() : ''
+        const signatureStored = typeof user?.signatureUrl === 'string' ? user.signatureUrl.trim() : ''
+        return signatureDraft.length > 0 || signatureStored.length > 0
+    }, [signature, user?.signatureUrl])
+
     const missingProfileFields = useMemo<string[]>(() => {
         if (!user) {
             return []
@@ -89,9 +96,12 @@ function ConfigurationProfilePage() {
         if (worksAtHeroica && (!user.immediateBoss || user.immediateBoss.trim().length === 0)) {
             missing.push('Jefe inmediato')
         }
+        if (!hasRegisteredSignature) {
+            missing.push('Firma manuscrita')
+        }
 
         return missing
-    }, [user, worksAtHeroica])
+    }, [user, worksAtHeroica, hasRegisteredSignature])
 
 
     useEffect(() => {
@@ -229,7 +239,15 @@ function ConfigurationProfilePage() {
             console.warn('Intento de guardar en base no propia');
             return;
         }
+
+        if (!hasRegisteredSignature) {
+            setProfileValidationError('La firma es obligatoria para continuar. Debes registrar una firma antes de guardar.')
+            setShowIncompleteProfileModal(true)
+            return
+        }
+
         try {
+            setProfileValidationError(null)
             setSavingProfile(true);
             const signatureUrlToSave = await persistUserSignature({
                 uid: firebaseUser.uid,
@@ -756,6 +774,7 @@ function ConfigurationProfilePage() {
                                                     <Button
                                                         type="button"
                                                         onClick={() => {
+                                                            setProfileValidationError(null)
                                                             setSignature(null)
                                                         }}
                                                         className="text-xs"
@@ -884,6 +903,11 @@ function ConfigurationProfilePage() {
 
                                 {isEditing && (
                                     <div className="flex justify-center items-center gap-4 pt-6">
+                                        {profileValidationError && (
+                                            <div className="w-full mb-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                                                {profileValidationError}
+                                            </div>
+                                        )}
                                         <button
                                             onClick={handleSave}
                                             disabled={isLocked || savingProfile}

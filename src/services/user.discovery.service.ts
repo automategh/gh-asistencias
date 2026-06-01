@@ -17,6 +17,8 @@ interface DiscoverableUserProfile {
     readonly department?: string | null
     readonly immediateBoss?: string | null
     readonly cargo?: string | null
+    readonly companyName?: string | null
+    readonly signatureUrl?: string | null
 }
 
 function isProfileComplete(profile: DiscoverableUserProfile | null): boolean {
@@ -24,10 +26,14 @@ function isProfileComplete(profile: DiscoverableUserProfile | null): boolean {
         return false
     }
 
+    const worksAtHeroica = !profile.companyName || profile.companyName.trim().length === 0
+
     return [
         profile.identify,
         profile.department,
+        profile.signatureUrl,
         profile.cargo,
+        worksAtHeroica ? profile.immediateBoss : "ok",
     ].every((value) => typeof value === 'string' && value.trim().length > 0)
 }
 
