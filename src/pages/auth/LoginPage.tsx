@@ -1,7 +1,7 @@
 import { useAuth } from "@/context/AuthContext"
 import { Mail, Lock, AlertCircle } from "lucide-react"
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 function LoginPage() {
 
@@ -11,6 +11,7 @@ function LoginPage() {
     const [password, setPassword] = useState("")
     const [error, setError] = useState("")
     const navigate = useNavigate()
+    const [searchParams] = useSearchParams()
 
     const handleLoginWithCredentials = async () => {
         setError("")
@@ -26,7 +27,12 @@ function LoginPage() {
 
         try {
             await loginWithEmailPassword(email.trim(), password)
-            navigate("/")
+            const redirectTo = searchParams.get("redirect")
+            if (redirectTo && redirectTo.startsWith('/')) {
+                navigate(redirectTo)
+            } else {
+                navigate("/")
+            }
         } catch (err) {
             const e = err as { code?: string; message?: string }
             let message = e?.message || "Error al iniciar sesión."

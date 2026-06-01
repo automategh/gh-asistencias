@@ -1,4 +1,3 @@
-import Layout from "@/components/layouts/layout"
 import { useDatabase } from "@/context/DatabaseContext"
 import { getMeetingById, updateAttendanceAcrossDatabases } from "@/services/meetings.service"
 import { getDatabaseForUrl } from "@/services/firebase"
@@ -10,12 +9,14 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useAuth } from "@/context/AuthContext"
 
 type methodType = "qr" | "manual"
+type CheckinRole = "internal" | "external"
 
 function ChekinPage() {
     const { id } = useParams<{ id: string }>()
     const [searchParams] = useSearchParams()
     const method = searchParams.get('method') as methodType | null
     const sourceDatabaseUrl = searchParams.get('db')
+    const roleParam = searchParams.get('role')
 
     const { database, databaseUrl } = useDatabase()
     const { user } = useAuth()
@@ -26,6 +27,7 @@ function ChekinPage() {
     const [error, setError] = useState<string | null>(null)
     const [checkedIn, setCheckedIn] = useState<boolean>(false)
     const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false)
+    const role: CheckinRole | null = roleParam === 'internal' || roleParam === 'external' ? roleParam : null
 
     const meetingDatabase = useMemo(() => {
         if (sourceDatabaseUrl) {
@@ -42,12 +44,32 @@ function ChekinPage() {
         return sourceDatabaseUrl ?? databaseUrl ?? null
     }, [sourceDatabaseUrl, databaseUrl])
 
+    const internalRedirectPath = useMemo<string>(() => {
+        if (!id) {
+            return '/login'
+        }
+
+        const params = new URLSearchParams()
+        params.set('method', method ?? 'qr')
+        params.set('role', 'internal')
+        if (sourceDatabaseUrl) {
+            params.set('db', sourceDatabaseUrl)
+        }
+
+        return `/login?redirect=${encodeURIComponent(`/checkin/${id}?${params.toString()}`)}`
+    }, [id, method, sourceDatabaseUrl])
+
     useEffect(() => {
         let cancelled = false
         async function load(): Promise<void> {
             try {
                 setLoading(true)
                 setError(null)
+                if (role !== 'internal') {
+                    setMeeting(null)
+                    setParticipant(null)
+                    return
+                }
                 if (!meetingDatabase || !id) {
                     setMeeting(null)
                     setParticipant(null)
@@ -75,7 +97,37 @@ function ChekinPage() {
         }
         load().catch(() => setError('No fue posible cargar la actividad'))
         return () => { cancelled = true }
-    }, [meetingDatabase, id, user])
+    }, [meetingDatabase, id, user, role])
+
+    function buildCurrentCheckinUrl(nextRole: CheckinRole): string {
+        if (!id) {
+            return '/checkin'
+        }
+
+        const params = new URLSearchParams()
+        params.set('method', method ?? 'qr')
+        params.set('role', nextRole)
+        if (sourceDatabaseUrl) {
+            params.set('db', sourceDatabaseUrl)
+        }
+
+        return `/checkin/${id}?${params.toString()}`
+    }
+
+    function handleChooseRole(nextRole: CheckinRole): void {
+        const destination = buildCurrentCheckinUrl(nextRole)
+        if (nextRole === 'internal' && !user) {
+            navigate(`/login?redirect=${encodeURIComponent(destination)}`)
+            return
+        }
+        navigate(destination)
+    }
+
+    useEffect(() => {
+        if (role === 'internal' && !user) {
+            navigate(internalRedirectPath)
+        }
+    }, [role, user, navigate, internalRedirectPath])
 
     const alreadyCheckedIn = useMemo<boolean>(() => {
         return typeof participant?.checkedInAt === 'number'
@@ -140,13 +192,50 @@ function ChekinPage() {
     }
 
     return (
-        <Layout
-            header={{
-                breadcrumbs: [{ label: 'Actividades', to: '/meets' }, { label: 'Check-in' }],
-                title: meeting?.title ?? 'Registrar asistencia',
-            }}
-        >
-            <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
+        <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
+                {!role && (
+                    <div className="max-w-2xl mx-auto p-6 mt-8">
+                        <div className="bg-card rounded-2xl border border-border p-6 space-y-4">
+                            <h1 className="text-2xl font-bold text-foreground">Selecciona tu tipo de acceso</h1>
+                            <p className="text-sm text-muted-foreground">
+                                Elige cómo deseas registrar tu asistencia para esta actividad.
+                            </p>
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <button
+                                    type="button"
+                                    onClick={() => handleChooseRole('internal')}
+                                    className="rounded-xl border border-[#1b3022] px-4 py-3 text-sm font-semibold text-[#1b3022] hover:bg-[#1b3022]/10 transition-colors"
+                                >
+                                    Soy colaborador
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleChooseRole('external')}
+                                    className="rounded-xl border border-[#124734] px-4 py-3 text-sm font-semibold text-[#124734] hover:bg-[#124734]/10 transition-colors"
+                                >
+                                    Soy externo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {role === 'external' && (
+                    <div className="max-w-2xl mx-auto p-6 mt-8">
+                        <div className="bg-card rounded-2xl border border-border p-6 space-y-3">
+                            <h2 className="text-xl font-bold text-foreground">Registro de externo</h2>
+                            <p className="text-sm text-muted-foreground">
+                                Estamos preparando el formulario de autogestión para externos desde este mismo enlace QR.
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                                Siguiente paso: completar datos, firma y envío de encuesta de satisfacción al finalizar el check-in.
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {role === 'internal' && (
+                    <>
                 <div className="max-w-2xl mx-auto p-6 mt-8">
                     <button
                         type="button"
@@ -217,9 +306,9 @@ function ChekinPage() {
                         </button>
                     </div>
                 )}
-            </div>
-
-        </Layout>
+                    </>
+                )}
+        </div>
     )
 }
 

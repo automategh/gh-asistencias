@@ -154,8 +154,8 @@ function App() {
                         <SurveyPage />
                     )} />
 
-                    <Route path="/checkin/:id" element={<ChekinPage />} />
                 </Route>
+                <Route path="/checkin/:id" element={<ChekinPage />} />
                 <Route element={<PublicOnlyRoute />}>
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/register" element={<RegisterPage />} />
