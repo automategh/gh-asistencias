@@ -1,14 +1,33 @@
 import Layout from '@/components/layouts/layout'
+import { useAuth } from '@/context/AuthContext'
 import { useDatabase } from '@/context/DatabaseContext'
 import { BarChart3, Calendar, Loader2, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { MeetingKind } from '@/types/meeting'
 import type { RecintoKey } from '@/lib/firebase/databaseResolver'
+import { get, ref } from 'firebase/database'
 import {
     getAttendanceSummaryFromCloudFunction,
     getEmptyAttendanceSummary,
     type AttendanceSummary,
 } from '@/services/meetings.analytics.service'
+
+interface DashboardUserAccessProfile {
+    readonly companyName?: string | null
+    readonly worksAtHeroica?: boolean | null
+}
+
+function resolveIsExternalUser(profile: DashboardUserAccessProfile | null): boolean {
+    if (!profile) {
+        return false
+    }
+
+    if (typeof profile.worksAtHeroica === 'boolean') {
+        return profile.worksAtHeroica === false
+    }
+
+    return typeof profile.companyName === 'string' && profile.companyName.trim().length > 0
+}
 
 /**
  * Filtro de tipo para el dashboard: permite mostrar
@@ -49,7 +68,8 @@ const MONTH_LABELS = [
  * para usuarios corporativos).
  */
 function DashboardPage() {
-    const { databaseUrl, availableDatabases, recinto, loading: dbLoading, isCorporateUser } = useDatabase()
+    const { user } = useAuth()
+    const { database, databaseUrl, availableDatabases, recinto, loading: dbLoading, isCorporateUser } = useDatabase()
     const emptySummary = useMemo(() => getEmptyAttendanceSummary(), [])
 
     const now = useMemo(() => new Date(), [])
@@ -61,6 +81,8 @@ function DashboardPage() {
     const [summary, setSummary] = useState<AttendanceSummary>(emptySummary)
     const [loading, setLoading] = useState<boolean>(false)
     const [error, setError] = useState<string | null>(null)
+    const [loadingAccess, setLoadingAccess] = useState<boolean>(true)
+    const [isExternalUser, setIsExternalUser] = useState<boolean>(false)
 
     /**
      * Indica si el usuario actual puede filtrar por recintos.
@@ -79,14 +101,71 @@ function DashboardPage() {
     useEffect(() => {
         let cancelled = false
 
+        async function resolveAccessProfile(): Promise<void> {
+            if (dbLoading) {
+                return
+            }
+
+            if (!user?.uid || !database) {
+                if (!cancelled) {
+                    setIsExternalUser(false)
+                    setLoadingAccess(false)
+                }
+                return
+            }
+
+            setLoadingAccess(true)
+
+            try {
+                const snapshot = await get(ref(database, `users/${user.uid}`))
+                const profile = snapshot.exists()
+                    ? (snapshot.val() as DashboardUserAccessProfile)
+                    : null
+
+                if (!cancelled) {
+                    setIsExternalUser(resolveIsExternalUser(profile))
+                }
+            } catch {
+                if (!cancelled) {
+                    setIsExternalUser(false)
+                }
+            } finally {
+                if (!cancelled) {
+                    setLoadingAccess(false)
+                }
+            }
+        }
+
+        resolveAccessProfile().catch(() => {
+            if (!cancelled) {
+                setIsExternalUser(false)
+                setLoadingAccess(false)
+            }
+        })
+
+        return () => {
+            cancelled = true
+        }
+    }, [dbLoading, database, user?.uid])
+
+    useEffect(() => {
+        let cancelled = false
+
         /**
          * Carga y calcula las métricas de asistencia según los filtros
          * seleccionados (mes, año, tipo y recinto) y actualiza el estado
          * del resumen (`summary`).
          */
         async function loadMetrics(): Promise<void> {
-            if (dbLoading) {
+            if (dbLoading || loadingAccess) {
                 setLoading(true)
+                return
+            }
+
+            if (isExternalUser) {
+                setLoading(false)
+                setError(null)
+                setSummary(getEmptyAttendanceSummary())
                 return
             }
 
@@ -154,6 +233,8 @@ function DashboardPage() {
         }
     }, [
         dbLoading,
+        loadingAccess,
+        isExternalUser,
         databaseUrl,
         availableDatabases,
         canFilterRecintos,
@@ -163,7 +244,33 @@ function DashboardPage() {
         typeFilter,
     ])
 
-    const isLoadingMetrics = dbLoading || loading
+    const isLoadingMetrics = dbLoading || loading || loadingAccess
+
+    if (!isLoadingMetrics && isExternalUser) {
+        return (
+            <Layout
+                header={{
+                    breadcrumbs: [{ label: "Inicio", to: "/" }, { label: "Dashboard" }],
+                    title: "Dashboard de Asistencias",
+                    description: "Resumen mensual de actividades: asistencias vs citados.",
+                }}
+            >
+                <div className="bg-linear-to-br from-background via-muted/5 to-background min-h-screen">
+                    <div className="px-4 md:px-12 py-10 md:py-10 space-y-10 max-w-7xl mx-auto">
+                        <section className="bg-white rounded-2xl p-8 text-center shadow-[0_20px_20px_rgba(25,28,28,0.04)] border border-[#edeeed]">
+                            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[#f3f4f3] flex items-center justify-center">
+                                <Users className="w-8 h-8 text-[#5f6560]" />
+                            </div>
+                            <h2 className="text-lg font-bold text-[#191c1c] mb-2">Acceso restringido</h2>
+                            <p className="text-sm text-[#5f6560] max-w-xl mx-auto">
+                                Este panel muestra métricas internas y no está disponible para colaboradores externos.
+                            </p>
+                        </section>
+                    </div>
+                </div>
+            </Layout>
+        )
+    }
 
     const totalInvited = summary.totalInvited
     const totalPresent = summary.totalPresent + summary.totalLate

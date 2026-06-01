@@ -1,6 +1,7 @@
 import { createUserWithEmailAndPassword, OAuthProvider, type OAuthCredential, type User, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile } from "firebase/auth";
 import { auth, DATABASE_CCCI_URL, DATABASE_CCCR_URL, DATABASE_CEVP_URL, DEFAULT_DATABASE_URL, getDatabaseForUrl } from "../firebase";
 import { getDatabaseByRecinto, resolveDatabaseByEmail, type RecintoKey } from "@/lib/firebase/databaseResolver";
+import { validatePasswordPolicy } from "@/lib/password-policy";
 import { get, ref, set } from "firebase/database";
 import type { RegisterFormData } from "@/types/user";
 
@@ -202,6 +203,11 @@ export const loginWithMicrosoft = async (): Promise<{ user: User; photoUrl: stri
  */
 export const registerWithEmailPassword = async (data: RegisterFormData) => {
     if (!auth) throw new Error('Firebase Auth no inicializado');
+
+    const passwordPolicyError = validatePasswordPolicy(data.password)
+    if (passwordPolicyError) {
+        throw new Error(passwordPolicyError)
+    }
 
     try {
         // Crear usuario en Firebase Auth

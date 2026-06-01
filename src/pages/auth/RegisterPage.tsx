@@ -2,6 +2,7 @@ import { useAuth } from "@/context/AuthContext";
 import { getDatabaseByRecinto, type RecintoKey } from "@/lib/firebase/databaseResolver";
 import { getDepartmentNames } from "@/services/departaments/departments.service";
 import { getLeaderNames } from "@/services/user.service";
+import { validatePasswordPolicy } from "@/lib/password-policy";
 import type { RegisterFormData } from "@/types/user";
 import { Briefcase, Building2, ChevronDown, IdCard, Landmark, Lock, Mail, User } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -120,8 +121,8 @@ function RegisterPage() {
         if (!data.recint.trim()) return "El recinto es obligatorio.";
         if (data.worksAtHeroica && !data.leader.trim()) return "El jefe inmediato es obligatorio para usuarios de Grupo Heroica.";
         if (!data.worksAtHeroica && !data.companyName.trim()) return "La empresa es obligatoria si no trabajas en Grupo Heroica.";
-        if (!data.password) return "La contraseña es obligatoria.";
-        if (data.password.length < 8) return "La contraseña debe tener al menos 8 caracteres."
+        const passwordPolicyError = validatePasswordPolicy(data.password)
+        if (passwordPolicyError) return passwordPolicyError
         if (data.password !== data.confirmPassword) return "Las contraseñas no coinciden.";
         return null;
     }
@@ -356,6 +357,9 @@ function RegisterPage() {
                                 required
                             />
                         </div>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                            Debe tener al menos 6 caracteres, una mayúscula y un carácter especial.
+                        </p>
                     </div>
                     <div>
                         <label className="block text-sm font-semibold text-foreground mb-2">Confirmar Contraseña *</label>
