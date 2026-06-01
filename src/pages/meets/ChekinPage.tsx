@@ -1,10 +1,11 @@
 import { useDatabase } from "@/context/DatabaseContext"
-import { getMeetingById, updateAttendanceAcrossDatabases } from "@/services/meetings.service"
+import { getMeetingById, registerExternalCheckin, updateAttendanceAcrossDatabases } from "@/services/meetings.service"
 import { getDatabaseForUrl } from "@/services/firebase"
 import type { Meeting, MeetingParticipant } from "@/types/meeting"
+import { SignaturePadCanvas, type SignaturePadHandle } from "@/components/profile/signature-pad"
 import { AlertCircle, ArrowLeft } from "lucide-react"
 import { get, ref } from "firebase/database"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useAuth } from "@/context/AuthContext"
 
@@ -25,8 +26,26 @@ function ChekinPage() {
     const [participant, setParticipant] = useState<MeetingParticipant | null>(null)
     const [loading, setLoading] = useState<boolean>(true)
     const [error, setError] = useState<string | null>(null)
+    const [showErrorModal, setShowErrorModal] = useState<boolean>(false)
     const [checkedIn, setCheckedIn] = useState<boolean>(false)
     const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false)
+    const [externalSubmitting, setExternalSubmitting] = useState<boolean>(false)
+    const [externalHasSignature, setExternalHasSignature] = useState<boolean>(false)
+    const [externalCheckinDone, setExternalCheckinDone] = useState<boolean>(false)
+    const [externalSurveyId, setExternalSurveyId] = useState<string | null>(null)
+    const [externalParticipantId, setExternalParticipantId] = useState<string | null>(null)
+    const [externalForm, setExternalForm] = useState<{
+        name: string
+        companyName: string
+        email: string
+        documentId: string
+    }>({
+        name: "",
+        companyName: "",
+        email: "",
+        documentId: "",
+    })
+    const externalSignatureRef = useRef<SignaturePadHandle | null>(null)
     const role: CheckinRole | null = roleParam === 'internal' || roleParam === 'external' ? roleParam : null
 
     const meetingDatabase = useMemo(() => {
@@ -79,7 +98,12 @@ function ChekinPage() {
                 const meet = await getMeetingById(meetingDatabase, id)
                 if (!cancelled) setMeeting(meet)
 
-                if (!user) return
+                if (!user) {
+                    if (!cancelled) {
+                        setParticipant(null)
+                    }
+                    return
+                }
                 // Cargar registro del participante
                 const pSnap = await get(ref(meetingDatabase, `meetingParticipants/${id}/${user.uid}`))
                 if (cancelled) return
@@ -179,8 +203,92 @@ function ChekinPage() {
             setShowSuccessModal(true)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'No fue posible registrar la asistencia')
+            setShowErrorModal(true)
         }
     }
+
+    async function handleExternalCheckin(): Promise<void> {
+        if (!sourceDatabaseUrl) {
+            setError('El enlace de check-in no incluye la base de datos de origen. Solicita un nuevo enlace o QR.')
+            setShowErrorModal(true)
+            return
+        }
+
+        if (!id || !meetingDatabaseUrl) {
+            setError('No se pudo resolver la actividad para el registro externo')
+            setShowErrorModal(true)
+            return
+        }
+
+        const name = externalForm.name.trim()
+        const companyName = externalForm.companyName.trim()
+        const email = externalForm.email.trim()
+        const documentId = externalForm.documentId.trim()
+
+        if (!name) {
+            setError('El nombre es obligatorio')
+            setShowErrorModal(true)
+            return
+        }
+        if (!companyName) {
+            setError('La empresa es obligatoria')
+            setShowErrorModal(true)
+            return
+        }
+        if (!email && !documentId) {
+            setError('Debes ingresar correo o identificación')
+            setShowErrorModal(true)
+            return
+        }
+
+        const signatureDataUrl = externalSignatureRef.current?.getDataURL('image/png')
+        if (!signatureDataUrl) {
+            setError('La firma es obligatoria')
+            setShowErrorModal(true)
+            return
+        }
+
+        try {
+            setExternalSubmitting(true)
+            setError(null)
+
+            const response = await registerExternalCheckin(
+                id,
+                meetingDatabaseUrl,
+                {
+                    name,
+                    companyName,
+                    email: email || null,
+                    documentId: documentId || null,
+                    signatureDataUrl,
+                    checkinMethod: method ?? 'qr',
+                },
+            )
+
+            setExternalCheckinDone(true)
+            setExternalParticipantId(response.externalId)
+            setExternalSurveyId(response.surveyId ?? null)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'No fue posible registrar el check-in externo')
+            setShowErrorModal(true)
+        } finally {
+            setExternalSubmitting(false)
+        }
+    }
+
+    useEffect(() => {
+        if (!externalCheckinDone || !externalSurveyId || !id || !externalParticipantId) {
+            return
+        }
+
+        const params = new URLSearchParams()
+        params.set('externalId', externalParticipantId)
+        if (sourceDatabaseUrl) {
+            params.set('db', sourceDatabaseUrl)
+        }
+
+        navigate(`/external-survey/${externalSurveyId}/response/${id}?${params.toString()}`)
+    }, [externalCheckinDone, externalSurveyId, id, externalParticipantId, sourceDatabaseUrl, navigate])
 
     const handleGoBack = (): void => {
         if (window.history.length > 1) {
@@ -193,6 +301,34 @@ function ChekinPage() {
 
     return (
         <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
+                {error && showErrorModal && (
+                    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4">
+                        <div className="w-full max-w-md rounded-3xl border border-red-200 bg-white shadow-[0_24px_48px_rgba(15,23,42,0.18)] overflow-hidden">
+                            <div className="px-6 py-5 border-b border-red-100 bg-red-50">
+                                <h2 className="text-xl font-bold text-red-800 flex items-center gap-2">
+                                    <AlertCircle className="w-5 h-5" />
+                                    Error de validación
+                                </h2>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-red-700 font-medium">{error}</p>
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowErrorModal(false)
+                                            setError(null)
+                                        }}
+                                        className="inline-flex items-center justify-center rounded-xl bg-[#1b3022] px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#14251a] transition-colors"
+                                    >
+                                        Cerrar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {!role && (
                     <div className="max-w-2xl mx-auto p-6 mt-8">
                         <div className="bg-card rounded-2xl border border-border p-6 space-y-4">
@@ -222,14 +358,97 @@ function ChekinPage() {
 
                 {role === 'external' && (
                     <div className="max-w-2xl mx-auto p-6 mt-8">
-                        <div className="bg-card rounded-2xl border border-border p-6 space-y-3">
+                        <div className="bg-card rounded-2xl border border-border p-6 space-y-4">
                             <h2 className="text-xl font-bold text-foreground">Registro de externo</h2>
                             <p className="text-sm text-muted-foreground">
-                                Estamos preparando el formulario de autogestión para externos desde este mismo enlace QR.
+                                Completa tus datos y firma para registrar la asistencia en {meeting?.title ?? 'la actividad'}.
                             </p>
-                            <p className="text-sm text-muted-foreground">
-                                Siguiente paso: completar datos, firma y envío de encuesta de satisfacción al finalizar el check-in.
-                            </p>
+
+                            {!externalCheckinDone && (
+                                <>
+                                    <div className="grid gap-4 md:grid-cols-2">
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Nombre completo</label>
+                                            <input
+                                                type="text"
+                                                value={externalForm.name}
+                                                onChange={(event) => setExternalForm((prev) => ({ ...prev, name: event.target.value }))}
+                                                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                                                placeholder="Nombre y apellido"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Empresa</label>
+                                            <input
+                                                type="text"
+                                                value={externalForm.companyName}
+                                                onChange={(event) => setExternalForm((prev) => ({ ...prev, companyName: event.target.value }))}
+                                                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                                                placeholder="Empresa donde trabajas"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Correo (opcional)</label>
+                                            <input
+                                                type="email"
+                                                value={externalForm.email}
+                                                onChange={(event) => setExternalForm((prev) => ({ ...prev, email: event.target.value }))}
+                                                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                                                placeholder="correo@empresa.com"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Identificación (opcional)</label>
+                                            <input
+                                                type="text"
+                                                value={externalForm.documentId}
+                                                onChange={(event) => setExternalForm((prev) => ({ ...prev, documentId: event.target.value }))}
+                                                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                                                placeholder="Documento o pasaporte"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Firma</p>
+                                        <SignaturePadCanvas
+                                            ref={externalSignatureRef}
+                                            onChange={setExternalHasSignature}
+                                            height={170}
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Debes firmar para confirmar el registro de asistencia.
+                                        </p>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => { void handleExternalCheckin() }}
+                                        disabled={externalSubmitting || !externalHasSignature || loading}
+                                        className="w-full rounded-xl bg-[#1b3022] px-4 py-3 text-sm font-semibold text-white hover:bg-[#14251a] transition-colors disabled:opacity-60"
+                                    >
+                                        {externalSubmitting ? 'Registrando asistencia...' : 'Registrar asistencia como externo'}
+                                    </button>
+                                    {!externalHasSignature && (
+                                        <p className="text-xs text-amber-700">
+                                            Para continuar, dibuja tu firma en el recuadro.
+                                        </p>
+                                    )}
+                                </>
+                            )}
+
+                            {externalCheckinDone && (
+                                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 space-y-2">
+                                    <p className="font-semibold">Asistencia registrada correctamente.</p>
+                                    {externalSurveyId ? (
+                                        <p>
+                                            Esta capacitación requiere encuesta de satisfacción. Te redirigiremos automáticamente para completarla.
+                                        </p>
+                                    ) : (
+                                        <p>No hay encuesta de satisfacción obligatoria para esta actividad.</p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
@@ -284,13 +503,6 @@ function ChekinPage() {
                                 </div>
                             </div>
                         </div>
-                    </div>
-                )}
-
-                {error && (
-                    <div className="p-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl mb-6 flex gap-4">
-                        <AlertCircle className="w-6 h-6 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
-                        <p className="text-red-700 dark:text-red-400 font-semibold">{error}</p>
                     </div>
                 )}
 

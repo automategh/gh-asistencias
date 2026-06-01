@@ -34,6 +34,90 @@ interface AttendanceUpdateChanges {
 	readonly noShow?: boolean | null;
 }
 
+interface RegisterExternalCheckinRequest {
+	readonly meetingId: string;
+	readonly meetingDatabaseUrl: string;
+	readonly externalParticipant: {
+		readonly name: string;
+		readonly companyName: string;
+		readonly email?: string | null;
+		readonly documentId?: string | null;
+		readonly signatureDataUrl: string;
+		readonly checkinMethod?: "qr" | "manual";
+	};
+}
+
+interface RegisterExternalCheckinResponse {
+	readonly externalId: string;
+	readonly attendance: "present" | "late";
+	readonly checkedInAt: number;
+	readonly alreadyRegistered: boolean;
+	readonly surveyId?: string | null;
+}
+
+interface ExternalMeetingRecord {
+	readonly status?: string | null;
+	readonly startTime?: number | null;
+	readonly type?: string | null;
+	readonly satisfactionSurveyId?: string | null;
+}
+
+interface ExternalParticipantRecord {
+	readonly id: string;
+	readonly name: string;
+	readonly companyName: string;
+	readonly email: string | null;
+	readonly documentId: string | null;
+	readonly signatureDataUrl: string;
+	readonly attendance: "present" | "late";
+	readonly checkedInAt: number;
+	readonly checkinMethod: "qr" | "manual";
+	readonly createdAt: number;
+	readonly updatedAt: number;
+	readonly noShow: false;
+	readonly source: "external";
+}
+
+interface GetExternalSurveyForCheckinRequest {
+	readonly surveyId: string;
+	readonly trainingId: string;
+	readonly meetingDatabaseUrl: string;
+	readonly externalId: string;
+}
+
+interface SubmitExternalSurveyResponseRequest {
+	readonly surveyId: string;
+	readonly trainingId: string;
+	readonly meetingDatabaseUrl: string;
+	readonly externalId: string;
+	readonly answers: Record<string, string | number | readonly string[] | null | undefined>;
+}
+
+interface ExternalSurveyQuestion {
+	readonly id: string;
+	readonly surveyId: string;
+	readonly order: number;
+	readonly text: string;
+	readonly type: "single" | "multiple" | "text" | "rating";
+	readonly required: boolean;
+}
+
+interface ExternalSurveyOption {
+	readonly id: string;
+	readonly questionId: string;
+	readonly order: number;
+	readonly text: string;
+	readonly value?: number;
+}
+
+interface ExternalSurveyPayload {
+	readonly id: string;
+	readonly name: string;
+	readonly description?: string;
+	readonly category: string;
+	readonly isActive: boolean;
+}
+
 interface StoredMeetingRecord {
 	readonly startTime?: number | null;
 	readonly status?: string | null;
@@ -90,6 +174,10 @@ const getDatabaseUrlMap = (): Record<RecintoKey, string | null> => {
 const listDatabaseUrls = (): string[] => {
 	const map = getDatabaseUrlMap();
 	return Object.values(map).filter((url): url is string => typeof url === "string" && url.length > 0);
+};
+
+const normalizeDatabaseUrl = (url: string): string => {
+	return url.trim().replace(/\/+$/, "");
 };
 
 const resolveDatabaseUrlByRecinto = (recinto?: RecintoKey): string | null => {
@@ -161,6 +249,95 @@ const resolveSyncKey = (role: RoleUpsertPayload): string => {
 		return `custom:${role.id}`;
 	}
 	return `local:${role.sourceRecinto ?? "corporativo"}:${role.id}`;
+};
+
+const normalizeIdentity = (value?: string | null): string | null => {
+	if (typeof value !== "string") {
+		return null;
+	}
+	const normalized = value.trim().toLowerCase();
+	return normalized.length > 0 ? normalized : null;
+};
+
+const sanitizeKey = (value: string): string => {
+	return value.replace(/[^a-z0-9]/gi, "_");
+};
+
+const computeExternalAttendance = (meetingStartTime: number, checkedInAt: number): "present" | "late" => {
+	const graceMs = 5 * 60 * 1000;
+	return checkedInAt > meetingStartTime + graceMs ? "late" : "present";
+};
+
+const normalizeRequiredString = (value: unknown): string => {
+	if (typeof value !== "string") {
+		return "";
+	}
+	return value.trim();
+};
+
+const resolveKnownDatabaseUrlOrThrow = (databaseUrl: string | null | undefined): string => {
+	const cleanUrl = normalizeDatabaseUrl(normalizeRequiredString(databaseUrl));
+	if (!cleanUrl) {
+		throw new HttpsError("invalid-argument", "meetingDatabaseUrl es requerido.");
+	}
+
+	const availableUrls = new Set(listDatabaseUrls().map(normalizeDatabaseUrl));
+	if (!availableUrls.has(cleanUrl)) {
+		throw new HttpsError("invalid-argument", "meetingDatabaseUrl no es válido.");
+	}
+
+	return cleanUrl;
+};
+
+const loadMeetingOrThrow = async (db: admin.database.Database, meetingId: string): Promise<ExternalMeetingRecord> => {
+	const snapshot = await db.ref(`meetings/${meetingId}`).get();
+	if (!snapshot.exists()) {
+		throw new HttpsError("not-found", "La actividad no existe.");
+	}
+	return snapshot.val() as ExternalMeetingRecord;
+};
+
+const assertTrainingMeetingWithSurvey = (meeting: ExternalMeetingRecord, surveyId: string): void => {
+	if (meeting.type !== "training") {
+		throw new HttpsError("failed-precondition", "La actividad no es de tipo capacitación.");
+	}
+	if (meeting.satisfactionSurveyId !== surveyId) {
+		throw new HttpsError("failed-precondition", "La encuesta no corresponde a esta capacitación.");
+	}
+};
+
+const normalizeSurveyAnswers = (
+	answers: Record<string, string | number | readonly string[] | null | undefined>,
+): Record<string, string | number | string[]> => {
+	const normalizedAnswers: Record<string, string | number | string[]> = {};
+
+	for (const [questionId, answer] of Object.entries(answers)) {
+		if (answer === null || typeof answer === "undefined") {
+			continue;
+		}
+		if (typeof answer === "string") {
+			const clean = answer.trim();
+			if (clean.length > 0) {
+				normalizedAnswers[questionId] = clean;
+			}
+			continue;
+		}
+		if (typeof answer === "number") {
+			normalizedAnswers[questionId] = answer;
+			continue;
+		}
+		if (Array.isArray(answer)) {
+			const cleanArray = answer
+				.filter((item): item is string => typeof item === "string")
+				.map((item) => item.trim())
+				.filter((item) => item.length > 0);
+			if (cleanArray.length > 0) {
+				normalizedAnswers[questionId] = cleanArray;
+			}
+		}
+	}
+
+	return normalizedAnswers;
 };
 
 export const upsertRoleAcrossDatabases = onCall<RoleUpsertRequest>(
@@ -322,6 +499,265 @@ export const updateAttendanceAcrossDatabases = onCall<AttendanceUpdateRequest>(
 
 			await userDb.ref().update(userUpdates);
 		}
+
+		return { ok: true };
+	},
+);
+
+export const registerExternalCheckin = onCall<RegisterExternalCheckinRequest>(
+	async (request): Promise<RegisterExternalCheckinResponse> => {
+		const meetingId = normalizeRequiredString(request.data?.meetingId);
+		const meetingDatabaseUrl = resolveKnownDatabaseUrlOrThrow(request.data?.meetingDatabaseUrl);
+		const externalParticipant = request.data?.externalParticipant;
+
+		if (!meetingId) {
+			throw new HttpsError("invalid-argument", "meetingId es requerido.");
+		}
+
+		if (!externalParticipant || typeof externalParticipant !== "object") {
+			throw new HttpsError("invalid-argument", "externalParticipant es requerido.");
+		}
+
+		const name = normalizeRequiredString(externalParticipant.name);
+		const companyName = normalizeRequiredString(externalParticipant.companyName);
+		const email = normalizeIdentity(externalParticipant.email ?? null);
+		const documentId = normalizeIdentity(externalParticipant.documentId ?? null);
+		const signatureDataUrl = normalizeRequiredString(externalParticipant.signatureDataUrl);
+
+		if (!name) {
+			throw new HttpsError("invalid-argument", "El nombre es obligatorio.");
+		}
+		if (!companyName) {
+			throw new HttpsError("invalid-argument", "La empresa es obligatoria.");
+		}
+		if (!email && !documentId) {
+			throw new HttpsError("invalid-argument", "Debes enviar correo o identificación.");
+		}
+		if (!signatureDataUrl || !signatureDataUrl.startsWith("data:image/")) {
+			throw new HttpsError("invalid-argument", "La firma es obligatoria y debe ser una imagen válida.");
+		}
+
+		const db = admin.app().database(meetingDatabaseUrl);
+		const meeting = await loadMeetingOrThrow(db, meetingId);
+		if (meeting.status !== "scheduled") {
+			throw new HttpsError("failed-precondition", "La actividad no permite nuevos check-ins.");
+		}
+		if (typeof meeting.startTime !== "number") {
+			throw new HttpsError("failed-precondition", "La actividad no tiene hora de inicio válida.");
+		}
+
+		const identityPieces = [documentId ?? "", email ?? "", name.toLowerCase()];
+		const dedupeKey = sanitizeKey(identityPieces.join("|"));
+		const dedupeRef = db.ref(`meetingExternalParticipantsIndex/${meetingId}/${dedupeKey}`);
+		const candidateRef = db.ref(`meetingExternalParticipants/${meetingId}`).push();
+		if (!candidateRef.key) {
+			throw new HttpsError("internal", "No fue posible generar un identificador para el externo.");
+		}
+		const candidateExternalId = candidateRef.key;
+
+		const dedupeTransaction = await dedupeRef.transaction((currentValue) => {
+			if (typeof currentValue === "string" && currentValue.trim().length > 0) {
+				return currentValue;
+			}
+			return candidateExternalId;
+		}, undefined, false);
+
+		const dedupeResolvedValue = dedupeTransaction.snapshot.val();
+		if (typeof dedupeResolvedValue !== "string" || dedupeResolvedValue.trim().length === 0) {
+			throw new HttpsError("internal", "No fue posible resolver el identificador del externo.");
+		}
+
+		const now = Date.now();
+		const attendance = computeExternalAttendance(meeting.startTime, now);
+		const checkinMethod = externalParticipant.checkinMethod ?? "qr";
+
+		const externalId = dedupeResolvedValue;
+		const alreadyRegistered = externalId !== candidateExternalId;
+
+		const participantRecord: ExternalParticipantRecord = {
+			id: externalId,
+			name,
+			companyName,
+			email: email ?? null,
+			documentId: documentId ?? null,
+			signatureDataUrl,
+			attendance,
+			checkedInAt: now,
+			checkinMethod,
+			createdAt: now,
+			updatedAt: now,
+			noShow: false,
+			source: "external",
+		};
+
+		const participantRef = db.ref(`meetingExternalParticipants/${meetingId}/${externalId}`);
+		const existingParticipantSnapshot = await participantRef.get();
+		const existingParticipant = existingParticipantSnapshot.val() as ExternalParticipantRecord | null;
+
+		await participantRef.set({
+			...participantRecord,
+			createdAt: existingParticipant?.createdAt ?? now,
+		});
+
+		const surveyId = meeting.type === "training"
+			? (typeof meeting.satisfactionSurveyId === "string" && meeting.satisfactionSurveyId.trim().length > 0
+				? meeting.satisfactionSurveyId.trim()
+				: null)
+			: null;
+
+		return {
+			externalId,
+			attendance,
+			checkedInAt: now,
+			alreadyRegistered,
+			surveyId,
+		};
+	},
+);
+
+export const getExternalSurveyForCheckin = onCall<GetExternalSurveyForCheckinRequest>(
+	async (request): Promise<{ survey: ExternalSurveyPayload; questions: ExternalSurveyQuestion[]; options: ExternalSurveyOption[] }> => {
+		const surveyId = normalizeRequiredString(request.data?.surveyId);
+		const trainingId = normalizeRequiredString(request.data?.trainingId);
+		const meetingDatabaseUrl = resolveKnownDatabaseUrlOrThrow(request.data?.meetingDatabaseUrl);
+		const externalId = normalizeRequiredString(request.data?.externalId);
+
+		if (!surveyId || !trainingId || !meetingDatabaseUrl || !externalId) {
+			throw new HttpsError("invalid-argument", "surveyId, trainingId, meetingDatabaseUrl y externalId son requeridos.");
+		}
+
+		const db = admin.app().database(meetingDatabaseUrl);
+		const [meetingSnapshot, externalSnapshot, surveySnapshot] = await Promise.all([
+			db.ref(`meetings/${trainingId}`).get(),
+			db.ref(`meetingExternalParticipants/${trainingId}/${externalId}`).get(),
+			db.ref(`surveys/${surveyId}`).get(),
+		]);
+
+		if (!meetingSnapshot.exists()) {
+			throw new HttpsError("not-found", "La capacitación no existe.");
+		}
+		if (!externalSnapshot.exists()) {
+			throw new HttpsError("permission-denied", "No existe registro de check-in externo para esta capacitación.");
+		}
+		if (!surveySnapshot.exists()) {
+			throw new HttpsError("not-found", "La encuesta no existe.");
+		}
+
+		const meeting = meetingSnapshot.val() as ExternalMeetingRecord;
+		assertTrainingMeetingWithSurvey(meeting, surveyId);
+
+		const survey = surveySnapshot.val() as ExternalSurveyPayload;
+		if (!survey.isActive) {
+			throw new HttpsError("failed-precondition", "La encuesta no está activa.");
+		}
+
+		const questionsRootSnapshot = await db.ref("surveyQuestions").get();
+		const rawQuestions = questionsRootSnapshot.val() as Record<string, Omit<ExternalSurveyQuestion, "id">> | null;
+		const questions: ExternalSurveyQuestion[] = Object.entries(rawQuestions ?? {})
+			.filter(([, question]) => question.surveyId === surveyId)
+			.map(([id, question]) => ({ ...question, id }))
+			.sort((left, right) => left.order - right.order);
+
+		const questionIds = new Set(questions.map((question) => question.id));
+		const optionsRootSnapshot = await db.ref("surveyOptions").get();
+		const rawOptions = optionsRootSnapshot.val() as Record<string, Omit<ExternalSurveyOption, "id">> | null;
+		const options: ExternalSurveyOption[] = Object.entries(rawOptions ?? {})
+			.filter(([, option]) => questionIds.has(option.questionId))
+			.map(([id, option]) => ({ ...option, id }))
+			.sort((left, right) => left.order - right.order);
+
+		return {
+			survey,
+			questions,
+			options,
+		};
+	},
+);
+
+export const submitExternalSurveyResponse = onCall<SubmitExternalSurveyResponseRequest>(
+	async (request): Promise<{ ok: true }> => {
+		const surveyId = normalizeRequiredString(request.data?.surveyId);
+		const trainingId = normalizeRequiredString(request.data?.trainingId);
+		const meetingDatabaseUrl = resolveKnownDatabaseUrlOrThrow(request.data?.meetingDatabaseUrl);
+		const externalId = normalizeRequiredString(request.data?.externalId);
+		const answers = request.data?.answers;
+
+		if (!surveyId || !trainingId || !meetingDatabaseUrl || !externalId) {
+			throw new HttpsError("invalid-argument", "surveyId, trainingId, meetingDatabaseUrl y externalId son requeridos.");
+		}
+		if (!answers || typeof answers !== "object") {
+			throw new HttpsError("invalid-argument", "answers es requerido.");
+		}
+
+		const db = admin.app().database(meetingDatabaseUrl);
+		const [meetingSnapshot, externalSnapshot] = await Promise.all([
+			db.ref(`meetings/${trainingId}`).get(),
+			db.ref(`meetingExternalParticipants/${trainingId}/${externalId}`).get(),
+		]);
+
+		if (!meetingSnapshot.exists()) {
+			throw new HttpsError("not-found", "La capacitación no existe.");
+		}
+		if (!externalSnapshot.exists()) {
+			throw new HttpsError("permission-denied", "No existe registro de check-in externo para esta capacitación.");
+		}
+
+		const meeting = meetingSnapshot.val() as ExternalMeetingRecord;
+		assertTrainingMeetingWithSurvey(meeting, surveyId);
+
+		const external = externalSnapshot.val() as ExternalParticipantRecord;
+		if (external.attendance !== "present" && external.attendance !== "late") {
+			throw new HttpsError("failed-precondition", "Solo externos con asistencia válida pueden responder la encuesta.");
+		}
+
+		const responseId = `ext_${externalId}`;
+		const responseRef = db.ref(`surveyResponses/${surveyId}/${trainingId}/${responseId}`);
+		const existingResponse = await responseRef.get();
+		if (existingResponse.exists()) {
+			throw new HttpsError("already-exists", "Esta encuesta externa ya fue respondida.");
+		}
+
+		const normalizedAnswers = normalizeSurveyAnswers(answers);
+
+		const questionsSnapshot = await db.ref("surveyQuestions").get();
+		const rawQuestions = questionsSnapshot.val() as Record<string, Omit<ExternalSurveyQuestion, "id">> | null;
+		const requiredQuestionIds = Object.entries(rawQuestions ?? {})
+			.filter(([, question]) => question.surveyId === surveyId && question.required === true)
+			.map(([questionId]) => questionId);
+
+		const missingRequired = requiredQuestionIds.filter((questionId) => {
+			const value = normalizedAnswers[questionId];
+			if (typeof value === "undefined") {
+				return true;
+			}
+			if (typeof value === "string") {
+				return value.trim().length === 0;
+			}
+			if (Array.isArray(value)) {
+				return value.length === 0;
+			}
+			return false;
+		});
+
+		if (missingRequired.length > 0) {
+			throw new HttpsError("invalid-argument", "Faltan respuestas obligatorias de la encuesta.");
+		}
+
+		const nowIso = new Date().toISOString();
+		await responseRef.set({
+			id: responseId,
+			surveyId,
+			trainingId,
+			userId: responseId,
+			userName: external.name,
+			userEmail: external.email,
+			createdAt: nowIso,
+			answers: normalizedAnswers,
+			respondentType: "external",
+			externalId,
+			companyName: external.companyName,
+			documentId: external.documentId,
+		});
 
 		return { ok: true };
 	},

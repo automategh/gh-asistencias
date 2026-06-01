@@ -245,6 +245,27 @@ interface UpdateAttendanceAcrossDatabasesResponse {
     readonly ok: true
 }
 
+interface RegisterExternalCheckinRequest {
+    readonly meetingId: string
+    readonly meetingDatabaseUrl: string
+    readonly externalParticipant: {
+        readonly name: string
+        readonly companyName: string
+        readonly email?: string | null
+        readonly documentId?: string | null
+        readonly signatureDataUrl: string
+        readonly checkinMethod?: "qr" | "manual"
+    }
+}
+
+export interface RegisterExternalCheckinResponse {
+    readonly externalId: string
+    readonly attendance: "present" | "late"
+    readonly checkedInAt: number
+    readonly alreadyRegistered: boolean
+    readonly surveyId?: string | null
+}
+
 export async function updateAttendanceAcrossDatabases(
     meetingId: string,
     participantUid: string,
@@ -271,6 +292,39 @@ export async function updateAttendanceAcrossDatabases(
         userDatabaseUrl,
         changes,
     })
+}
+
+export async function registerExternalCheckin(
+    meetingId: string,
+    meetingDatabaseUrl: string | null,
+    externalParticipant: {
+        readonly name: string
+        readonly companyName: string
+        readonly email?: string | null
+        readonly documentId?: string | null
+        readonly signatureDataUrl: string
+        readonly checkinMethod?: "qr" | "manual"
+    },
+): Promise<RegisterExternalCheckinResponse> {
+    if (!functions) {
+        throw new Error("Cloud Functions no está disponible")
+    }
+    if (!meetingDatabaseUrl) {
+        throw new Error("No se pudo resolver la base de datos de la actividad")
+    }
+
+    const callable = httpsCallable<RegisterExternalCheckinRequest, RegisterExternalCheckinResponse>(
+        functions,
+        "registerExternalCheckin",
+    )
+
+    const result = await callable({
+        meetingId,
+        meetingDatabaseUrl,
+        externalParticipant,
+    })
+
+    return result.data
 }
 
 /** Obtiene una reunión por su ID.

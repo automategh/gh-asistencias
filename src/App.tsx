@@ -26,6 +26,7 @@ import EditSurveyPage from './pages/survey/EditSurveyPage'
 import SurveyPage from './pages/survey/SurveyPage'
 import SurveyResultsPage from './pages/survey/SurveyResultsPage'
 import ReportIndividualPage from './pages/reports/ReportIndividualPage'
+import ExternalSurveyPage from './pages/survey/ExternalSurveyPage'
 
 function App() {
     return (
@@ -156,6 +157,7 @@ function App() {
 
                 </Route>
                 <Route path="/checkin/:id" element={<ChekinPage />} />
+                <Route path="/external-survey/:id/response/:trainingId" element={<ExternalSurveyPage />} />
                 <Route element={<PublicOnlyRoute />}>
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/register" element={<RegisterPage />} />

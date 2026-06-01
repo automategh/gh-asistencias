@@ -1,6 +1,7 @@
 import { get, push, ref, remove, set, type Database } from "firebase/database"
+import { httpsCallable } from "firebase/functions"
 import { getAllAvailableDatabases, type RecintoKey } from "@/lib/firebase/databaseResolver"
-import { getDatabaseForUrl } from "@/services/firebase"
+import { functions, getDatabaseForUrl } from "@/services/firebase"
 
 /**
  * Estructura principal de una encuesta almacenada en Realtime Database.
@@ -537,5 +538,61 @@ export async function saveSurveyResponse(
     await set(responseRef, response)
 
     return response
+}
+
+interface GetExternalSurveyForCheckinRequest {
+    readonly surveyId: string
+    readonly trainingId: string
+    readonly meetingDatabaseUrl: string
+    readonly externalId: string
+}
+
+interface GetExternalSurveyForCheckinResponse {
+    readonly survey: Survey
+    readonly questions: SurveyQuestion[]
+    readonly options: SurveyOption[]
+}
+
+interface SubmitExternalSurveyResponseRequest {
+    readonly surveyId: string
+    readonly trainingId: string
+    readonly meetingDatabaseUrl: string
+    readonly externalId: string
+    readonly answers: Record<string, SurveyAnswerValue | null | undefined>
+}
+
+interface SubmitExternalSurveyResponseResponse {
+    readonly ok: true
+}
+
+export async function getExternalSurveyForCheckin(
+    params: GetExternalSurveyForCheckinRequest,
+): Promise<GetExternalSurveyForCheckinResponse> {
+    if (!functions) {
+        throw new Error("Cloud Functions no está disponible")
+    }
+
+    const callable = httpsCallable<GetExternalSurveyForCheckinRequest, GetExternalSurveyForCheckinResponse>(
+        functions,
+        "getExternalSurveyForCheckin",
+    )
+
+    const response = await callable(params)
+    return response.data
+}
+
+export async function submitExternalSurveyResponse(
+    params: SubmitExternalSurveyResponseRequest,
+): Promise<void> {
+    if (!functions) {
+        throw new Error("Cloud Functions no está disponible")
+    }
+
+    const callable = httpsCallable<SubmitExternalSurveyResponseRequest, SubmitExternalSurveyResponseResponse>(
+        functions,
+        "submitExternalSurveyResponse",
+    )
+
+    await callable(params)
 }
 
