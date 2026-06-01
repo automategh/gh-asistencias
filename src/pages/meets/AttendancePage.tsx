@@ -10,7 +10,11 @@ import type { MeetingParticipant, Meeting } from '@/types/meeting'
 import type { UserProfile } from '@/types/user'
 import { getMeetingById, updateAttendanceAcrossDatabases } from '@/services/meetings.service'
 import { getDatabaseForUrl } from '@/services/firebase'
-import { ArrowLeft } from 'lucide-react'
+import {
+    resolveCrossDbUserProfileByEmail,
+    type CrossDbUserProfileLiteCache,
+} from '@/services/user.service'
+import { ArrowLeft, Loader2 } from 'lucide-react'
 
 /**
  * Fila de asistencia enriquecida para la vista/impresión.
@@ -39,6 +43,15 @@ interface ExternalAttendanceParticipant {
     readonly checkedInAt?: number | null
     readonly checkinMethod?: 'qr' | 'manual' | null
     readonly noShow?: boolean | null
+}
+
+function resolveCompanyLabel(row: AttendanceRow): string {
+    const normalizedCompanyName = typeof row.companyName === 'string' ? row.companyName.trim() : ''
+    if (normalizedCompanyName.length > 0) {
+        return normalizedCompanyName
+    }
+
+    return 'Grupo Heroica'
 }
 
 /**
@@ -168,6 +181,7 @@ function AttendancePage() {
 
                 const usersVal = usersSnap.val() as Record<string, UserProfile> | null
                 const usersByUid: Record<string, UserProfile> = usersVal ?? {}
+                const crossDbProfileCache: CrossDbUserProfileLiteCache = {}
                 const externalParticipantsVal = externalParticipantsSnap.val() as Record<string, ExternalAttendanceParticipant> | null
                 const externalParticipants = externalParticipantsVal
                     ? Object.values(externalParticipantsVal)
@@ -178,6 +192,14 @@ function AttendancePage() {
                 const internalEnriched: AttendanceRow[] = await Promise.all(
                     participants.map(async (participant) => {
                         const user = usersByUid[participant.uid]
+                        const shouldResolveCrossDb = Boolean(
+                            participant.email
+                            && ((!user?.identify || !user.identify.trim()) || (!user?.cargo || !user.cargo.trim())),
+                        )
+
+                        const crossDbProfile = shouldResolveCrossDb
+                            ? await resolveCrossDbUserProfileByEmail(participant.email, crossDbProfileCache)
+                            : null
 
                         let signatureDataUrl: string | null = null
                         const signatureUrl = user?.signatureUrl ?? null
@@ -193,10 +215,10 @@ function AttendancePage() {
                         return {
                             ...participant,
                             source: 'internal',
-                            identify: user?.identify ?? null,
-                            companyName: user?.companyName ?? null,
+                            identify: user?.identify ?? crossDbProfile?.identify ?? null,
+                            companyName: user?.companyName ?? crossDbProfile?.companyName ?? null,
                             department: user?.department ?? null,
-                            cargo: user?.cargo ?? null,
+                            cargo: user?.cargo ?? crossDbProfile?.cargo ?? null,
                             signatureUrl,
                             signatureDataUrl,
                         }
@@ -362,7 +384,13 @@ function AttendancePage() {
             }}
         >
             <div className="min-h-screen bg-linear-to-br from-background via-muted/10 to-background">
-                {loading && <div className="px-4 pt-4 text-sm text-muted-foreground">Cargando…</div>}
+                {loading && (
+                    <div className="px-4 pt-6">
+                        <div className="mx-auto max-w-sm md:max-w-7xl rounded-xl bg-white border border-[#edeeed] p-8 flex items-center justify-center">
+                            <Loader2 className="h-7 w-7 animate-spin text-[#1b3022]" />
+                        </div>
+                    </div>
+                )}
                 {error && <div className="px-4 pt-4 text-sm text-red-600">{error}</div>}
 
                 <div className="max-w-sm md:max-w-7xl mx-auto mt-6 px-2 sm:px-4">
@@ -463,7 +491,15 @@ function AttendancePage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {attendance.length === 0 ? (
+                                    {loading ? (
+                                        <tr>
+                                            <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                                                <div className="inline-flex items-center justify-center">
+                                                    <Loader2 className="h-6 w-6 animate-spin text-[#1b3022]" />
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : attendance.length === 0 ? (
                                         <tr>
                                             <td colSpan={6} className="text-center py-4 text-muted-foreground">
                                                 Sin registros
@@ -477,7 +513,7 @@ function AttendancePage() {
                                             >
                                                 <td className="px-3 py-3 text-foreground align-top wrap-break-word">{item.name}</td>
                                                 <td className="px-3 py-3 text-foreground align-top wrap-break-word">{item.identify ?? '—'}</td>
-                                                <td className="px-3 py-3 text-foreground align-top wrap-break-word">{item.companyName ?? 'Grupo Heroica'}</td>
+                                                <td className="px-3 py-3 text-foreground align-top wrap-break-word">{resolveCompanyLabel(item)}</td>
                                                 <td className="px-3 py-3 text-foreground align-top wrap-break-word">{item.cargo ?? '—'}</td>
                                                 <td className="px-3 py-4 align-middle">
                                                     <div className="h-12 w-full flex items-center justify-center">

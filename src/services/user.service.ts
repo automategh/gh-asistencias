@@ -223,6 +223,21 @@ export type UserCargoCache = Record<string, string>
 export type UserEmailCargoCache = Record<string, string>
 
 /**
+ * Resultado mínimo de perfil para reportes/listados cuando el usuario
+ * pertenece a una base distinta a la actualmente seleccionada.
+ */
+export interface CrossDbUserProfileLite {
+    readonly identify: string
+    readonly cargo: string
+    readonly companyName: string
+}
+
+/**
+ * Caché por email para resolución de cédula/cargo/empresa entre bases.
+ */
+export type CrossDbUserProfileLiteCache = Record<string, CrossDbUserProfileLite>
+
+/**
  * Carga un mapa uid -> cargo para todos los usuarios en la base de datos.
  *
  * Se utiliza en operaciones de reporte/exportación donde es preferible
@@ -345,6 +360,54 @@ export async function resolveCrossDbUserCargoByEmail(
 
     cache[normalizedEmail] = ""
     return ""
+}
+
+/**
+ * Resuelve cédula, cargo y empresa por email recorriendo todas las bases
+ * de datos configuradas en la app.
+ */
+export async function resolveCrossDbUserProfileByEmail(
+    email: string | null | undefined,
+    cache: CrossDbUserProfileLiteCache,
+): Promise<CrossDbUserProfileLite | null> {
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : ""
+    if (!normalizedEmail) {
+        return null
+    }
+
+    const cached = cache[normalizedEmail]
+    if (cached !== undefined) {
+        return cached
+    }
+
+    const databases = getAllAvailableDatabases()
+
+    for (const dbInfo of databases) {
+        const db = getDatabaseForUrl(dbInfo.url)
+        if (!db) continue
+
+        const usersRef = ref(db, "users")
+        const snapshot = await get(usersRef)
+        const values = snapshot.val() as Record<string, UserProfile> | null
+        if (!values) continue
+
+        for (const data of Object.values(values)) {
+            const userEmail = typeof data.email === "string" ? data.email.trim().toLowerCase() : ""
+            if (!userEmail || userEmail !== normalizedEmail) {
+                continue
+            }
+
+            const resolved: CrossDbUserProfileLite = {
+                identify: typeof data.identify === "string" ? data.identify : "",
+                cargo: typeof data.cargo === "string" ? data.cargo : "",
+                companyName: typeof data.companyName === "string" ? data.companyName : "",
+            }
+            cache[normalizedEmail] = resolved
+            return resolved
+        }
+    }
+
+    return null
 }
 
 export async function updateUserProfile(database: Database, uid: string, profileData: Partial<UserProfile>) {
