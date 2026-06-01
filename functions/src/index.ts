@@ -275,6 +275,84 @@ const normalizeRequiredString = (value: unknown): string => {
 	return value.trim();
 };
 
+const normalizeOptionalText = (value: unknown): string | null => {
+	if (typeof value !== "string") {
+		return null;
+	}
+	const clean = value.trim();
+	return clean.length > 0 ? clean : null;
+};
+
+const pickNonEmptyText = (...values: Array<string | null | undefined>): string | null => {
+	for (const value of values) {
+		if (typeof value === "string" && value.trim().length > 0) {
+			return value;
+		}
+	}
+	return null;
+};
+
+const mergeCertificateUserProfile = (
+	base: CertificateUserProfile | null,
+	override: CertificateUserProfile | null,
+): CertificateUserProfile | null => {
+	if (!base && !override) {
+		return null;
+	}
+
+	return {
+		email: pickNonEmptyText(base?.email, override?.email),
+		cargo: pickNonEmptyText(base?.cargo, override?.cargo),
+		identify: pickNonEmptyText(base?.identify, override?.identify),
+		department: pickNonEmptyText(base?.department, override?.department),
+		companyName: pickNonEmptyText(base?.companyName, override?.companyName),
+	};
+};
+
+/**
+ * Recorre todas las BD configuradas para construir un índice de perfiles
+ * por UID y por email, usado como fallback al generar certificados.
+ */
+const buildCertificateUserDirectory = async (databaseUrls: string[]): Promise<CertificateUserDirectory> => {
+	const byUid: Record<string, CertificateUserProfile> = {};
+	const byEmail: Record<string, CertificateUserProfile> = {};
+
+	for (const databaseUrl of databaseUrls) {
+		try {
+			const db = admin.app().database(databaseUrl);
+			const usersSnap = await db.ref("users").get();
+			const usersMap = usersSnap.val() as Record<string, CertificateUserProfile> | null;
+			if (!usersMap) {
+				continue;
+			}
+
+			for (const [uid, rawProfile] of Object.entries(usersMap)) {
+				const profile: CertificateUserProfile = {
+					email: normalizeOptionalText(rawProfile.email),
+					cargo: normalizeOptionalText(rawProfile.cargo),
+					identify: normalizeOptionalText(rawProfile.identify),
+					department: normalizeOptionalText(rawProfile.department),
+					companyName: normalizeOptionalText(rawProfile.companyName),
+				};
+
+				const uidKey = uid.trim();
+				if (uidKey.length > 0) {
+					byUid[uidKey] = mergeCertificateUserProfile(byUid[uidKey] ?? null, profile) ?? profile;
+				}
+
+				const emailKey = normalizeIdentity(profile.email);
+				if (emailKey) {
+					byEmail[emailKey] = mergeCertificateUserProfile(byEmail[emailKey] ?? null, profile) ?? profile;
+				}
+			}
+		} catch (error) {
+			console.error(`No fue posible cargar usuarios para certificados en la BD ${databaseUrl}:`, error);
+		}
+	}
+
+	return { byUid, byEmail };
+};
+
 const resolveKnownDatabaseUrlOrThrow = (databaseUrl: string | null | undefined): string => {
 	const cleanUrl = normalizeDatabaseUrl(normalizeRequiredString(databaseUrl));
 	if (!cleanUrl) {
@@ -980,7 +1058,16 @@ interface CertificateParticipant {
 }
 
 interface CertificateUserProfile {
+	readonly email?: string | null;
 	readonly cargo?: string | null;
+	readonly identify?: string | null;
+	readonly department?: string | null;
+	readonly companyName?: string | null;
+}
+
+interface CertificateUserDirectory {
+	readonly byUid: Record<string, CertificateUserProfile>;
+	readonly byEmail: Record<string, CertificateUserProfile>;
 }
 
 interface CertificateTextLayout {
@@ -1220,18 +1307,23 @@ export const onTrainingCompletedSendCertificates = onValueUpdated(
 			return;
 		}
 
-		const usersSnap = await database.ref("users").get();
-		const usersMap = usersSnap.val() as Record<string, CertificateUserProfile> | null;
+		const userDirectory = await buildCertificateUserDirectory(listDatabaseUrls());
 
 		const graph = new Graph();
 
 		await Promise.all(
 			participants.map(async (participant) => {
 				try {
-					const participantProfile = usersMap?.[participant.uid] ?? null;
+					const participantUid = normalizeRequiredString(participant.uid);
+					const participantEmail = normalizeIdentity(participant.email);
+					const participantProfile = mergeCertificateUserProfile(
+						participantUid.length > 0 ? userDirectory.byUid[participantUid] ?? null : null,
+						participantEmail ? userDirectory.byEmail[participantEmail] ?? null : null,
+					);
+					const resolvedCargo = pickNonEmptyText(participant.cargo, participantProfile?.cargo);
 					const participantWithCargo: CertificateParticipant = {
 						...participant,
-						cargo: participant.cargo ?? participantProfile?.cargo ?? null,
+						cargo: resolvedCargo,
 					};
 
 					const pdfBuffer = await buildCertificatePdf(meeting, participantWithCargo);
