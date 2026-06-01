@@ -1243,6 +1243,7 @@ interface CertificateParticipant {
 	readonly cargo?: string | null;
 	readonly attendance?: string | null;
 	readonly noShow?: boolean | null;
+	readonly source?: "internal" | "external";
 }
 
 interface CertificateUserProfile {
@@ -1470,17 +1471,13 @@ export const onTrainingCompletedSendCertificates = onValueUpdated(
 			endTime: meetingValue.endTime ?? 0,
 		};
 
-		const participantsSnap = await database.ref(`meetingParticipants/${meetingId}`).get();
-		if (!participantsSnap.exists()) {
-			return;
-		}
+		const [participantsSnap, externalParticipantsSnap] = await Promise.all([
+			database.ref(`meetingParticipants/${meetingId}`).get(),
+			database.ref(`meetingExternalParticipants/${meetingId}`).get(),
+		]);
 
 		const participantsMap = participantsSnap.val() as Record<string, CertificateParticipant> | null;
-		if (!participantsMap) {
-			return;
-		}
-
-		const participants = Object.values(participantsMap).filter((participant) => {
+		const internalParticipants = Object.values(participantsMap ?? {}).filter((participant) => {
 			if (!participant.email) {
 				return false;
 			}
@@ -1489,7 +1486,45 @@ export const onTrainingCompletedSendCertificates = onValueUpdated(
 				return false;
 			}
 			return attendance === "present" || attendance === "late";
-		});
+		}).map((participant) => ({
+			...participant,
+			source: "internal" as const,
+		}));
+
+		type ExternalCertificateParticipantRecord = {
+			readonly id: string;
+			readonly name: string;
+			readonly companyName?: string | null;
+			readonly email?: string | null;
+			readonly attendance?: "absent" | "present" | "late" | null;
+			readonly noShow?: boolean | null;
+		};
+
+		const externalParticipantsMap = externalParticipantsSnap.val() as Record<string, ExternalCertificateParticipantRecord> | null;
+		const externalParticipants: CertificateParticipant[] = Object.values(externalParticipantsMap ?? {})
+			.filter((participant) => {
+				const cleanEmail = normalizeOptionalString(participant.email);
+				if (!cleanEmail) {
+					return false;
+				}
+
+				if (participant.noShow === true) {
+					return false;
+				}
+
+				return participant.attendance === "present" || participant.attendance === "late";
+			})
+			.map((participant) => ({
+				uid: participant.id,
+				name: participant.name,
+				email: normalizeOptionalString(participant.email) ?? "",
+				cargo: pickNonEmptyText(normalizeOptionalString(participant.companyName), "Externo"),
+				attendance: participant.attendance,
+				noShow: participant.noShow ?? false,
+				source: "external",
+			}));
+
+		const participants = [...internalParticipants, ...externalParticipants];
 
 		if (participants.length === 0) {
 			return;
@@ -1508,7 +1543,9 @@ export const onTrainingCompletedSendCertificates = onValueUpdated(
 						participantUid.length > 0 ? userDirectory.byUid[participantUid] ?? null : null,
 						participantEmail ? userDirectory.byEmail[participantEmail] ?? null : null,
 					);
-					const resolvedCargo = pickNonEmptyText(participant.cargo, participantProfile?.cargo);
+					const resolvedCargo = participant.source === "external"
+						? pickNonEmptyText(participant.cargo, "Externo")
+						: pickNonEmptyText(participant.cargo, participantProfile?.cargo);
 					const participantWithCargo: CertificateParticipant = {
 						...participant,
 						cargo: resolvedCargo,
