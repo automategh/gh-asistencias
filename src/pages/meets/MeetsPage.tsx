@@ -95,11 +95,21 @@ function MeetsPage() {
     const allTabDateFilterToken = activeTab === 'all' ? `${dateFrom}|${dateTo}` : ''
 
     const buildMeetingPath = (basePath: '/meeting' | '/checkin', meeting: MeetingWithIndex): string => {
-        if (!meeting.source?.url) {
-            return `${basePath}/${meeting.id}`
+        const baseRoute = `${basePath}/${meeting.id}`
+        const params = new URLSearchParams()
+
+        if (meeting.source?.url) {
+            params.set('db', meeting.source.url)
         }
 
-        return `${basePath}/${meeting.id}?db=${encodeURIComponent(meeting.source.url)}`
+        if (basePath === '/checkin') {
+            // Si se entra desde la app, el flujo debe abrir como colaborador interno.
+            params.set('role', 'internal')
+            params.set('method', 'manual')
+        }
+
+        const query = params.toString()
+        return query ? `${baseRoute}?${query}` : baseRoute
     }
 
     const buildMeetingEditPath = (meeting: MeetingWithIndex): string => {
