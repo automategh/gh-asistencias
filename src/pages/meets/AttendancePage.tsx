@@ -206,12 +206,12 @@ function AttendancePage() {
                 const externalEnriched: AttendanceRow[] = externalParticipants.map((participant) => ({
                     uid: participant.id,
                     name: participant.name,
-                    email: participant.email ?? null,
-                    role: 'guest',
+                    email: participant.email ?? '',
+                    role: 'attendee',
                     inviteStatus: 'accepted',
                     attendance: participant.attendance ?? null,
-                    checkedInAt: participant.checkedInAt ?? null,
-                    checkinMethod: participant.checkinMethod ?? null,
+                    checkedInAt: participant.checkedInAt ?? undefined,
+                    checkinMethod: participant.checkinMethod ?? undefined,
                     noShow: Boolean(participant.noShow),
                     source: 'external',
                     identify: participant.documentId ?? null,
@@ -354,40 +354,45 @@ function AttendancePage() {
         navigate(-1)
     }
 
-    const headerActions = (
-        <div className="flex items-center gap-3">
-            <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                onClick={handleGoBack}
-                aria-label="Volver atrás"
-            >
-                <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={handleExportPdf}
-                disabled={isExporting || attendance.length === 0}
-            >
-                {isExporting ? 'Generando PDF…' : 'Descargar PDF'}
-            </Button>
-        </div>
-    )
-
     return (
         <Layout
             header={{
                 breadcrumbs: [{ label: 'Actividades', to: '/meets' }, { label: 'Asistencia' }],
                 title: `Asistencia: ${meeting?.title ?? '—'}`,
-                actions: headerActions,
             }}
         >
             <div className="min-h-screen bg-linear-to-br from-background via-muted/10 to-background">
                 {loading && <div className="px-4 pt-4 text-sm text-muted-foreground">Cargando…</div>}
                 {error && <div className="px-4 pt-4 text-sm text-red-600">{error}</div>}
+
+                <div className="max-w-sm md:max-w-7xl mx-auto mt-6 px-2 sm:px-4">
+                    <section className="bg-[#f3f4f3] p-4 rounded-xl flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Acciones</p>
+                            <h2 className="text-sm md:text-base font-bold text-[#191c1c]">Formato de asistencia</h2>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <Button
+                                type="button"
+                                size="icon"
+                                variant="outline"
+                                onClick={handleGoBack}
+                                aria-label="Volver atrás"
+                            >
+                                <ArrowLeft className="w-4 h-4" />
+                            </Button>
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={handleExportPdf}
+                                disabled={isExporting || attendance.length === 0}
+                            >
+                                {isExporting ? 'Generando PDF…' : 'Descargar PDF'}
+                            </Button>
+                        </div>
+                    </section>
+                </div>
 
                 <div className="max-w-sm md:max-w-7xl mx-auto mt-10 px-2 sm:px-4 pb-10">
                     <div
@@ -478,7 +483,7 @@ function AttendancePage() {
                                                     <div className="h-12 w-full flex items-center justify-center">
                                                         {item.signatureUrl || item.signatureDataUrl ? (
                                                             <img
-                                                                src={item.signatureDataUrl ?? item.signatureUrl}
+                                                                src={(item.signatureDataUrl ?? item.signatureUrl) || undefined}
                                                                 alt={`Firma de ${item.name}`}
                                                                 className="max-h-10 max-w-full object-contain"
                                                             />

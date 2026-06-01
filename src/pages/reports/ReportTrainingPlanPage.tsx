@@ -689,12 +689,19 @@ function ReportTrainingPlanPage() {
             header={{
                 breadcrumbs: [{ label: 'Reportes', to: '/reports' }, { label: 'Plan de formación' }],
                 title: 'Plan de formación',
-                actions: exportActions,
             }}
         >
             <div className='bg-linear-to-br from-background via-muted/5 to-background'>
                 <div className='bg-linear-to-br from-background via-muted/5 to-background' id="training-report-container" ref={exportRef}>
                     <div className='px-4 md:px-12 py-10 md:py-10 space-y-10'>
+                        <section className="bg-[#f3f4f3] p-4 rounded-xl max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Acciones</p>
+                                <h2 className="text-sm md:text-base font-bold text-[#191c1c]">Reporte de plan de formación</h2>
+                            </div>
+                            {exportActions}
+                        </section>
+
                         <section className="bg-[#f3f4f3] p-6 rounded-xl space-y-4 max-w-7xl mx-auto">
                             <div className="flex flex-wrap items-end gap-6">
                                 <div className="flex-1 min-w-50">

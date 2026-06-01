@@ -304,35 +304,35 @@ function DetailMeetPage() {
             header={{
                 breadcrumbs: [{ label: 'Actividades', to: '/meets' }, { label: 'Detalle' }],
                 title: meeting?.title ?? 'Detalle de actividad',
-                actions: canEditMeeting ? (
-                    <Link
-                        to={sourceDatabaseUrl ? `/meeting/${id}/edit?db=${encodeURIComponent(sourceDatabaseUrl)}` : `/meeting/${id}/edit`}
-                        className="inline-flex items-center gap-2 rounded-xl border border-[#124734] bg-white px-4 py-2 text-sm font-semibold text-[#124734] shadow-sm hover:bg-[#124734]/10 transition-colors"
-                    >
-                        Editar
-                    </Link>
-                ) : undefined,
             }}
         >
             <div className="min-h-screen bg-linear-to-br from-background via-muted/5 to-background">
                 <div className="max-w-6xl mx-auto px-6 pt-6">
-                    <button
-                        type="button"
-                        onClick={handleGoBack}
-                        className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors bg-muted hover:bg-primary/20 rounded-lg px-3 py-2"
-                    >
-                        <ArrowLeft className="w-4 h-4" />
-                        Volver atrás
-                    </button>
+                    <section className="bg-[#f3f4f3] p-4 rounded-xl flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p className="text-[10px] uppercase tracking-widest text-outline font-bold">Acciones</p>
+                            <h2 className="text-sm md:text-base font-bold text-[#191c1c]">Gestión de actividad</h2>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={handleGoBack}
+                                className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors bg-muted hover:bg-primary/20 rounded-lg px-3 py-2"
+                            >
+                                <ArrowLeft className="w-4 h-4" />
+                                Volver atrás
+                            </button>
 
-                    {canEditMeeting ? (
-                    <Link
-                        to={sourceDatabaseUrl ? `/meeting/${id}/edit?db=${encodeURIComponent(sourceDatabaseUrl)}` : `/meeting/${id}/edit`}
-                        className="inline-flex items-center gap-2 rounded-xl border border-[#124734] bg-white px-4 py-2 text-sm font-semibold text-[#124734] shadow-sm hover:bg-[#124734]/10 transition-colors"
-                    >
-                        Editar
-                    </Link>
-                ) : undefined}
+                            {canEditMeeting && (
+                                <Link
+                                    to={sourceDatabaseUrl ? `/meeting/${id}/edit?db=${encodeURIComponent(sourceDatabaseUrl)}` : `/meeting/${id}/edit`}
+                                    className="inline-flex items-center gap-2 rounded-xl border border-[#124734] bg-white px-4 py-2 text-sm font-semibold text-[#124734] shadow-sm hover:bg-[#124734]/10 transition-colors"
+                                >
+                                    Editar
+                                </Link>
+                            )}
+                        </div>
+                    </section>
                 </div>
                 <div className="max-w-6xl mx-auto p-6 ">
 
