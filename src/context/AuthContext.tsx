@@ -1,7 +1,7 @@
 import { resolveDatabaseByEmail } from "@/lib/firebase/databaseResolver";
 import { getAllAvailableDatabases } from "@/lib/firebase/databaseResolver";
 import { getLegacyRoleFromRoleId, LEGACY_ROLE_TO_ROLE_ID } from "@/services/authorization/role-permissions.service";
-import { loginWithEmailPassword, loginWithMicrosoft, logout, registerWithEmailPassword } from "@/services/auth/auth.service";
+import { loginWithEmailPassword, loginWithMicrosoft, logout, registerWithEmailPassword, processMicrosoftRedirectResult } from "@/services/auth/auth.service";
 import { auth, getDatabaseForUrl } from "@/services/firebase";
 import type { PermissionId, RoleId } from "@/types/authorization";
 import type { RegisterFormData } from "@/types/user";
@@ -219,6 +219,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 setPermissions([]);
             }
         });
+
+        // Procesar posible resultado de un signInWithRedirect (móvil)
+        void (async () => {
+            try {
+                const redirectResult = await processMicrosoftRedirectResult();
+                if (redirectResult?.photoUrl) {
+                    setProfilePhotoUrl(redirectResult.photoUrl);
+                }
+            } catch (err) {
+                // Ignorar errores locales de redirect
+                console.warn('No redirect result processed', err);
+            }
+        })();
 
         return () => unsusbscribe();
     }, [])

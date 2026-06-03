@@ -1,4 +1,4 @@
-import { createUserWithEmailAndPassword, OAuthProvider, type OAuthCredential, type User, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, OAuthProvider, type OAuthCredential, type User, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile, getRedirectResult, signInWithRedirect } from "firebase/auth";
 import { auth, DATABASE_CCCI_URL, DATABASE_CCCR_URL, DATABASE_CEVP_URL, DEFAULT_DATABASE_URL, functions, getDatabaseForUrl } from "../firebase";
 import { getDatabaseByRecinto, getDatabaseUrlByRecinto, resolveDatabaseByEmail, type RecintoKey } from "@/lib/firebase/databaseResolver";
 import { validatePasswordPolicy } from "@/lib/password-policy";
@@ -16,6 +16,7 @@ interface UserRecord {
     identify?: string | null;
     department?: string | null;
     cargo?: string | null;
+    photoUrl?: string | null;
     active: boolean;
     recint?: string | null;
     companyName?: string | null;
@@ -202,7 +203,91 @@ export const loginWithMicrosoft = async (): Promise<{ user: User; photoUrl: stri
         return { user, photoUrl: resolvedPhotoUrl };
     } catch (error) {
         console.error("Error durante la autenticación con Microsoft:", error);
+
+        // Si el popup está bloqueado o estamos en un entorno móvil, usar redirect como fallback.
+        try {
+            const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+            const isMobile = /Mobi|Android|iPhone|iPad|iPod/.test(ua);
+            const errCode = (error && (error as { code?: string }).code) || '';
+
+            if (isMobile || errCode === 'auth/popup-blocked' || errCode === 'auth/cancelled-popup-request' || errCode === 'auth/operation-not-supported-in-this-environment') {
+                await signInWithRedirect(auth, microsoftProvider);
+                // la página se redirigirá y no se llegará a este punto normalmente
+                return Promise.resolve({ user: auth.currentUser as User, photoUrl: null });
+            }
+        } catch (redirErr) {
+            console.error('Error al intentar signInWithRedirect:', redirErr);
+        }
+
         throw error;
+    }
+}
+
+/**
+ * Procesa el resultado de un signInWithRedirect si existe.
+ * Devuelve el usuario y la foto (si fue posible obtenerla), o null si no hay resultado.
+ */
+export const processMicrosoftRedirectResult = async (): Promise<{ user: User; photoUrl: string | null } | null> => {
+    if (!auth) return null;
+    try {
+        const result = await getRedirectResult(auth);
+        if (!result || !result.user) return null;
+
+        const user = result.user;
+
+        // Obtener posible photo desde credential
+        let resolvedPhotoUrl: string | null = null;
+        try {
+            const credential = OAuthProvider.credentialFromResult(result) as OAuthCredential | null;
+            const accessToken = credential?.accessToken ?? null;
+            if (accessToken) {
+                resolvedPhotoUrl = await fetchMicrosoftProfilePhoto(accessToken);
+            }
+        } catch (photoError) {
+            console.warn("No se pudo obtener la foto de perfil desde Microsoft (redirect):", photoError);
+        }
+
+        // Resolver la base de datos según el email del usuario
+        const { databaseUrl, recinto } = resolveDatabaseByEmail(user.email ?? null);
+        const database = getDatabaseForUrl(databaseUrl);
+
+        try {
+            const selectedDatabase = { url: databaseUrl, key: recinto };
+            localStorage.setItem("selectedDatabase", JSON.stringify(selectedDatabase));
+        } catch {
+            console.warn("No se pudo guardar selectedDatabase en LocalStorage (redirect).");
+        }
+
+        if (database) {
+            const userRef = ref(database, `users/${user.uid}`);
+            const snapshot = await get(userRef);
+            if (!snapshot.exists()) {
+                await set(userRef, {
+                    uid: user.uid,
+                    name: user.displayName,
+                    email: user.email,
+                    role: "User",
+                    roleId: "user",
+                    active: true,
+                    createdAt: new Date().toISOString(),
+                    lastLogin: new Date().toISOString(),
+                    photoUrl: resolvedPhotoUrl ?? null,
+                });
+            } else {
+                const existingData = snapshot.val() as UserRecord;
+                await set(userRef, {
+                    ...existingData,
+                    lastLogin: new Date().toISOString(),
+                    name: user.displayName || existingData.name,
+                    photoUrl: resolvedPhotoUrl ?? existingData.photoUrl ?? null,
+                });
+            }
+        }
+
+        return { user, photoUrl: resolvedPhotoUrl };
+    } catch (err) {
+        console.error('Error al procesar redirect result de Microsoft:', err);
+        return null;
     }
 }
 

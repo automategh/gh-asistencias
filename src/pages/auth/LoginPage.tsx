@@ -58,6 +58,22 @@ function LoginPage() {
         }
     }
 
+    const handleLoginWithMicrosoft = async () => {
+        setError("")
+        try {
+            await loginWithMicrosoft()
+            const redirectTo = searchParams.get("redirect")
+            if (redirectTo && redirectTo.startsWith('/')) {
+                navigate(redirectTo)
+            } else {
+                navigate('/')
+            }
+        } catch (err) {
+            const e = err as { message?: string }
+            setError(e?.message ?? 'Error al iniciar sesión con Microsoft')
+        }
+    }
+
     return (
         <div className="min-h-screen bg-linear-to-br from-background via-muted/20 to-background">
             <div className="flex justify-center items-center">
@@ -139,7 +155,7 @@ function LoginPage() {
                         </div>
 
                         <button
-                            onClick={loginWithMicrosoft}
+                            onClick={handleLoginWithMicrosoft}
                             type="button"
                             aria-label="Iniciar sesión con Microsoft"
                             className="w-full px-6 py-3 bg-white dark:bg-slate-900 border border-border text-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-muted/40 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:shadow-md focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 flex items-center justify-center gap-3"
