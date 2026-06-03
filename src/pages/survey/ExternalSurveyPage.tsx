@@ -294,7 +294,7 @@ function ExternalSurveyPage() {
                                     )}
 
                                     {isRating && questionOptions.length > 0 && (
-                                        <div className="mt-4 flex gap-2">
+                                        <div className="mt-4 grid gap-2 grid-cols-5 sm:grid-cols-6 md:flex md:flex-wrap md:gap-2">
                                             {questionOptions.map((option) => {
                                                 const numeric = typeof option.value === "number" ? option.value : Number(option.text)
                                                 const selected = typeof answerValue === "number" && answerValue === numeric
@@ -303,7 +303,7 @@ function ExternalSurveyPage() {
                                                         key={option.id}
                                                         type="button"
                                                         className={cn(
-                                                            "flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors",
+                                                            "w-full md:flex-1 min-w-11 flex items-center justify-center rounded-lg border px-3 py-2 text-sm font-semibold transition-colors",
                                                             selected
                                                                 ? "border-[#1b3022] bg-[#1b3022] text-white"
                                                                 : "border-border bg-white text-[#1b3022] hover:bg-[#e2efe4]",

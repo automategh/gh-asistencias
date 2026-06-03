@@ -244,6 +244,27 @@ function DashboardPage() {
         typeFilter,
     ])
 
+    const totalInvited = summary.totalInvited
+    const totalPresent = summary.totalPresent + summary.totalLate
+    const totalMeetings = summary.totalMeetings
+    const attendanceRate = totalInvited > 0 ? Math.round((totalPresent * 100) / totalInvited) : 0
+    const hasMetrics = totalMeetings > 0 || totalInvited > 0 || totalPresent > 0 || summary.totalAbsent > 0
+
+    /**
+     * Etiqueta legible del recinto actualmente aplicado en el dashboard.
+     * Para corporativo puede ser "Todos los recintos" o un recinto específico;
+     * para el resto, siempre muestra su propio recinto.
+     */
+    const currentRecintoLabel = useMemo(() => {
+        if (canFilterRecintos) {
+            if (recintoFilter === 'ALL') return 'Todos los recintos'
+            const match = availableDatabases.find((db) => db.key === recintoFilter)
+            return match?.name ?? recintoFilter
+        }
+        const match = availableDatabases.find((db) => db.key === recinto)
+        return match?.name ?? recinto
+    }, [availableDatabases, recinto, recintoFilter, canFilterRecintos])
+
     const isLoadingMetrics = dbLoading || loading || loadingAccess
 
     if (!isLoadingMetrics && isExternalUser) {
@@ -271,27 +292,6 @@ function DashboardPage() {
             </Layout>
         )
     }
-
-    const totalInvited = summary.totalInvited
-    const totalPresent = summary.totalPresent + summary.totalLate
-    const totalMeetings = summary.totalMeetings
-    const attendanceRate = totalInvited > 0 ? Math.round((totalPresent * 100) / totalInvited) : 0
-    const hasMetrics = totalMeetings > 0 || totalInvited > 0 || totalPresent > 0 || summary.totalAbsent > 0
-
-    /**
-     * Etiqueta legible del recinto actualmente aplicado en el dashboard.
-     * Para corporativo puede ser "Todos los recintos" o un recinto específico;
-     * para el resto, siempre muestra su propio recinto.
-     */
-    const currentRecintoLabel = useMemo(() => {
-        if (canFilterRecintos) {
-            if (recintoFilter === 'ALL') return 'Todos los recintos'
-            const match = availableDatabases.find((db) => db.key === recintoFilter)
-            return match?.name ?? recintoFilter
-        }
-        const match = availableDatabases.find((db) => db.key === recinto)
-        return match?.name ?? recinto
-    }, [availableDatabases, recinto, recintoFilter, canFilterRecintos])
 
     const byType = summary.byType
 

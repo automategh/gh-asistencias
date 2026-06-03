@@ -353,7 +353,7 @@ function ChekinPage() {
                                     onClick={() => handleChooseRole('internal')}
                                     className="rounded-xl border border-[#1b3022] bg-white px-4 py-3 text-sm font-semibold text-[#1b3022] hover:bg-[#1b3022]/10 transition-colors"
                                 >
-                                    Soy colaborador
+                                    Trabajo en Grupo Heroica
                                 </button>
                                 <button
                                     type="button"
@@ -381,7 +381,7 @@ function ChekinPage() {
                                 <>
                                     <div className="grid gap-4 md:grid-cols-2">
                                         <div className="space-y-1">
-                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Nombre completo</label>
+                                            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Nombres y apellidos</label>
                                             <input
                                                 type="text"
                                                 value={externalForm.name}
