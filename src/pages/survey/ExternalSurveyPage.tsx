@@ -29,6 +29,7 @@ function ExternalSurveyPage() {
     const [success, setSuccess] = useState<boolean>(false)
     const [showErrorModal, setShowErrorModal] = useState<boolean>(false)
     const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false)
+    const [showAlreadyAnsweredModal, setShowAlreadyAnsweredModal] = useState<boolean>(false)
 
     const canLoadSurvey = Boolean(id && trainingId && sourceDatabaseUrl && externalId)
 
@@ -172,6 +173,13 @@ function ExternalSurveyPage() {
             setSuccess(true)
             setShowSuccessModal(true)
         } catch (error) {
+            const code = (error && (error as { code?: string }).code) ?? null
+            if (code === "already-exists") {
+                // Encuesta ya respondida por este externo
+                setShowAlreadyAnsweredModal(true)
+                return
+            }
+
             setSubmitError(error instanceof Error ? error.message : "No fue posible guardar la encuesta")
             setShowErrorModal(true)
         } finally {
@@ -245,6 +253,31 @@ function ExternalSurveyPage() {
                                         className="inline-flex items-center justify-center rounded-xl bg-[#1b3022] px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#14251a] transition-colors"
                                     >
                                         Finalizar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {showAlreadyAnsweredModal && (
+                    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4">
+                        <div className="w-full max-w-md rounded-3xl border border-[#edeeed] bg-white shadow-[0_24px_48px_rgba(15,23,42,0.18)] overflow-hidden">
+                            <div className="px-6 py-5 border-b border-[#edeeed] bg-[#f8faf8]">
+                                <h2 className="text-xl font-bold text-[#191c1c]">Encuesta ya respondida</h2>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-[#5f6560]">Ya completaste esta encuesta para la capacitación seleccionada.</p>
+                                <div className="flex justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowAlreadyAnsweredModal(false)
+                                            navigate('/')
+                                        }}
+                                        className="inline-flex items-center justify-center rounded-xl bg-[#1b3022] px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#14251a] transition-colors"
+                                    >
+                                        Ir al inicio
                                     </button>
                                 </div>
                             </div>

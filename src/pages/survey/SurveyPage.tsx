@@ -32,6 +32,7 @@ function SurveyPage() {
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
     const [submitError, setSubmitError] = useState<string | null>(null)
     const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false)
+    const [showAlreadyAnsweredModal, setShowAlreadyAnsweredModal] = useState<boolean>(false)
     const [hasResponded, setHasResponded] = useState<boolean>(false)
     const [hasAttendance, setHasAttendance] = useState<boolean>(false)
     const navigate = useNavigate()
@@ -144,6 +145,7 @@ function SurveyPage() {
 
                     if (!cancelled && existingResponse) {
                         setHasResponded(true)
+                        setShowAlreadyAnsweredModal(true)
                     }
                 }
             } catch {
@@ -461,6 +463,30 @@ function SurveyPage() {
                                         className="inline-flex items-center justify-center rounded-xl bg-[#1b3022] px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#14251a] transition-colors"
                                     >
                                         Cerrar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {showAlreadyAnsweredModal && (
+                    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4">
+                        <div className="w-full max-w-md rounded-3xl border border-[#edeeed] bg-white shadow-[0_24px_48px_rgba(15,23,42,0.18)] overflow-hidden">
+                            <div className="px-6 py-5 border-b border-[#edeeed] bg-[#f8f9f8]">
+                                <h2 className="text-xl font-bold text-[#191c1c]">Encuesta ya respondida</h2>
+                            </div>
+                            <div className="p-6 space-y-4">
+                                <p className="text-sm text-[#5f6560]">Ya completaste esta encuesta para la capacitación seleccionada.</p>
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowAlreadyAnsweredModal(false)
+                                            navigate(-1)
+                                        }}
+                                        className="inline-flex items-center justify-center rounded-xl bg-[#1b3022] px-5 py-3 text-sm font-semibold text-white shadow-md hover:bg-[#14251a] transition-colors"
+                                    >
+                                        Volver
                                     </button>
                                 </div>
                             </div>
