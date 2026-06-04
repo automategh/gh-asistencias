@@ -410,44 +410,47 @@ function NewMeetPage() {
                 await addParticipants(database, meeting.id, selected, { startTime: meeting.startTime, status: meeting.status })
             }
 
-            if (isOnlineMeeting) {
-                const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-                const hostParticipant = selected.find(participant => participant.role === 'host')
-                const organizerEmail = hostParticipant?.email ?? user.email ?? null
+            const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+            const hostParticipant = selected.find(participant => participant.role === 'host')
+            const organizerEmail = hostParticipant?.email ?? user.email ?? null
 
-                try {
-                    setCreatingTeams(true)
+            try {
+                setCreatingTeams(true)
 
-                    const teamsResult = await createTeamsMeetingViaCloudFunction({
-                        organizerEmail,
-                        subject: meeting.title,
-                        bodyHtml: meeting.description ?? undefined,
-                        startTime: meeting.startTime,
-                        endTime: meeting.endTime,
-                        timeZone,
-                        attendees: selected.map(participant => ({
-                            email: participant.email,
-                            name: participant.name,
-                            type: 'required',
-                        })),
-                        isOnlineMeeting: true,
-                    })
+                const teamsResult = await createTeamsMeetingViaCloudFunction({
+                    organizerEmail,
+                    subject: meeting.title,
+                    bodyHtml: meeting.description ?? undefined,
+                    startTime: meeting.startTime,
+                    endTime: meeting.endTime,
+                    timeZone,
+                    location: isOnlineMeeting ? undefined : meeting.location,
+                    attendees: selected.map(participant => ({
+                        email: participant.email,
+                        name: participant.name,
+                        type: 'required',
+                    })),
+                    isOnlineMeeting,
+                })
 
-                    await updateMeeting(database, meeting.id, {
-                        teamsEventId: teamsResult.eventId,
-                        teamsJoinUrl: teamsResult.joinUrl ?? null,
-                        teamsOrganizerEmail: organizerEmail,
-                    })
+                await updateMeeting(database, meeting.id, {
+                    teamsEventId: teamsResult.eventId,
+                    teamsJoinUrl: isOnlineMeeting ? (teamsResult.joinUrl ?? null) : null,
+                    teamsOrganizerEmail: organizerEmail,
+                })
 
-                    setSuccess('Actividad creada correctamente y sincronizada con Teams')
-                } catch (teamsError) {
-                    const message = teamsError instanceof Error ? teamsError.message : 'Error al crear la actividad en Teams'
-                    setError(message)
-                } finally {
-                    setCreatingTeams(false)
-                }
-            } else {
-                setSuccess('Actividad creada correctamente')
+                setSuccess(
+                    isOnlineMeeting
+                        ? 'Actividad creada correctamente y sincronizada con Teams'
+                        : 'Actividad creada correctamente y sincronizada con calendario',
+                )
+            } catch (teamsError) {
+                const message = teamsError instanceof Error
+                    ? teamsError.message
+                    : 'Error al crear la actividad en el calendario'
+                setError(message)
+            } finally {
+                setCreatingTeams(false)
             }
 
             setForm({

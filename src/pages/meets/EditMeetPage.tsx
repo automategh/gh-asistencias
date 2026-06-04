@@ -418,12 +418,6 @@ function EditMeetPage() {
             let updatedTeamsJoinUrl = meeting.teamsJoinUrl ?? null
             let updatedTeamsOrganizerEmail = meeting.teamsOrganizerEmail ?? null
 
-            const shouldClearTeams = !form.isOnlineMeeting
-            if (shouldClearTeams) {
-                updatedTeamsEventId = null
-                updatedTeamsJoinUrl = null
-                updatedTeamsOrganizerEmail = null
-            }
             await updateMeeting(meetingDatabase, id, {
                 title: form.title,
                 type: form.type,
@@ -435,9 +429,6 @@ function EditMeetPage() {
                 startTime: startMs,
                 endTime: endMs,
                 trainerName: resolvedTrainerName,
-                ...(shouldClearTeams
-                    ? { teamsEventId: null, teamsJoinUrl: null, teamsOrganizerEmail: null }
-                    : {}),
             })
 
             await syncMeetingParticipants(meetingDatabase, id, selectedParticipants, {
@@ -445,71 +436,73 @@ function EditMeetPage() {
                 status: meeting.status,
             })
 
-            if (form.isOnlineMeeting) {
-                const hostParticipant = selectedParticipants.find((participant) => participant.role === 'host')
-                const organizerEmail = meeting.teamsOrganizerEmail ?? hostParticipant?.email ?? user?.email ?? null
-                const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+            const hostParticipant = selectedParticipants.find((participant) => participant.role === 'host')
+            const organizerEmail = meeting.teamsOrganizerEmail ?? hostParticipant?.email ?? user?.email ?? null
+            const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
 
-                try {
-                    setCreatingTeams(true)
+            try {
+                setCreatingTeams(true)
 
-                    if (meeting.teamsEventId) {
-                        const updateResult = await updateTeamsMeetingViaCloudFunction({
-                            eventId: meeting.teamsEventId,
-                            organizerEmail,
-                            subject: form.title,
-                            bodyHtml: form.description ?? undefined,
-                            startTime: startMs,
-                            endTime: endMs,
-                            timeZone,
-                            attendees: selectedParticipants.map((participant) => ({
-                                email: participant.email,
-                                name: participant.name,
-                                type: 'required',
-                            })),
-                            isOnlineMeeting: true,
-                        })
+                if (meeting.teamsEventId) {
+                    const updateResult = await updateTeamsMeetingViaCloudFunction({
+                        eventId: meeting.teamsEventId,
+                        organizerEmail,
+                        subject: form.title,
+                        bodyHtml: form.description ?? undefined,
+                        startTime: startMs,
+                        endTime: endMs,
+                        timeZone,
+                        location: form.isOnlineMeeting ? undefined : form.location,
+                        attendees: selectedParticipants.map((participant) => ({
+                            email: participant.email,
+                            name: participant.name,
+                            type: 'required',
+                        })),
+                        isOnlineMeeting: form.isOnlineMeeting,
+                    })
 
-                        await updateMeeting(meetingDatabase, id, {
-                            teamsJoinUrl: updateResult.joinUrl ?? meeting.teamsJoinUrl ?? null,
-                            teamsOrganizerEmail: meeting.teamsOrganizerEmail ?? organizerEmail,
-                        })
+                    await updateMeeting(meetingDatabase, id, {
+                        teamsJoinUrl: form.isOnlineMeeting ? (updateResult.joinUrl ?? meeting.teamsJoinUrl ?? null) : null,
+                        teamsOrganizerEmail: meeting.teamsOrganizerEmail ?? organizerEmail,
+                    })
 
-                        updatedTeamsEventId = meeting.teamsEventId
-                        updatedTeamsJoinUrl = updateResult.joinUrl ?? meeting.teamsJoinUrl ?? null
-                        updatedTeamsOrganizerEmail = meeting.teamsOrganizerEmail ?? organizerEmail
-                    } else {
-                        const createResult = await createTeamsMeetingViaCloudFunction({
-                            organizerEmail,
-                            subject: form.title,
-                            bodyHtml: form.description ?? undefined,
-                            startTime: startMs,
-                            endTime: endMs,
-                            timeZone,
-                            attendees: selectedParticipants.map((participant) => ({
-                                email: participant.email,
-                                name: participant.name,
-                                type: 'required',
-                            })),
-                            isOnlineMeeting: true,
-                        })
+                    updatedTeamsEventId = meeting.teamsEventId
+                    updatedTeamsJoinUrl = form.isOnlineMeeting ? (updateResult.joinUrl ?? meeting.teamsJoinUrl ?? null) : null
+                    updatedTeamsOrganizerEmail = meeting.teamsOrganizerEmail ?? organizerEmail
+                } else {
+                    const createResult = await createTeamsMeetingViaCloudFunction({
+                        organizerEmail,
+                        subject: form.title,
+                        bodyHtml: form.description ?? undefined,
+                        startTime: startMs,
+                        endTime: endMs,
+                        timeZone,
+                        location: form.isOnlineMeeting ? undefined : form.location,
+                        attendees: selectedParticipants.map((participant) => ({
+                            email: participant.email,
+                            name: participant.name,
+                            type: 'required',
+                        })),
+                        isOnlineMeeting: form.isOnlineMeeting,
+                    })
 
-                        await updateMeeting(meetingDatabase, id, {
-                            teamsEventId: createResult.eventId,
-                            teamsJoinUrl: createResult.joinUrl ?? null,
-                            teamsOrganizerEmail: organizerEmail,
-                        })
+                    await updateMeeting(meetingDatabase, id, {
+                        teamsEventId: createResult.eventId,
+                        teamsJoinUrl: form.isOnlineMeeting ? (createResult.joinUrl ?? null) : null,
+                        teamsOrganizerEmail: organizerEmail,
+                    })
 
-                        updatedTeamsEventId = createResult.eventId
-                        updatedTeamsJoinUrl = createResult.joinUrl ?? null
-                        updatedTeamsOrganizerEmail = organizerEmail
-                    }
-                } catch (teamsError) {
-                    const message = teamsError instanceof Error ? teamsError.message : 'Error al actualizar la actividad en Teams'
-                    setError(message)
-                } finally {
-                    setCreatingTeams(false)
+                    updatedTeamsEventId = createResult.eventId
+                    updatedTeamsJoinUrl = form.isOnlineMeeting ? (createResult.joinUrl ?? null) : null
+                    updatedTeamsOrganizerEmail = organizerEmail
                 }
+            } catch (teamsError) {
+                const message = teamsError instanceof Error
+                    ? teamsError.message
+                    : 'Error al actualizar la actividad en el calendario'
+                setError(message)
+            } finally {
+                setCreatingTeams(false)
             }
 
             setSuccess('Actividad actualizada correctamente.')
