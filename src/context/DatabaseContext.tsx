@@ -59,6 +59,20 @@ export const DatabaseProvider: React.FC<PropsWithChildren> = ({ children }) => {
             try {
                 const { databaseUrl: resolvedUrl, recinto: resolvedRecinto } = resolveDatabaseByEmail(user?.email ?? null);
 
+                if (!isCorporate && user?.uid) {
+                    const resolvedDatabase = getDatabaseForUrl(resolvedUrl);
+                    if (resolvedDatabase) {
+                        const resolvedSnapshot = await get(ref(resolvedDatabase, `users/${user.uid}`));
+                        if (!cancelled && resolvedSnapshot.exists()) {
+                            setDatabaseUrl(resolvedUrl);
+                            setRecinto(resolvedRecinto);
+                            localStorage.setItem('selectedDatabase', JSON.stringify({ url: resolvedUrl, key: resolvedRecinto }));
+                            setResolved(true);
+                            return;
+                        }
+                    }
+                }
+
                 const savedSelection = localStorage.getItem('selectedDatabase');
                 if (savedSelection && user?.uid) {
                     try {

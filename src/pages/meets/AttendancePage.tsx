@@ -202,7 +202,7 @@ function AttendancePage() {
                             : null
 
                         let signatureDataUrl: string | null = null
-                        const signatureUrl = user?.signatureUrl ?? null
+                        const signatureUrl = user?.signatureUrl ?? crossDbProfile?.signatureUrl ?? null
 
                         if (signatureUrl) {
                             try {

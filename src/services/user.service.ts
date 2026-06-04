@@ -230,6 +230,7 @@ export interface CrossDbUserProfileLite {
     readonly identify: string
     readonly cargo: string
     readonly companyName: string
+    readonly signatureUrl: string
 }
 
 /**
@@ -363,7 +364,7 @@ export async function resolveCrossDbUserCargoByEmail(
 }
 
 /**
- * Resuelve cédula, cargo y empresa por email recorriendo todas las bases
+ * Resuelve cédula, cargo, empresa y firma por email recorriendo todas las bases
  * de datos configuradas en la app.
  */
 export async function resolveCrossDbUserProfileByEmail(
@@ -401,6 +402,7 @@ export async function resolveCrossDbUserProfileByEmail(
                 identify: typeof data.identify === "string" ? data.identify : "",
                 cargo: typeof data.cargo === "string" ? data.cargo : "",
                 companyName: typeof data.companyName === "string" ? data.companyName : "",
+                signatureUrl: typeof data.signatureUrl === "string" ? data.signatureUrl : "",
             }
             cache[normalizedEmail] = resolved
             return resolved

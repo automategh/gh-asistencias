@@ -8,6 +8,36 @@ import { Graph, type CreateTeamsMeetingOptions, type GraphEvent, type MeetingAtt
 export { getAttendanceSummary } from "./attendance-summary";
 export { getUserMeetings } from "./user-meetings";
 
+const loadLocalEnvironmentFile = (): void => {
+	const envFilePath = path.join(__dirname, "..", ".env");
+	if (!fs.existsSync(envFilePath)) {
+		return;
+	}
+
+	const envFileContent = fs.readFileSync(envFilePath, "utf8");
+	for (const rawLine of envFileContent.split(/\r?\n/u)) {
+		const line = rawLine.trim();
+		if (line.length === 0 || line.startsWith("#")) {
+			continue;
+		}
+
+		const separatorIndex = line.indexOf("=");
+		if (separatorIndex <= 0) {
+			continue;
+		}
+
+		const key = line.slice(0, separatorIndex).trim();
+		const value = line.slice(separatorIndex + 1).trim();
+		if (!key || process.env[key]) {
+			continue;
+		}
+
+		process.env[key] = value;
+	}
+};
+
+loadLocalEnvironmentFile();
+
 if (!admin.apps.length) {
 	admin.initializeApp();
 }
@@ -216,6 +246,16 @@ const resolveDatabaseUrlByRecinto = (recinto?: RecintoKey): string | null => {
 	}
 	const map = getDatabaseUrlMap();
 	return map[recinto] ?? null;
+};
+
+const getDatabaseInstanceName = (databaseUrl: string): string => {
+	try {
+		const parsedUrl = new URL(databaseUrl);
+		const [instanceName] = parsedUrl.hostname.split(".");
+		return instanceName?.trim() ?? "";
+	} catch {
+		return "";
+	}
 };
 
 const hasPermissionInDatabase = async (databaseUrl: string, uid: string, permissionId: string): Promise<boolean> => {
@@ -1435,162 +1475,177 @@ async function buildCertificatePdf(meeting: CertificateMeeting, participant: Cer
 	});
 }
 
-export const onTrainingCompletedSendCertificates = onValueUpdated(
-	"/meetings/{meetingId}/status",
-	async (event): Promise<void> => {
-		const beforeStatus = event.data.before.val() as string | null;
-		const afterStatus = event.data.after.val() as string | null;
+type ExternalCertificateParticipantRecord = {
+	readonly id: string;
+	readonly name: string;
+	readonly companyName?: string | null;
+	readonly email?: string | null;
+	readonly attendance?: "absent" | "present" | "late" | null;
+	readonly noShow?: boolean | null;
+};
 
-		if (beforeStatus === afterStatus) {
-			return;
+const sendCertificatesForCompletedTraining = async (meetingId: string, databaseUrl: string): Promise<void> => {
+	const database = admin.app().database(databaseUrl);
+	const meetingSnap = await database.ref(`meetings/${meetingId}`).get();
+	if (!meetingSnap.exists()) {
+		return;
+	}
+
+	const meetingValue = meetingSnap.val() as Partial<CertificateMeeting>;
+	if (meetingValue.type !== "training") {
+		return;
+	}
+
+	const meeting: CertificateMeeting = {
+		id: meetingId,
+		title: meetingValue.title ?? "Capacitación",
+		type: meetingValue.type,
+		location: meetingValue.location ?? "",
+		startTime: meetingValue.startTime ?? 0,
+		endTime: meetingValue.endTime ?? 0,
+	};
+
+	const [participantsSnap, externalParticipantsSnap] = await Promise.all([
+		database.ref(`meetingParticipants/${meetingId}`).get(),
+		database.ref(`meetingExternalParticipants/${meetingId}`).get(),
+	]);
+
+	const participantsMap = participantsSnap.val() as Record<string, CertificateParticipant> | null;
+	const internalParticipants = Object.values(participantsMap ?? {}).filter((participant) => {
+		if (!participant.email) {
+			return false;
 		}
-
-		if (afterStatus !== "completed") {
-			return;
+		const attendance = participant.attendance ?? null;
+		if (participant.noShow) {
+			return false;
 		}
+		return attendance === "present" || attendance === "late";
+	}).map((participant) => ({
+		...participant,
+		source: "internal" as const,
+	}));
 
-		const meetingId = event.params.meetingId;
-		const database = admin.database();
-
-		const meetingSnap = await database.ref(`meetings/${meetingId}`).get();
-		if (!meetingSnap.exists()) {
-			return;
-		}
-
-		const meetingValue = meetingSnap.val() as Partial<CertificateMeeting>;
-		if (meetingValue.type !== "training") {
-			return;
-		}
-
-		const meeting: CertificateMeeting = {
-			id: meetingId,
-			title: meetingValue.title ?? "Capacitación",
-			type: meetingValue.type,
-			location: meetingValue.location ?? "",
-			startTime: meetingValue.startTime ?? 0,
-			endTime: meetingValue.endTime ?? 0,
-		};
-
-		const [participantsSnap, externalParticipantsSnap] = await Promise.all([
-			database.ref(`meetingParticipants/${meetingId}`).get(),
-			database.ref(`meetingExternalParticipants/${meetingId}`).get(),
-		]);
-
-		const participantsMap = participantsSnap.val() as Record<string, CertificateParticipant> | null;
-		const internalParticipants = Object.values(participantsMap ?? {}).filter((participant) => {
-			if (!participant.email) {
+	const externalParticipantsMap = externalParticipantsSnap.val() as Record<string, ExternalCertificateParticipantRecord> | null;
+	const externalParticipants: CertificateParticipant[] = Object.values(externalParticipantsMap ?? {})
+		.filter((participant) => {
+			const cleanEmail = normalizeOptionalString(participant.email);
+			if (!cleanEmail) {
 				return false;
 			}
-			const attendance = participant.attendance ?? null;
-			if (participant.noShow) {
+
+			if (participant.noShow === true) {
 				return false;
 			}
-			return attendance === "present" || attendance === "late";
-		}).map((participant) => ({
-			...participant,
-			source: "internal" as const,
+
+			return participant.attendance === "present" || participant.attendance === "late";
+		})
+		.map((participant) => ({
+			uid: participant.id,
+			name: participant.name,
+			email: normalizeOptionalString(participant.email) ?? "",
+			cargo: pickNonEmptyText(normalizeOptionalString(participant.companyName), "Externo"),
+			attendance: participant.attendance,
+			noShow: participant.noShow ?? false,
+			source: "external",
 		}));
 
-		type ExternalCertificateParticipantRecord = {
-			readonly id: string;
-			readonly name: string;
-			readonly companyName?: string | null;
-			readonly email?: string | null;
-			readonly attendance?: "absent" | "present" | "late" | null;
-			readonly noShow?: boolean | null;
-		};
+	const participants = [...internalParticipants, ...externalParticipants];
 
-		const externalParticipantsMap = externalParticipantsSnap.val() as Record<string, ExternalCertificateParticipantRecord> | null;
-		const externalParticipants: CertificateParticipant[] = Object.values(externalParticipantsMap ?? {})
-			.filter((participant) => {
-				const cleanEmail = normalizeOptionalString(participant.email);
-				if (!cleanEmail) {
-					return false;
-				}
+	if (participants.length === 0) {
+		return;
+	}
 
-				if (participant.noShow === true) {
-					return false;
-				}
+	const userDirectory = await buildCertificateUserDirectory(listDatabaseUrls());
+	const graph = new Graph();
 
-				return participant.attendance === "present" || participant.attendance === "late";
-			})
-			.map((participant) => ({
-				uid: participant.id,
-				name: participant.name,
-				email: normalizeOptionalString(participant.email) ?? "",
-				cargo: pickNonEmptyText(normalizeOptionalString(participant.companyName), "Externo"),
-				attendance: participant.attendance,
-				noShow: participant.noShow ?? false,
-				source: "external",
-			}));
+	await Promise.all(
+		participants.map(async (participant) => {
+			try {
+				const participantUid = normalizeRequiredString(participant.uid);
+				const participantEmail = normalizeIdentity(participant.email);
+				const participantProfile = mergeCertificateUserProfile(
+					participantUid.length > 0 ? userDirectory.byUid[participantUid] ?? null : null,
+					participantEmail ? userDirectory.byEmail[participantEmail] ?? null : null,
+				);
+				const resolvedCargo = participant.source === "external"
+					? pickNonEmptyText(participant.cargo, "Externo")
+					: pickNonEmptyText(participant.cargo, participantProfile?.cargo);
+				const participantWithCargo: CertificateParticipant = {
+					...participant,
+					cargo: resolvedCargo,
+				};
 
-		const participants = [...internalParticipants, ...externalParticipants];
+				const pdfBuffer = await buildCertificatePdf(meeting, participantWithCargo);
+				const attachmentName = `Certificado-${participant.name.replace(/\s+/g, "-")}.pdf`;
+				const attachmentBase64 = pdfBuffer.toString("base64");
+				const subject = `Certificado de asistencia - ${meeting.title}`;
+				const htmlBody = `
+					<p>Hola ${participant.name},</p>
+					<p>
+						Adjuntamos tu certificado de asistencia a la capacitación
+						<strong>${meeting.title}</strong>.
+					</p>
+					<p>Muchas gracias por tu participación.</p>
+				`;
 
-		if (participants.length === 0) {
-			return;
-		}
+				await graph.sendMailWithAttachment({
+					to: [
+						{
+							email: participant.email,
+							name: participant.name,
+						},
+					],
+					subject,
+					htmlBody,
+					attachments: [
+						{
+							name: attachmentName,
+							contentType: "application/pdf",
+							contentBytes: attachmentBase64,
+						},
+					],
+				});
+			} catch (error) {
+				console.error(
+					`No fue posible enviar el certificado de asistencia para el participante ${participant.uid} en la reunión ${meetingId} de la BD ${databaseUrl}:`,
+					error,
+				);
+			}
+		}),
+	);
+};
 
-		const userDirectory = await buildCertificateUserDirectory(listDatabaseUrls());
+const createTrainingCompletedSendCertificatesTrigger = (databaseUrl: string | null) => {
+	const cleanDatabaseUrl = databaseUrl ? normalizeDatabaseUrl(databaseUrl) : "";
+	const instance = cleanDatabaseUrl ? getDatabaseInstanceName(cleanDatabaseUrl) : "";
 
-		const graph = new Graph();
+	return onValueUpdated(
+		{
+			ref: "/meetings/{meetingId}/status",
+			instance,
+			omit: cleanDatabaseUrl.length === 0 || instance.length === 0,
+		},
+		async (event): Promise<void> => {
+			const beforeStatus = event.data.before.val() as string | null;
+			const afterStatus = event.data.after.val() as string | null;
 
-		await Promise.all(
-			participants.map(async (participant) => {
-				try {
-					const participantUid = normalizeRequiredString(participant.uid);
-					const participantEmail = normalizeIdentity(participant.email);
-					const participantProfile = mergeCertificateUserProfile(
-						participantUid.length > 0 ? userDirectory.byUid[participantUid] ?? null : null,
-						participantEmail ? userDirectory.byEmail[participantEmail] ?? null : null,
-					);
-					const resolvedCargo = participant.source === "external"
-						? pickNonEmptyText(participant.cargo, "Externo")
-						: pickNonEmptyText(participant.cargo, participantProfile?.cargo);
-					const participantWithCargo: CertificateParticipant = {
-						...participant,
-						cargo: resolvedCargo,
-					};
+			if (beforeStatus === afterStatus) {
+				return;
+			}
 
-					const pdfBuffer = await buildCertificatePdf(meeting, participantWithCargo);
+			if (afterStatus !== "completed") {
+				return;
+			}
 
-					const attachmentName = `Certificado-${participant.name.replace(/\s+/g, "-")}.pdf`;
-					const attachmentBase64 = pdfBuffer.toString("base64");
+			await sendCertificatesForCompletedTraining(event.params.meetingId, cleanDatabaseUrl);
+		},
+	);
+};
 
-					const subject = `Certificado de asistencia - ${meeting.title}`;
-					const htmlBody = `
-						<p>Hola ${participant.name},</p>
-						<p>
-							Adjuntamos tu certificado de asistencia a la capacitación
-							<strong>${meeting.title}</strong>.
-						</p>
-						<p>Muchas gracias por tu participación.</p>
-					`;
+const databaseUrlMap = getDatabaseUrlMap();
 
-					await graph.sendMailWithAttachment({
-						to: [
-							{
-								email: participant.email,
-								name: participant.name,
-							},
-						],
-						subject,
-						htmlBody,
-						attachments: [
-							{
-								name: attachmentName,
-								contentType: "application/pdf",
-								contentBytes: attachmentBase64,
-							},
-						],
-					});
-				} catch (error) {
-					console.error(
-						`No fue posible enviar el certificado de asistencia para el participante ${participant.uid} en la reunión ${meetingId}:`,
-						error,
-					);
-				}
-			}),
-		);
-	},
-);
+export const onTrainingCompletedSendCertificates = createTrainingCompletedSendCertificatesTrigger(databaseUrlMap.corporativo);
+export const onTrainingCompletedSendCertificatesCcci = createTrainingCompletedSendCertificatesTrigger(databaseUrlMap.ccci);
+export const onTrainingCompletedSendCertificatesCccr = createTrainingCompletedSendCertificatesTrigger(databaseUrlMap.cccr);
+export const onTrainingCompletedSendCertificatesCevp = createTrainingCompletedSendCertificatesTrigger(databaseUrlMap.cevp);
 

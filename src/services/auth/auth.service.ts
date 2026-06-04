@@ -24,6 +24,12 @@ interface UserRecord {
     lastLogin: string;
 }
 
+interface UserLookupResult {
+    readonly user: UserRecord;
+    readonly databaseUrl: string;
+    readonly matchedBy: "uid" | "email";
+}
+
 interface NotifyHrPendingActivationRequest {
     readonly uid: string
     readonly databaseUrl: string
@@ -384,7 +390,10 @@ export const loginWithEmailPassword = async (props: LoginProps) => {
         const user = result.user;
 
         // Buscar el usuario en todas las BDs para obtener su recinto
-        const userFound = await findUserByEmailInAllDatabases(user.email ?? "");
+        const userFound = await findUserInAllDatabases({
+            uid: user.uid,
+            email: user.email ?? "",
+        });
 
         if (!userFound) {
             await logout();
@@ -438,13 +447,27 @@ export const loginWithEmailPassword = async (props: LoginProps) => {
  * @param email Correo electrónico del usuario.
  * @returns El usuario encontrado y la URL de la BD donde se encuentra, o null si no existe.
  */
-async function findUserByEmailInAllDatabases(email: string): Promise<{ user: UserRecord; databaseUrl: string } | null> {
+function resolveUserDatabaseFromRecord(user: UserRecord, currentDatabaseUrl: string): string {
+    const recinto = typeof user.recint === "string" ? user.recint.trim().toLowerCase() : "";
+    const recintoDatabaseUrl = recinto ? getDatabaseUrlByRecinto(recinto as RecintoKey) : null;
+    return recintoDatabaseUrl ?? currentDatabaseUrl;
+}
+
+async function findUserInAllDatabases({
+    uid,
+    email,
+}: {
+    readonly uid: string;
+    readonly email: string;
+}): Promise<UserLookupResult | null> {
     const allDatabases = [
         DEFAULT_DATABASE_URL,
         DATABASE_CCCI_URL,
         DATABASE_CCCR_URL,
         DATABASE_CEVP_URL,
     ];
+
+    const matches: UserLookupResult[] = [];
 
     for (const databaseUrl of allDatabases) {
         const database = getDatabaseForUrl(databaseUrl);
@@ -457,14 +480,49 @@ async function findUserByEmailInAllDatabases(email: string): Promise<{ user: Use
             const users = snapshot.val();
             for (const userId in users) {
                 const user = users[userId] as UserRecord;
-                if (user.email?.toLowerCase() === email.toLowerCase()) {
-                    return { user, databaseUrl };
+                const normalizedUserEmail = user.email?.toLowerCase() ?? "";
+                const normalizedEmail = email.toLowerCase();
+                const matchedByUid = user.uid === uid;
+                const matchedByEmail = normalizedUserEmail === normalizedEmail;
+
+                if (!matchedByUid && !matchedByEmail) {
+                    continue;
                 }
+
+                matches.push({
+                    user,
+                    databaseUrl,
+                    matchedBy: matchedByUid ? "uid" : "email",
+                });
             }
         }
     }
 
-    return null;
+    if (matches.length === 0) {
+        return null;
+    }
+
+    const exactUidMatch = matches.find((match) => {
+        return resolveUserDatabaseFromRecord(match.user, match.databaseUrl) === match.databaseUrl
+            && match.matchedBy === "uid";
+    });
+    if (exactUidMatch) {
+        return exactUidMatch;
+    }
+
+    const exactEmailMatch = matches.find((match) => {
+        return resolveUserDatabaseFromRecord(match.user, match.databaseUrl) === match.databaseUrl
+            && match.matchedBy === "email";
+    });
+    if (exactEmailMatch) {
+        return exactEmailMatch;
+    }
+
+    const uidMatch = matches.find((match) => match.matchedBy === "uid") ?? matches[0];
+    return {
+        ...uidMatch,
+        databaseUrl: resolveUserDatabaseFromRecord(uidMatch.user, uidMatch.databaseUrl),
+    };
 }
 
 

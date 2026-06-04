@@ -1,5 +1,4 @@
-import { resolveDatabaseByEmail } from "@/lib/firebase/databaseResolver";
-import { getAllAvailableDatabases } from "@/lib/firebase/databaseResolver";
+import { getAllAvailableDatabases, isCorporateUser, resolveDatabaseByEmail } from "@/lib/firebase/databaseResolver";
 import { getLegacyRoleFromRoleId, LEGACY_ROLE_TO_ROLE_ID } from "@/services/authorization/role-permissions.service";
 import { loginWithEmailPassword, loginWithMicrosoft, logout, registerWithEmailPassword, processMicrosoftRedirectResult } from "@/services/auth/auth.service";
 import { auth, getDatabaseForUrl } from "@/services/firebase";
@@ -73,6 +72,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const resolveUserDatabaseUrl = async (uid: string, email: string | null): Promise<string | null> => {
+            const { databaseUrl } = resolveDatabaseByEmail(email);
+            const isCorporateAccount = isCorporateUser(email);
+
+            if (!isCorporateAccount) {
+                const dbByEmail = getDatabaseForUrl(databaseUrl);
+                if (dbByEmail) {
+                    const snapshotByEmail = await get(ref(dbByEmail, `users/${uid}`));
+                    if (snapshotByEmail.exists()) {
+                        return databaseUrl;
+                    }
+                }
+            }
+
             const savedSelectionRaw = localStorage.getItem('selectedDatabase');
             if (savedSelectionRaw) {
                 try {
@@ -91,7 +103,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
             }
 
-            const { databaseUrl } = resolveDatabaseByEmail(email);
             const dbByEmail = getDatabaseForUrl(databaseUrl);
             if (dbByEmail) {
                 const snapshotByEmail = await get(ref(dbByEmail, `users/${uid}`));
