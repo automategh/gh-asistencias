@@ -1,6 +1,7 @@
-import { createUserWithEmailAndPassword, OAuthProvider, type OAuthCredential, type User, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile, getRedirectResult, signInWithRedirect } from "firebase/auth";
+import { createUserWithEmailAndPassword, OAuthProvider, type Auth, type OAuthCredential, type User, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile, getRedirectResult, signInWithRedirect } from "firebase/auth";
 import { auth, DATABASE_CCCI_URL, DATABASE_CCCR_URL, DATABASE_CEVP_URL, DEFAULT_DATABASE_URL, functions, getDatabaseForUrl } from "../firebase";
 import { getDatabaseByRecinto, getDatabaseUrlByRecinto, resolveDatabaseByEmail, type RecintoKey } from "@/lib/firebase/databaseResolver";
+import { ensureDepartamentExists } from "@/services/departaments/departments.service";
 import { validatePasswordPolicy } from "@/lib/password-policy";
 import { get, ref, set } from "firebase/database";
 import { httpsCallable } from "firebase/functions";
@@ -28,6 +29,22 @@ interface UserLookupResult {
     readonly user: UserRecord;
     readonly databaseUrl: string;
     readonly matchedBy: "uid" | "email";
+}
+
+interface MicrosoftGraphProfile {
+    readonly cargo: string | null;
+    readonly department: string | null;
+    readonly photoUrl: string | null;
+}
+
+interface GetMicrosoftUserProfileResponse {
+    readonly cargo: string | null;
+    readonly department: string | null;
+    readonly photoUrl: string | null;
+}
+
+interface GetMicrosoftUserProfileRequest {
+    readonly accessToken: string;
 }
 
 interface NotifyHrPendingActivationRequest {
@@ -58,43 +75,117 @@ const ALLOWED_DOMAINS = [
 ];
 
 
-/**
- * Obtiene la foto de perfil del usuario autenticado en Microsoft
- * usando Microsoft Graph y devuelve una data URL (base64) o null
- * si no existe o no se puede leer.
- *
- * @param accessToken Token de acceso OAuth de Microsoft con scope User.Read.
- */
-async function fetchMicrosoftProfilePhoto(accessToken: string): Promise<string | null> {
-    try {
-        const response = await fetch("https://graph.microsoft.com/v1.0/me/photo/$value", {
-            headers: {
-                Authorization: `Bearer ${accessToken}`,
-            },
-        });
-
-        if (!response.ok) {
-            console.warn("No se pudo obtener la foto de perfil desde Microsoft Graph", response.status, response.statusText);
-            return null;
-        }
-
-        const blob = await response.blob();
-
-        return await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const result = typeof reader.result === "string" ? reader.result : null;
-                resolve(result);
-            };
-            reader.onerror = () => {
-                reject(reader.error ?? new Error("Error al leer el blob de la foto de perfil"));
-            };
-            reader.readAsDataURL(blob);
-        });
-    } catch (error) {
-        console.error("Error al obtener la foto de perfil desde Microsoft Graph:", error);
-        return null;
+async function getMicrosoftGraphProfileFromFunction(accessToken: string | null): Promise<MicrosoftGraphProfile> {
+    if (!functions) {
+        return {
+            cargo: null,
+            department: null,
+            photoUrl: null,
+        };
     }
+
+    if (!accessToken || accessToken.trim().length === 0) {
+        return {
+            cargo: null,
+            department: null,
+            photoUrl: null,
+        };
+    }
+
+    try {
+        const callable = httpsCallable<GetMicrosoftUserProfileRequest, GetMicrosoftUserProfileResponse>(
+            functions,
+            "getMicrosoftUserProfile",
+        );
+        const result = await callable({ accessToken });
+        return {
+            cargo: result.data.cargo,
+            department: result.data.department,
+            photoUrl: result.data.photoUrl,
+        };
+    } catch (error) {
+        console.warn("No se pudo obtener el perfil de Microsoft desde Cloud Functions:", error);
+        return {
+            cargo: null,
+            department: null,
+            photoUrl: null,
+        };
+    }
+}
+
+function getRequiredAuth(): Auth {
+    if (!auth) {
+        throw new Error('Firebase Auth no inicializado');
+    }
+
+    return auth;
+}
+
+async function syncMicrosoftUserInDatabase(options: {
+    readonly user: User;
+    readonly photoUrl: string | null;
+    readonly graphProfile: MicrosoftGraphProfile;
+}): Promise<void> {
+    const { user, photoUrl, graphProfile } = options;
+    const { databaseUrl, recinto } = resolveDatabaseByEmail(user.email ?? null);
+    const database = getDatabaseForUrl(databaseUrl);
+
+    try {
+        const selectedDatabase = { url: databaseUrl, key: recinto };
+        localStorage.setItem("selectedDatabase", JSON.stringify(selectedDatabase));
+    } catch {
+        console.warn("No se pudo guardar selectedDatabase en LocalStorage.");
+    }
+
+    console.log(`🔵 Usuario ${user.email} asignado a BD de ${recinto}: ${databaseUrl}`);
+
+    if (!database) {
+        throw new Error('Realtime Database no inicializado');
+    }
+
+    if (graphProfile.department) {
+        await ensureDepartamentExists(database, graphProfile.department);
+    }
+
+    const userRef = ref(database, `users/${user.uid}`);
+    const snapshot = await get(userRef);
+    const nowIso = new Date().toISOString();
+
+    if (!snapshot.exists()) {
+        console.log(`✅ Creando nuevo usuario ${user.email} en BD de ${recinto}`);
+        await set(userRef, {
+            uid: user.uid,
+            name: user.displayName,
+            email: user.email,
+            role: "User",
+            roleId: "user",
+            active: true,
+            createdAt: nowIso,
+            lastLogin: nowIso,
+            photoUrl: photoUrl ?? null,
+            cargo: graphProfile.cargo,
+            department: graphProfile.department,
+        });
+        return;
+    }
+
+    const existingData = snapshot.val() as UserRecord;
+    if (!existingData.active) {
+        if (auth) {
+            await signOut(auth);
+        }
+        throw new Error('Usuario inactivo. Contacte al administrador.');
+    }
+
+    console.log(`🔄 Actualizando último login de ${user.email} en BD de ${recinto}`);
+    await set(userRef, {
+        ...existingData,
+        lastLogin: nowIso,
+        name: user.displayName || existingData.name,
+        photoUrl: photoUrl ?? existingData.photoUrl ?? null,
+        cargo: existingData.cargo ?? graphProfile.cargo,
+        department: existingData.department ?? graphProfile.department,
+    });
 }
 
 
@@ -121,90 +212,32 @@ function isDomainAllowed(email: string | null): boolean {
  * @returns Objeto con la información del usuario autenticado y, si existe, la foto de perfil.
  */
 export const loginWithMicrosoft = async (): Promise<{ user: User; photoUrl: string | null }> => {
-    if (!auth) throw new Error('Firebase Auth no inicializado');
+    const firebaseAuth = getRequiredAuth();
     try {
 
-        const result = await signInWithPopup(auth, microsoftProvider);
+        const result = await signInWithPopup(firebaseAuth, microsoftProvider);
         const userEmail = result.user.email;
 
 
         if (!isDomainAllowed(userEmail)) {
-            await signOut(auth);
+            await signOut(firebaseAuth);
             throw new Error('Dominio de correo no permitido.');
         }
 
         // Información del usuario autenticado
         const user = result.user;
 
-        // Intentar obtener la foto de perfil desde Microsoft Graph de forma opcional
-        let resolvedPhotoUrl: string | null = null;
-        try {
-            const credential = OAuthProvider.credentialFromResult(result) as OAuthCredential | null;
-            const accessToken = credential?.accessToken ?? null;
+        const credential = OAuthProvider.credentialFromResult(result) as OAuthCredential | null;
+        const accessToken = credential?.accessToken ?? null;
 
-            if (accessToken) {
-                resolvedPhotoUrl = await fetchMicrosoftProfilePhoto(accessToken);
-            }
-        } catch (photoError) {
-            console.warn("No se pudo obtener la foto de perfil desde Microsoft:", photoError);
-        }
+        const resolvedGraphProfile = await getMicrosoftGraphProfileFromFunction(accessToken);
+        const resolvedPhotoUrl = resolvedGraphProfile.photoUrl;
 
-        // Resolver la base de datos según el email del usuario
-        const { databaseUrl, recinto } = resolveDatabaseByEmail(user.email ?? null);
-        const database = getDatabaseForUrl(databaseUrl);
-
-        try {
-            const selectedDatabase = { url: databaseUrl, key: recinto };
-            localStorage.setItem("selectedDatabase", JSON.stringify(selectedDatabase));
-        } catch {
-            console.warn("No se pudo guardar selectedDatabase en LocalStorage.");
-        }
-
-        console.log(`🔵 Usuario ${user.email} asignado a BD de ${recinto}: ${databaseUrl}`);
-
-        if (!database) {
-            throw new Error('Realtime Database no inicializado');
-        }
-
-        const userRef = ref(database, `users/${user.uid}`);
-
-        // Verificar si ya existe el usuario en esta BD
-        const snapshot = await get(userRef);
-        const value = snapshot.val();
-
-
-        if (!snapshot.exists()) {
-            // Usuario nuevo en esta BD - crear registro
-            console.log(`✅ Creando nuevo usuario ${user.email} en BD de ${recinto}`);
-            await set(userRef, {
-                uid: user.uid,
-                name: user.displayName,
-                email: user.email,
-                role: "User", // rol por defecto
-                roleId: "user",
-                active: true,
-                createdAt: new Date().toISOString(),
-                lastLogin: new Date().toISOString(),
-                photoUrl: resolvedPhotoUrl ?? null,
-            });
-        } else {
-
-            if (!value.active) {
-                await signOut(auth);
-                throw new Error('Usuario inactivo. Contacte al administrador.');
-            }
-
-            // Usuario existente - actualizar último login
-            console.log(`🔄 Actualizando último login de ${user.email} en BD de ${recinto}`);
-            const existingData = snapshot.val() as { photoUrl?: string | null; name?: string | null };
-            await set(userRef, {
-                ...existingData,
-                lastLogin: new Date().toISOString(),
-                // Actualizar datos que puedan haber cambiado
-                name: user.displayName || existingData.name,
-                photoUrl: resolvedPhotoUrl ?? existingData.photoUrl ?? null,
-            });
-        }
+        await syncMicrosoftUserInDatabase({
+            user,
+            photoUrl: resolvedPhotoUrl,
+            graphProfile: resolvedGraphProfile,
+        });
 
         return { user, photoUrl: resolvedPhotoUrl };
     } catch (error) {
@@ -217,9 +250,9 @@ export const loginWithMicrosoft = async (): Promise<{ user: User; photoUrl: stri
             const errCode = (error && (error as { code?: string }).code) || '';
 
             if (isMobile || errCode === 'auth/popup-blocked' || errCode === 'auth/cancelled-popup-request' || errCode === 'auth/operation-not-supported-in-this-environment') {
-                await signInWithRedirect(auth, microsoftProvider);
+                await signInWithRedirect(firebaseAuth, microsoftProvider);
                 // la página se redirigirá y no se llegará a este punto normalmente
-                return Promise.resolve({ user: auth.currentUser as User, photoUrl: null });
+                return Promise.resolve({ user: firebaseAuth.currentUser as User, photoUrl: null });
             }
         } catch (redirErr) {
             console.error('Error al intentar signInWithRedirect:', redirErr);
@@ -235,60 +268,24 @@ export const loginWithMicrosoft = async (): Promise<{ user: User; photoUrl: stri
  */
 export const processMicrosoftRedirectResult = async (): Promise<{ user: User; photoUrl: string | null } | null> => {
     if (!auth) return null;
+    const firebaseAuth = getRequiredAuth();
     try {
-        const result = await getRedirectResult(auth);
+        const result = await getRedirectResult(firebaseAuth);
         if (!result || !result.user) return null;
 
         const user = result.user;
 
-        // Obtener posible photo desde credential
-        let resolvedPhotoUrl: string | null = null;
-        try {
-            const credential = OAuthProvider.credentialFromResult(result) as OAuthCredential | null;
-            const accessToken = credential?.accessToken ?? null;
-            if (accessToken) {
-                resolvedPhotoUrl = await fetchMicrosoftProfilePhoto(accessToken);
-            }
-        } catch (photoError) {
-            console.warn("No se pudo obtener la foto de perfil desde Microsoft (redirect):", photoError);
-        }
+        const credential = OAuthProvider.credentialFromResult(result) as OAuthCredential | null;
+        const accessToken = credential?.accessToken ?? null;
 
-        // Resolver la base de datos según el email del usuario
-        const { databaseUrl, recinto } = resolveDatabaseByEmail(user.email ?? null);
-        const database = getDatabaseForUrl(databaseUrl);
+        const resolvedGraphProfile = await getMicrosoftGraphProfileFromFunction(accessToken);
+        const resolvedPhotoUrl = resolvedGraphProfile.photoUrl;
 
-        try {
-            const selectedDatabase = { url: databaseUrl, key: recinto };
-            localStorage.setItem("selectedDatabase", JSON.stringify(selectedDatabase));
-        } catch {
-            console.warn("No se pudo guardar selectedDatabase en LocalStorage (redirect).");
-        }
-
-        if (database) {
-            const userRef = ref(database, `users/${user.uid}`);
-            const snapshot = await get(userRef);
-            if (!snapshot.exists()) {
-                await set(userRef, {
-                    uid: user.uid,
-                    name: user.displayName,
-                    email: user.email,
-                    role: "User",
-                    roleId: "user",
-                    active: true,
-                    createdAt: new Date().toISOString(),
-                    lastLogin: new Date().toISOString(),
-                    photoUrl: resolvedPhotoUrl ?? null,
-                });
-            } else {
-                const existingData = snapshot.val() as UserRecord;
-                await set(userRef, {
-                    ...existingData,
-                    lastLogin: new Date().toISOString(),
-                    name: user.displayName || existingData.name,
-                    photoUrl: resolvedPhotoUrl ?? existingData.photoUrl ?? null,
-                });
-            }
-        }
+        await syncMicrosoftUserInDatabase({
+            user,
+            photoUrl: resolvedPhotoUrl,
+            graphProfile: resolvedGraphProfile,
+        });
 
         return { user, photoUrl: resolvedPhotoUrl };
     } catch (err) {

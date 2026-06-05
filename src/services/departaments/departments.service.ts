@@ -63,6 +63,25 @@ export async function createDepartament(database: Database, name: string): Promi
     return departament;
 }
 
+export async function ensureDepartamentExists(database: Database, name: string): Promise<Departament | null> {
+    if (!database) {
+        throw new Error("La base de datos no está disponible");
+    }
+
+    const cleanName = name.trim().replace(/\s+/g, ' ')
+    if (!cleanName) {
+        return null
+    }
+
+    const departaments = await getDepartaments(database)
+    const existingDepartament = departaments.find((departament) => departament.name.trim().toLowerCase() === cleanName.toLowerCase())
+    if (existingDepartament) {
+        return existingDepartament
+    }
+
+    return createDepartament(database, cleanName)
+}
+
 /**
  * Actualiza el nombre de un departamento existente.
  *

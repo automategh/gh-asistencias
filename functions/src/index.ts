@@ -4,7 +4,7 @@ import * as admin from "firebase-admin";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import PDFDocument from "pdfkit";
-import { Graph, type CreateTeamsMeetingOptions, type GraphEvent, type MeetingAttendee, type UpdateTeamsMeetingOptions } from "./graph";
+import { Graph, type CreateTeamsMeetingOptions, type GraphEvent, type GraphUserProfile, type MeetingAttendee, type UpdateTeamsMeetingOptions } from "./graph";
 export { getAttendanceSummary } from "./attendance-summary";
 export { getUserMeetings } from "./user-meetings";
 
@@ -66,6 +66,16 @@ interface NotifyHrPendingActivationRequest {
 interface NotifyHrPendingActivationResponse {
 	readonly sent: boolean;
 	readonly recipientsCount: number;
+}
+
+interface GetMicrosoftUserProfileResponse {
+	readonly cargo: string | null;
+	readonly department: string | null;
+	readonly photoUrl: string | null;
+}
+
+interface GetMicrosoftUserProfileRequest {
+	readonly accessToken: string;
 }
 
 interface AttendanceUpdateChanges {
@@ -1198,6 +1208,36 @@ export const createTeamsMeeting = onCall<CreateTeamsMeetingRequest>(
 				throw error;
 			}
 			throw new HttpsError("internal", "Error al crear la reunión en Teams");
+		}
+	},
+);
+
+export const getMicrosoftUserProfile = onCall<GetMicrosoftUserProfileRequest>(
+	async (request): Promise<GetMicrosoftUserProfileResponse> => {
+		if (!request.auth?.uid) {
+			throw new HttpsError("unauthenticated", "Debes iniciar sesión con una cuenta válida para consultar el perfil de Microsoft.");
+		}
+
+		const accessToken = normalizeRequiredString(request.data?.accessToken);
+		if (!accessToken) {
+			throw new HttpsError("invalid-argument", "accessToken es requerido.");
+		}
+
+		try {
+			const graph = new Graph();
+			const profile: GraphUserProfile = await graph.getCurrentUserProfile(accessToken);
+
+			return {
+				cargo: profile.cargo,
+				department: profile.department,
+				photoUrl: profile.photoUrl,
+			};
+		} catch (error) {
+			console.error("Error en getMicrosoftUserProfile:", error);
+			if (error instanceof HttpsError) {
+				throw error;
+			}
+			throw new HttpsError("internal", "No fue posible consultar el perfil de Microsoft Graph.");
 		}
 	},
 );

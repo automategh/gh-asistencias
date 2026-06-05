@@ -247,6 +247,127 @@ export class Graph {
         const data = (await response.json()) as GraphEvent;
         return data;
     }
+
+    public async getUserProfileByEmail(email: string): Promise<GraphUserProfile> {
+        const token = await this.getToken();
+        const normalizedEmail = email.trim();
+
+        if (!normalizedEmail) {
+            throw new Error("El correo del usuario es obligatorio para consultar Microsoft Graph.");
+        }
+
+        const profileResponse = await fetch(
+            `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(normalizedEmail)}?$select=jobTitle,department`,
+            {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    "Content-Type": "application/json",
+                },
+            },
+        );
+
+        if (!profileResponse.ok) {
+            const errorText = await profileResponse.text();
+            throw new Error(`Error al consultar perfil de usuario en Graph: ${profileResponse.status} ${errorText}`);
+        }
+
+        const profileData = (await profileResponse.json()) as {
+            readonly jobTitle?: string | null;
+            readonly department?: string | null;
+        };
+
+        let photoUrl: string | null = null;
+        try {
+            const photoResponse = await fetch(
+                `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(normalizedEmail)}/photo/$value`,
+                {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                },
+            );
+
+            if (photoResponse.ok) {
+                const contentType = photoResponse.headers.get("content-type") ?? "image/jpeg";
+                const photoBuffer = Buffer.from(await photoResponse.arrayBuffer());
+                photoUrl = `data:${contentType};base64,${photoBuffer.toString("base64")}`;
+            }
+        } catch (error) {
+            console.warn(`No se pudo obtener la foto de ${normalizedEmail} desde Graph:`, error);
+        }
+
+        return {
+            cargo: typeof profileData.jobTitle === "string" && profileData.jobTitle.trim().length > 0
+                ? profileData.jobTitle.trim()
+                : null,
+            department: typeof profileData.department === "string" && profileData.department.trim().length > 0
+                ? profileData.department.trim()
+                : null,
+            photoUrl,
+        };
+    }
+
+    public async getCurrentUserProfile(accessToken: string): Promise<GraphUserProfile> {
+        const normalizedToken = accessToken.trim();
+
+        if (!normalizedToken) {
+            throw new Error("El access token del usuario es obligatorio para consultar Microsoft Graph.");
+        }
+
+        const profileResponse = await fetch(
+            "https://graph.microsoft.com/v1.0/me?$select=jobTitle,department",
+            {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${normalizedToken}`,
+                    "Content-Type": "application/json",
+                },
+            },
+        );
+
+        if (!profileResponse.ok) {
+            const errorText = await profileResponse.text();
+            throw new Error(`Error al consultar perfil del usuario actual en Graph: ${profileResponse.status} ${errorText}`);
+        }
+
+        const profileData = (await profileResponse.json()) as {
+            readonly jobTitle?: string | null;
+            readonly department?: string | null;
+        };
+
+        let photoUrl: string | null = null;
+        try {
+            const photoResponse = await fetch(
+                "https://graph.microsoft.com/v1.0/me/photo/$value",
+                {
+                    method: "GET",
+                    headers: {
+                        Authorization: `Bearer ${normalizedToken}`,
+                    },
+                },
+            );
+
+            if (photoResponse.ok) {
+                const contentType = photoResponse.headers.get("content-type") ?? "image/jpeg";
+                const photoBuffer = Buffer.from(await photoResponse.arrayBuffer());
+                photoUrl = `data:${contentType};base64,${photoBuffer.toString("base64")}`;
+            }
+        } catch (error) {
+            console.warn("No se pudo obtener la foto del usuario actual desde Graph:", error);
+        }
+
+        return {
+            cargo: typeof profileData.jobTitle === "string" && profileData.jobTitle.trim().length > 0
+                ? profileData.jobTitle.trim()
+                : null,
+            department: typeof profileData.department === "string" && profileData.department.trim().length > 0
+                ? profileData.department.trim()
+                : null,
+            photoUrl,
+        };
+    }
 }
 
 export interface MeetingAttendee {
@@ -316,6 +437,12 @@ export interface GraphEvent {
         readonly joinUrl?: string;
     };
     readonly onlineMeetingProvider?: string;
+}
+
+export interface GraphUserProfile {
+    readonly cargo: string | null;
+    readonly department: string | null;
+    readonly photoUrl: string | null;
 }
 
 interface GraphCreateEventRequest {
