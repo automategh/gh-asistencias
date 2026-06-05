@@ -57,6 +57,17 @@ function formatDateInputValue(date: Date): string {
     return `${year}-${month}-${day}`
 }
 
+function getCurrentMonthDateRange(): { from: string; to: string } {
+    const currentDate = new Date()
+    const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+    const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
+
+    return {
+        from: formatDateInputValue(startOfMonth),
+        to: formatDateInputValue(endOfMonth),
+    }
+}
+
 /**
  * Vista de reuniones: participación y creadas por el usuario.
  * Obtiene índices de `userMeetings/{uid}` para participación y
@@ -82,17 +93,16 @@ function MeetsPage() {
     const [searchTerm, setSearchTerm] = useState<string>('')
     const [statusFilter, setStatusFilter] = useState<MeetingStatus | 'all'>('all')
     const [meetingTypeFilter, setMeetingTypeFilter] = useState<MeetingKind | 'all'>('all')
-    const [dateFrom, setDateFrom] = useState<string>('')
-    const [dateTo, setDateTo] = useState<string>('')
+    const [dateFrom, setDateFrom] = useState<string>(() => getCurrentMonthDateRange().from)
+    const [dateTo, setDateTo] = useState<string>(() => getCurrentMonthDateRange().to)
     const [isDateDropdownOpen, setIsDateDropdownOpen] = useState<boolean>(false)
     const [activeTab, setActiveTab] = useState<'invited' | 'created' | 'all'>('invited')
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
     const [invitedPage, setInvitedPage] = useState<number>(1)
     const [createdPage, setCreatedPage] = useState<number>(1)
     const [allPage, setAllPage] = useState<number>(1)
-    const previousDateFilterBeforeAllRef = useRef<{ from: string; to: string } | null>(null)
-    const currentDateFilterRef = useRef<{ from: string; to: string }>({ from: '', to: '' })
-    const allTabDateFilterToken = activeTab === 'all' ? `${dateFrom}|${dateTo}` : ''
+    const currentDateFilterRef = useRef<{ from: string; to: string }>(getCurrentMonthDateRange())
+    const dateFilterToken = `${dateFrom}|${dateTo}`
 
     const buildMeetingPath = (basePath: '/meeting' | '/checkin', meeting: MeetingWithIndex): string => {
         const baseRoute = `${basePath}/${meeting.id}`
@@ -170,25 +180,25 @@ function MeetsPage() {
                     ? ALL_TAB_BASE_LOOKBACK_MS
                     : Math.max(now, ALL_TAB_BASE_LOOKBACK_MS)
 
-                if (canViewAllTab && activeTab === 'all') {
-                    const currentDate = new Date()
-                    const allTabDateFrom = currentDateFilterRef.current.from
-                    const allTabDateTo = currentDateFilterRef.current.to
-                    const parsedFromDate = allTabDateFrom ? parseDateInputAsLocalDate(allTabDateFrom) : null
-                    const parsedToDate = allTabDateTo ? parseDateInputAsLocalDate(allTabDateTo) : null
 
-                    const fallbackFromDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-                    const fromDate = parsedFromDate ?? fallbackFromDate
-                    const toDate = parsedToDate ?? currentDate
+                const currentDate = new Date()
+                const dateRangeFrom = currentDateFilterRef.current.from
+                const dateRangeTo = currentDateFilterRef.current.to
+                const parsedFromDate = dateRangeFrom ? parseDateInputAsLocalDate(dateRangeFrom) : null
+                const parsedToDate = dateRangeTo ? parseDateInputAsLocalDate(dateRangeTo) : null
 
-                    const fromTimestamp = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate()).getTime()
-                    const toTimestamp = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23, 59, 59, 999).getTime()
+                const fallbackFromDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+                const fromDate = parsedFromDate ?? fallbackFromDate
+                const toDate = parsedToDate ?? currentDate
 
-                    if (toTimestamp >= fromTimestamp) {
-                        queryNow = Math.max(now, toTimestamp)
-                        queryLookbackMs = Math.max(ALL_TAB_BASE_LOOKBACK_MS, queryNow - fromTimestamp)
-                    }
+                const fromTimestamp = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate()).getTime()
+                const toTimestamp = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 23, 59, 59, 999).getTime()
+
+                if (toTimestamp >= fromTimestamp) {
+                    queryNow = Math.max(now, toTimestamp)
+                    queryLookbackMs = Math.max(ALL_TAB_BASE_LOOKBACK_MS, queryNow - fromTimestamp)
                 }
+
 
                 let invited: MeetingWithIndex[] = []
                 let createdList: MeetingWithIndex[] | Meeting[] = []
@@ -299,7 +309,7 @@ function MeetsPage() {
         // Ejecutar
         load().catch(() => setError('No fue posible cargar las actividades'))
         return () => { cancelled = true }
-    }, [database, databaseUrl, user?.uid, now, availableDatabases, canViewAllTab, getMeetingKey, activeTab, allTabDateFilterToken, recinto])
+    }, [database, databaseUrl, user?.uid, now, availableDatabases, canViewAllTab, getMeetingKey, activeTab, dateFilterToken, recinto])
 
     useEffect(() => {
         if (!canViewAllTab && activeTab === 'all') {
@@ -315,28 +325,9 @@ function MeetsPage() {
     }, [dateFrom, dateTo])
 
     useEffect(() => {
-        if (activeTab === 'all') {
-            if (previousDateFilterBeforeAllRef.current === null) {
-                previousDateFilterBeforeAllRef.current = {
-                    from: currentDateFilterRef.current.from,
-                    to: currentDateFilterRef.current.to,
-                }
-            }
-
-            const currentDate = new Date()
-            const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-            const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
-
-            setDateFrom(formatDateInputValue(startOfMonth))
-            setDateTo(formatDateInputValue(endOfMonth))
-            return
-        }
-
-        if (previousDateFilterBeforeAllRef.current) {
-            setDateFrom(previousDateFilterBeforeAllRef.current.from)
-            setDateTo(previousDateFilterBeforeAllRef.current.to)
-            previousDateFilterBeforeAllRef.current = null
-        }
+        const { from, to } = getCurrentMonthDateRange()
+        setDateFrom(from)
+        setDateTo(to)
     }, [activeTab])
 
     // Reiniciar paginación cuando cambian filtros o datos base
