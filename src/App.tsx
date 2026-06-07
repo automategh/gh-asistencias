@@ -13,7 +13,6 @@ import UserGroupingPage from './pages/configuration/UserGroupingPage'
 import MeetsPage from './pages/meets/MeetsPage'
 import DetailMeetPage from './pages/meets/DetailMeetPage'
 import EditMeetPage from './pages/meets/EditMeetPage'
-import AttendancePage from './pages/meets/AttendancePage'
 import ChekinPage from './pages/meets/ChekinPage'
 import RegisterPage from './pages/auth/RegisterPage'
 import RoleRoute from './components/auth/role-route'
@@ -66,11 +65,6 @@ function App() {
                         )}
                     />
                     <Route path="/meeting/:id" element={<DetailMeetPage />} />
-                    <Route path="/attendance/:id" element={(
-                        <RoleRoute requireAny={["meetings_attendance_view"]}>
-                            <AttendancePage />
-                        </RoleRoute>
-                    )} />
                     <Route
                         path="/permissions"
                         element={(

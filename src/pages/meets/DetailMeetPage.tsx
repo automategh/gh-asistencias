@@ -1,4 +1,5 @@
 import Layout from '@/components/layouts/layout'
+import AttendanceSection from '@/components/meet/attendance-section'
 import { QRCodeDisplay } from '@/components/meet/qr-code-display'
 import { useDatabase } from '@/context/DatabaseContext'
 import { useAuth } from '@/context/AuthContext'
@@ -7,7 +8,7 @@ import { getDatabaseForUrl } from '@/services/firebase'
 import { getSurveys, getSurveyById, type Survey } from '@/services/forms.service'
 import { cancelMeeting, closeMeeting, completeMeeting, getMeetingById, reopenMeeting } from '@/services/meetings.service'
 import type { Meeting } from '@/types/meeting'
-import { ArrowLeft, BarChart3, Calendar, Clock, Copy, FileText, MapPin } from 'lucide-react'
+import { ArrowLeft, Calendar, Clock, Copy, FileText, MapPin } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
@@ -15,7 +16,7 @@ function DetailMeetPage() {
 
     const { id } = useParams<{ id: string }>()
     const navigate = useNavigate()
-    const { database } = useDatabase()
+    const { database, databaseUrl } = useDatabase()
     const { user, hasPermission } = useAuth()
     const [searchParams] = useSearchParams()
     const [meeting, setMeeting] = useState<Meeting | null>(null)
@@ -37,6 +38,10 @@ function DetailMeetPage() {
 
         return database
     }, [database, sourceDatabaseUrl])
+
+    const meetingDatabaseUrl = useMemo(() => {
+        return sourceDatabaseUrl ?? databaseUrl ?? null
+    }, [sourceDatabaseUrl, databaseUrl])
 
     useEffect(() => {
         if (!meetingDatabase || !id) {
@@ -451,15 +456,6 @@ function DetailMeetPage() {
                                                     {cancel ? 'Cancelando…' : 'Cancelar actividad'}
                                                 </button>
                                             )}
-                                            {canViewAttendance ? (
-                                                <Link
-                                                    to={meeting ? `/attendance/${meeting.id}${sourceDatabaseUrl ? `?db=${encodeURIComponent(sourceDatabaseUrl)}` : ''}` : '/meets'}
-                                                    className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-lg transition-all duration-300 hover:bg-primary-light hover:shadow-lg hover:-translate-y-0.5"
-                                                >
-                                                    <BarChart3 className="w-4 h-4" />
-                                                    Ver asistencias
-                                                </Link>
-                                            ) : null}
                                         </div>
                                     </div>
                                 </div>
@@ -494,6 +490,17 @@ function DetailMeetPage() {
                             </div>
                         </div>
                     </div>
+                    {canViewAttendance && meeting && (
+                        <div className="mt-6">
+                            <AttendanceSection
+                                meeting={meeting}
+                                meetingDatabase={meetingDatabase}
+                                databaseUrl={databaseUrl}
+                                meetingDatabaseUrl={meetingDatabaseUrl}
+                                canEditAttendance={canViewAttendance}
+                            />
+                        </div>
+                    )}
                 </div>
             </div>
         </Layout>
