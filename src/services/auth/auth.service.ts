@@ -366,6 +366,8 @@ export const registerWithEmailPassword = async (data: RegisterFormData) => {
             }
         }
 
+        await signOut(auth)
+
         return { user };
     } catch (error) {
         console.error("Error durante el registro de usuario:", error);
