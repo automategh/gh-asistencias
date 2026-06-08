@@ -150,8 +150,8 @@ export class Graph {
             ...(options.location ? { location: { displayName: options.location } } : {}),
             ...(options.isOnlineMeeting ? {
                 isOnlineMeeting: true,
+                onlineMeetingProvider: "teamsForBusiness",
             } : {}),
-            onlineMeetingProvider: "teamsForBusiness",
         };
 
         const createForOrganizer = async (upnOrId: string): Promise<GraphEvent> => {
@@ -223,8 +223,8 @@ export class Graph {
             ...(options.location ? { location: { displayName: options.location } } : {}),
             ...(options.isOnlineMeeting ? {
                 isOnlineMeeting: true,
+                onlineMeetingProvider: "teamsForBusiness",
             } : {}),
-            onlineMeetingProvider: "teamsForBusiness",
         };
 
         const response = await fetch(

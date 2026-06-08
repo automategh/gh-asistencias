@@ -11,7 +11,7 @@ import type { RecintoKey } from '@/lib/firebase/databaseResolver'
 import { buildUserGroups, buildUserGroupsByField, getUserGroupingDefinitions, type GroupingFieldKey, type UserGroupingId } from '@/lib/userGrouping'
 import { createTeamsMeetingViaCloudFunction, updateTeamsMeetingViaCloudFunction } from '@/services/teams.service'
 import { Users } from 'lucide-react'
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 const INITIAL_FORM_STATE: MeetingCreateInput = {
@@ -54,6 +54,7 @@ function EditMeetPage() {
     const navigate = useNavigate()
 
     const [meeting, setMeeting] = useState<Meeting | null>(null)
+    const originalModalityRef = useRef<{ isOnlineMeeting: boolean; location: string } | null>(null)
     const [form, setForm] = useState<MeetingCreateInput>({ ...INITIAL_FORM_STATE, isOnlineMeeting: false })
     const [trainingSurveys, setTrainingSurveys] = useState<Survey[]>([])
     const [allUsers, setAllUsers] = useState<UserItem[]>([])
@@ -249,6 +250,10 @@ function EditMeetPage() {
                 }
                 setMeeting(loadedMeeting)
                 const isOnlineMeeting = loadedMeeting.isOnline ?? (loadedMeeting as unknown as { isOnlineMeeting?: boolean }).isOnlineMeeting ?? (loadedMeeting as unknown as { isVirtual?: boolean }).isVirtual ?? false
+                originalModalityRef.current = {
+                    isOnlineMeeting,
+                    location: loadedMeeting.location,
+                }
                 setForm({
                     title: loadedMeeting.title,
                     type: loadedMeeting.type,
@@ -414,6 +419,31 @@ function EditMeetPage() {
                 ? (form.trainerName?.trim() || selectedTrainer?.name?.trim() || null)
                 : null
 
+            const original = originalModalityRef.current
+            const originalIsOnline = original?.isOnlineMeeting ?? false
+            const originalLocation = original?.location ?? ''
+            const formIsOnline = form.isOnlineMeeting ?? false
+            const toggleChanged = formIsOnline !== originalIsOnline
+            const locationChanged = form.location.trim() !== originalLocation.trim()
+
+            let effectiveIsOnlineMeeting: boolean
+            let effectiveLocation: string
+            if (toggleChanged) {
+                effectiveIsOnlineMeeting = formIsOnline
+                effectiveLocation = formIsOnline ? 'Virtual' : form.location
+            } else if (locationChanged) {
+                const normalizedLocation = form.location.trim().toLowerCase()
+                effectiveIsOnlineMeeting = normalizedLocation === 'virtual'
+                effectiveLocation = effectiveIsOnlineMeeting ? 'Virtual' : form.location
+            } else {
+                effectiveIsOnlineMeeting = originalIsOnline
+                effectiveLocation = originalLocation
+            }
+
+            if (effectiveIsOnlineMeeting && !effectiveLocation.trim()) {
+                effectiveLocation = 'Virtual'
+            }
+
             let updatedTeamsEventId = meeting.teamsEventId ?? null
             let updatedTeamsJoinUrl = meeting.teamsJoinUrl ?? null
             let updatedTeamsOrganizerEmail = meeting.teamsOrganizerEmail ?? null
@@ -424,8 +454,8 @@ function EditMeetPage() {
                 customType: form.type === 'custom' ? form.customType || null : null,
                 satisfactionSurveyId: form.type === 'training' ? form.satisfactionSurveyId || null : null,
                 description: form.description || null,
-                location: form.isOnlineMeeting ? 'Virtual' : form.location,
-                isOnlineMeeting: form.isOnlineMeeting,
+                location: effectiveLocation,
+                isOnlineMeeting: effectiveIsOnlineMeeting,
                 startTime: startMs,
                 endTime: endMs,
                 trainerName: resolvedTrainerName,
@@ -452,22 +482,22 @@ function EditMeetPage() {
                         startTime: startMs,
                         endTime: endMs,
                         timeZone,
-                        location: form.isOnlineMeeting ? undefined : form.location,
+                        location: effectiveIsOnlineMeeting ? undefined : effectiveLocation,
                         attendees: selectedParticipants.map((participant) => ({
                             email: participant.email,
                             name: participant.name,
                             type: 'required',
                         })),
-                        isOnlineMeeting: form.isOnlineMeeting,
+                        isOnlineMeeting: effectiveIsOnlineMeeting,
                     })
 
                     await updateMeeting(meetingDatabase, id, {
-                        teamsJoinUrl: form.isOnlineMeeting ? (updateResult.joinUrl ?? meeting.teamsJoinUrl ?? null) : null,
+                        teamsJoinUrl: effectiveIsOnlineMeeting ? (updateResult.joinUrl ?? meeting.teamsJoinUrl ?? null) : null,
                         teamsOrganizerEmail: meeting.teamsOrganizerEmail ?? organizerEmail,
                     })
 
                     updatedTeamsEventId = meeting.teamsEventId
-                    updatedTeamsJoinUrl = form.isOnlineMeeting ? (updateResult.joinUrl ?? meeting.teamsJoinUrl ?? null) : null
+                    updatedTeamsJoinUrl = effectiveIsOnlineMeeting ? (updateResult.joinUrl ?? meeting.teamsJoinUrl ?? null) : null
                     updatedTeamsOrganizerEmail = meeting.teamsOrganizerEmail ?? organizerEmail
                 } else {
                     const createResult = await createTeamsMeetingViaCloudFunction({
@@ -477,23 +507,23 @@ function EditMeetPage() {
                         startTime: startMs,
                         endTime: endMs,
                         timeZone,
-                        location: form.isOnlineMeeting ? undefined : form.location,
+                        location: effectiveIsOnlineMeeting ? undefined : effectiveLocation,
                         attendees: selectedParticipants.map((participant) => ({
                             email: participant.email,
                             name: participant.name,
                             type: 'required',
                         })),
-                        isOnlineMeeting: form.isOnlineMeeting,
+                        isOnlineMeeting: effectiveIsOnlineMeeting,
                     })
 
                     await updateMeeting(meetingDatabase, id, {
                         teamsEventId: createResult.eventId,
-                        teamsJoinUrl: form.isOnlineMeeting ? (createResult.joinUrl ?? null) : null,
+                        teamsJoinUrl: effectiveIsOnlineMeeting ? (createResult.joinUrl ?? null) : null,
                         teamsOrganizerEmail: organizerEmail,
                     })
 
                     updatedTeamsEventId = createResult.eventId
-                    updatedTeamsJoinUrl = form.isOnlineMeeting ? (createResult.joinUrl ?? null) : null
+                    updatedTeamsJoinUrl = effectiveIsOnlineMeeting ? (createResult.joinUrl ?? null) : null
                     updatedTeamsOrganizerEmail = organizerEmail
                 }
             } catch (teamsError) {
@@ -513,8 +543,8 @@ function EditMeetPage() {
                 customType: form.type === 'custom' ? form.customType || null : null,
                 satisfactionSurveyId: form.type === 'training' ? form.satisfactionSurveyId || null : null,
                 description: form.description || null,
-                location: form.isOnlineMeeting ? 'Virtual' : form.location,
-                isOnlineMeeting: form.isOnlineMeeting,
+                location: effectiveLocation,
+                isOnlineMeeting: effectiveIsOnlineMeeting,
                 startTime: startMs,
                 endTime: endMs,
                 trainerName: resolvedTrainerName,
@@ -522,6 +552,10 @@ function EditMeetPage() {
                 teamsJoinUrl: updatedTeamsJoinUrl,
                 teamsOrganizerEmail: updatedTeamsOrganizerEmail,
             } : prev)
+            originalModalityRef.current = {
+                isOnlineMeeting: effectiveIsOnlineMeeting,
+                location: effectiveLocation,
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'No fue posible guardar los cambios.')
         } finally {
