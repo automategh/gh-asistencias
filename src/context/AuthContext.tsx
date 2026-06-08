@@ -4,7 +4,7 @@ import { loginWithEmailPassword, loginWithMicrosoft, logout, registerWithEmailPa
 import { auth, getDatabaseForUrl } from "@/services/firebase";
 import type { PermissionId, RoleId } from "@/types/authorization";
 import type { RegisterFormData } from "@/types/user";
-import { onAuthStateChanged, type User } from "firebase/auth";
+import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { get, ref } from "firebase/database";
 import React, { createContext, useContext, useEffect, useState } from "react";
 
@@ -43,7 +43,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!auth) {
+        const firebaseAuth = auth
+        if (!firebaseAuth) {
             // Si auth no está definido, no hacemos nada y evitamos errores.
             setLoading(false);
             return;
@@ -217,17 +218,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
 
         // Escuchar cambios en el estado de autenticación
-        const unsusbscribe = onAuthStateChanged(auth, (firebaseUser) => {
-            setUser(firebaseUser);
-            setProfilePhotoUrl(firebaseUser?.photoURL ?? null);
-            setLoading(false);
-
+        const unsusbscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
             if (firebaseUser) {
-                fetchUserRole(firebaseUser.uid, firebaseUser.email); // Llama la función async sin await
+                setLoading(true);
+
+                try {
+                    const databaseUrl = await resolveUserDatabaseUrl(firebaseUser.uid, firebaseUser.email);
+                    if (databaseUrl) {
+                        const db = getDatabaseForUrl(databaseUrl);
+                        if (db) {
+                            const userRef = ref(db, `users/${firebaseUser.uid}`);
+                            const snapshot = await get(userRef);
+                            if (snapshot.exists()) {
+                                const data = snapshot.val() as { active?: boolean | null } | null;
+                                if (data && data.active === false) {
+                                    await signOut(firebaseAuth);
+                                    setUser(null);
+                                    setProfilePhotoUrl(null);
+                                    setRole(null);
+                                    setRoleId(null);
+                                    setPermissions([]);
+                                    setLoading(false);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error("Error al verificar el estado activo del usuario:", error);
+                }
+
+                setUser(firebaseUser);
+                setProfilePhotoUrl(firebaseUser.photoURL ?? null);
+                fetchUserRole(firebaseUser.uid, firebaseUser.email);
+                setLoading(false);
             } else {
+                setUser(null);
+                setProfilePhotoUrl(null);
                 setRole(null);
                 setRoleId(null);
                 setPermissions([]);
+                setLoading(false);
             }
         });
 

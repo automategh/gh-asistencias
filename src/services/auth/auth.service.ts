@@ -1,6 +1,6 @@
-import { createUserWithEmailAndPassword, OAuthProvider, type Auth, type OAuthCredential, type User, signInWithEmailAndPassword, signInWithPopup, signOut, updateProfile, getRedirectResult, signInWithRedirect } from "firebase/auth";
+import { OAuthProvider, type Auth, type OAuthCredential, type User, signInWithEmailAndPassword, signInWithPopup, signOut, getRedirectResult, signInWithRedirect } from "firebase/auth";
 import { auth, DATABASE_CCCI_URL, DATABASE_CCCR_URL, DATABASE_CEVP_URL, DEFAULT_DATABASE_URL, functions, getDatabaseForUrl } from "../firebase";
-import { getDatabaseByRecinto, getDatabaseUrlByRecinto, resolveDatabaseByEmail, type RecintoKey } from "@/lib/firebase/databaseResolver";
+import { getDatabaseUrlByRecinto, resolveDatabaseByEmail, type RecintoKey } from "@/lib/firebase/databaseResolver";
 import { ensureDepartamentExists } from "@/services/departaments/departments.service";
 import { validatePasswordPolicy } from "@/lib/password-policy";
 import { get, ref, set } from "firebase/database";
@@ -47,15 +47,23 @@ interface GetMicrosoftUserProfileRequest {
     readonly accessToken: string;
 }
 
-interface NotifyHrPendingActivationRequest {
-    readonly uid: string
-    readonly databaseUrl: string
-    readonly recinto: RecintoKey
+interface RegisterUserRequest {
+    readonly name: string;
+    readonly email: string;
+    readonly password: string;
+    readonly identify: string;
+    readonly department: string;
+    readonly cargo: string;
+    readonly recint: string;
+    readonly leader: string;
+    readonly worksAtHeroica: boolean;
+    readonly companyName: string;
 }
 
-interface NotifyHrPendingActivationResponse {
-    readonly sent: boolean
-    readonly recipientsCount: number
+interface RegisterUserResponse {
+    readonly uid: string;
+    readonly databaseUrl: string;
+    readonly recinto: string;
 }
 
 // Configuración del proveedor de OAuth para Microsoft
@@ -296,13 +304,16 @@ export const processMicrosoftRedirectResult = async (): Promise<{ user: User; ph
 
 /**
  * Registra un nuevo usuario con email y contraseña.
- * 
+ *
+ * El registro se delega a la cloud function `registerUser`, que usa el Admin SDK
+ * para crear el usuario en Firebase Auth sin dejar al cliente autenticado.
+ *
  * @param data Datos del formulario de registro.
  * @returns Objeto con la información del usuario registrado.
  * @throws Error si el correo ya está registrado o si ocurre un problema durante el registro.
  */
 export const registerWithEmailPassword = async (data: RegisterFormData) => {
-    if (!auth) throw new Error('Firebase Auth no inicializado');
+    if (!functions) throw new Error('Cloud Functions no está disponible en este entorno de Firebase.');
 
     const passwordPolicyError = validatePasswordPolicy(data.password)
     if (passwordPolicyError) {
@@ -310,68 +321,33 @@ export const registerWithEmailPassword = async (data: RegisterFormData) => {
     }
 
     try {
-        // Crear usuario en Firebase Auth
-        // Firebase Auth garantiza unicidad de correo; evita lectura previa sin auth en RTDB.
-        const result = await createUserWithEmailAndPassword(auth, data.email, data.password);
-        const user = result.user;
+        const callable = httpsCallable<RegisterUserRequest, RegisterUserResponse>(
+            functions,
+            "registerUser",
+        );
 
-        //actualizamos el perfil del usuario con el nombre
-        await updateProfile(user, { displayName: data.name });
-
-        // Obtener la base de datos según el recinto seleccionado
-        const db = getDatabaseByRecinto(data.recint as RecintoKey);
-
-        if (!db) {
-            throw new Error('Base de datos no encontrada para el recinto seleccionado.');
-        }
-
-        const userRef = ref(db, `users/${user.uid}`);
-        const selectedRecinto = data.recint as RecintoKey
-        const targetDatabaseUrl = getDatabaseUrlByRecinto(selectedRecinto)
-
-        // Crear el registro del usuario en la base de datos correspondiente
-        const newUserRecord: UserRecord = {
-            uid: user.uid,
+        const result = await callable({
             name: data.name,
             email: data.email,
-            role: "User", // rol por defecto
-            roleId: "user",
-            active: false, // el usuario debe ser activado por un admin
-            createdAt: new Date().toISOString(),
-            lastLogin: new Date().toISOString(),
+            password: data.password,
             identify: data.identify,
             department: data.department,
             cargo: data.cargo,
             recint: data.recint,
-            immediateBoss: data.leader,
-            companyName: data.worksAtHeroica ? null : (data.companyName || null),
-        };
+            leader: data.leader,
+            worksAtHeroica: data.worksAtHeroica,
+            companyName: data.companyName,
+        });
 
-        await set(userRef, newUserRecord);
-
-        if (functions && targetDatabaseUrl) {
-            try {
-                const notifyHrPendingActivationCallable = httpsCallable<NotifyHrPendingActivationRequest, NotifyHrPendingActivationResponse>(
-                    functions,
-                    "notifyHrPendingActivation",
-                )
-
-                await notifyHrPendingActivationCallable({
-                    uid: user.uid,
-                    databaseUrl: targetDatabaseUrl,
-                    recinto: selectedRecinto,
-                })
-            } catch (notificationError) {
-                console.error("No fue posible enviar la notificación de activación a Talento Humano:", notificationError)
-            }
-        }
-
-        await signOut(auth)
-
-        return { user };
+        return { uid: result.data.uid, databaseUrl: result.data.databaseUrl, recinto: result.data.recinto };
     } catch (error) {
         console.error("Error durante el registro de usuario:", error);
-        throw error;
+        const code = (error as { code?: string }).code;
+        if (code === "functions/already-exists") {
+            throw new Error("El correo ya está registrado.");
+        }
+        const message = error instanceof Error ? error.message : "Error al crear la cuenta.";
+        throw new Error(message);
     }
 }
 

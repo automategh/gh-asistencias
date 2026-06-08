@@ -724,6 +724,75 @@ export const updateAttendanceAcrossDatabases = onCall<AttendanceUpdateRequest>(
 	},
 );
 
+interface HrPendingActivationEmailData {
+	readonly name: string;
+	readonly email: string;
+	readonly identify: string;
+	readonly department: string;
+	readonly cargo: string;
+	readonly companyName: string;
+	readonly recinto: string;
+	readonly databaseUrl: string;
+}
+
+const sendHrPendingActivationEmail = async (data: HrPendingActivationEmailData): Promise<{ sent: boolean; recipientsCount: number }> => {
+	const db = admin.app().database(data.databaseUrl);
+	const [usersSnapshot, rolesSnapshot] = await Promise.all([
+		db.ref("users").get(),
+		db.ref("roles").get(),
+	]);
+
+	const usersMap = usersSnapshot.val() as Record<string, PendingActivationUserRecord> | null;
+	const rolesMap = rolesSnapshot.val() as Record<string, PendingActivationRoleRecord> | null;
+
+	const recipients = Object.values(usersMap ?? {})
+		.filter((user) => isHumanTalentUser(user, rolesMap))
+		.map((user) => {
+			const email = normalizeOptionalString(user.email);
+			if (!email) {
+				return null;
+			}
+			return {
+				email,
+				name: normalizeOptionalString(user.name) ?? email,
+			};
+		})
+		.filter((value): value is { email: string; name: string } => value !== null);
+
+	if (recipients.length === 0) {
+		return { sent: false, recipientsCount: 0 };
+	}
+
+	const userName = escapeHtml(data.name || "Sin nombre");
+	const userEmail = escapeHtml(data.email || "Sin correo");
+	const userIdentify = escapeHtml(data.identify || "No registrada");
+	const userDepartment = escapeHtml(data.department || "No registrada");
+	const userCargo = escapeHtml(data.cargo || "No registrado");
+	const userCompany = escapeHtml(data.companyName || "Grupo Heroica");
+	const cleanRecinto = escapeHtml(data.recinto.toUpperCase());
+
+	const graph = new Graph();
+	await graph.sendMailWithAttachment({
+		to: recipients,
+		subject: `Activación pendiente de usuario (${cleanRecinto})`,
+		htmlBody: `
+			<p>Hola equipo de Talento Humano,</p>
+			<p>Se registró un nuevo usuario y requiere activación en el recinto <strong>${cleanRecinto}</strong>.</p>
+			<ul>
+				<li><strong>Nombre:</strong> ${userName}</li>
+				<li><strong>Correo:</strong> ${userEmail}</li>
+				<li><strong>Identificación:</strong> ${userIdentify}</li>
+				<li><strong>Área:</strong> ${userDepartment}</li>
+				<li><strong>Cargo:</strong> ${userCargo}</li>
+				<li><strong>Empresa:</strong> ${userCompany}</li>
+			</ul>
+			<p>Por favor, revisen y activen el usuario en el módulo de usuarios.</p>
+		`,
+	});
+
+	return { sent: true, recipientsCount: recipients.length };
+};
+
 export const notifyHrPendingActivation = onCall<NotifyHrPendingActivationRequest>(
 	async (request): Promise<NotifyHrPendingActivationResponse> => {
 		if (!request.auth?.uid) {
@@ -744,11 +813,7 @@ export const notifyHrPendingActivation = onCall<NotifyHrPendingActivationRequest
 		}
 
 		const db = admin.app().database(databaseUrl);
-		const [targetUserSnapshot, usersSnapshot, rolesSnapshot] = await Promise.all([
-			db.ref(`users/${targetUid}`).get(),
-			db.ref("users").get(),
-			db.ref("roles").get(),
-		]);
+		const targetUserSnapshot = await db.ref(`users/${targetUid}`).get();
 
 		if (!targetUserSnapshot.exists()) {
 			throw new HttpsError("not-found", "El usuario registrado no existe en la base de datos seleccionada.");
@@ -756,67 +821,178 @@ export const notifyHrPendingActivation = onCall<NotifyHrPendingActivationRequest
 
 		const targetUser = targetUserSnapshot.val() as PendingActivationUserRecord;
 		if (targetUser.active === true) {
-			return {
-				sent: false,
-				recipientsCount: 0,
-			};
+			return { sent: false, recipientsCount: 0 };
 		}
 
-		const usersMap = usersSnapshot.val() as Record<string, PendingActivationUserRecord> | null;
-		const rolesMap = rolesSnapshot.val() as Record<string, PendingActivationRoleRecord> | null;
-
-		const recipients = Object.values(usersMap ?? {})
-			.filter((user) => isHumanTalentUser(user, rolesMap))
-			.map((user) => {
-				const email = normalizeOptionalString(user.email);
-				if (!email) {
-					return null;
-				}
-				return {
-					email,
-					name: normalizeOptionalString(user.name) ?? email,
-				};
-			})
-			.filter((value): value is { email: string; name: string } => value !== null);
-
-		if (recipients.length === 0) {
-			return {
-				sent: false,
-				recipientsCount: 0,
-			};
-		}
-
-		const userName = escapeHtml(normalizeOptionalString(targetUser.name) ?? "Sin nombre");
-		const userEmail = escapeHtml(normalizeOptionalString(targetUser.email) ?? "Sin correo");
-		const userIdentify = escapeHtml(normalizeOptionalString(targetUser.identify) ?? "No registrada");
-		const userDepartment = escapeHtml(normalizeOptionalString(targetUser.department) ?? "No registrada");
-		const userCargo = escapeHtml(normalizeOptionalString(targetUser.cargo) ?? "No registrado");
-		const userCompany = escapeHtml(normalizeOptionalString(targetUser.companyName) ?? "Grupo Heroica");
-		const cleanRecinto = escapeHtml(recinto.toUpperCase());
-
-		const graph = new Graph();
-		await graph.sendMailWithAttachment({
-			to: recipients,
-			subject: `Activación pendiente de usuario (${cleanRecinto})`,
-			htmlBody: `
-				<p>Hola equipo de Talento Humano,</p>
-				<p>Se registró un nuevo usuario y requiere activación en el recinto <strong>${cleanRecinto}</strong>.</p>
-				<ul>
-					<li><strong>Nombre:</strong> ${userName}</li>
-					<li><strong>Correo:</strong> ${userEmail}</li>
-					<li><strong>Identificación:</strong> ${userIdentify}</li>
-					<li><strong>Área:</strong> ${userDepartment}</li>
-					<li><strong>Cargo:</strong> ${userCargo}</li>
-					<li><strong>Empresa:</strong> ${userCompany}</li>
-				</ul>
-				<p>Por favor, revisen y activen el usuario en el módulo de usuarios.</p>
-			`,
+		return await sendHrPendingActivationEmail({
+			name: normalizeOptionalString(targetUser.name) ?? "Sin nombre",
+			email: normalizeOptionalString(targetUser.email) ?? "Sin correo",
+			identify: normalizeOptionalString(targetUser.identify) ?? "No registrada",
+			department: normalizeOptionalString(targetUser.department) ?? "No registrada",
+			cargo: normalizeOptionalString(targetUser.cargo) ?? "No registrado",
+			companyName: normalizeOptionalString(targetUser.companyName) ?? "Grupo Heroica",
+			recinto,
+			databaseUrl,
 		});
+	},
+);
 
-		return {
-			sent: true,
-			recipientsCount: recipients.length,
+interface RegisterUserRequest {
+	readonly name?: string;
+	readonly email?: string;
+	readonly password?: string;
+	readonly identify?: string;
+	readonly department?: string;
+	readonly cargo?: string;
+	readonly recint?: string;
+	readonly leader?: string;
+	readonly worksAtHeroica?: boolean;
+	readonly companyName?: string;
+}
+
+interface RegisterUserResponse {
+	readonly uid: string;
+	readonly databaseUrl: string;
+	readonly recinto: string;
+}
+
+const REGISTER_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const REGISTER_PASSWORD_SPECIAL_REGEX = /[^A-Za-z0-9]/;
+
+const mapClientRecintoToServer = (recinto: string): RecintoKey | null => {
+	const normalized = recinto.toLowerCase().trim();
+	if (normalized === "gh") return "corporativo";
+	if (normalized === "ccci") return "ccci";
+	if (normalized === "cccr") return "cccr";
+	if (normalized === "cevp") return "cevp";
+	return null;
+};
+
+export const registerUser = onCall<RegisterUserRequest>(
+	async (request): Promise<RegisterUserResponse> => {
+		const name = normalizeRequiredString(request.data?.name);
+		const email = normalizeRequiredString(request.data?.email);
+		const password = typeof request.data?.password === "string" ? request.data.password : "";
+		const identify = normalizeRequiredString(request.data?.identify);
+		const cargo = normalizeRequiredString(request.data?.cargo);
+		const recintRaw = normalizeRequiredString(request.data?.recint);
+		const leader = normalizeOptionalString(request.data?.leader);
+		const department = normalizeOptionalString(request.data?.department);
+		const companyName = normalizeOptionalString(request.data?.companyName);
+		const worksAtHeroica = Boolean(request.data?.worksAtHeroica);
+
+		if (!name) {
+			throw new HttpsError("invalid-argument", "El nombre es obligatorio.");
+		}
+		if (!email || !REGISTER_EMAIL_REGEX.test(email)) {
+			throw new HttpsError("invalid-argument", "El correo no es válido.");
+		}
+		if (!password || password.length < 6) {
+			throw new HttpsError("invalid-argument", "La contraseña debe tener al menos 6 caracteres.");
+		}
+		if (!/[A-Z]/.test(password)) {
+			throw new HttpsError("invalid-argument", "La contraseña debe incluir al menos una letra mayúscula.");
+		}
+		if (!REGISTER_PASSWORD_SPECIAL_REGEX.test(password)) {
+			throw new HttpsError("invalid-argument", "La contraseña debe incluir al menos un carácter especial.");
+		}
+		if (!identify) {
+			throw new HttpsError("invalid-argument", "La identificación es obligatoria.");
+		}
+		if (!cargo) {
+			throw new HttpsError("invalid-argument", "El cargo es obligatorio.");
+		}
+		if (!recintRaw) {
+			throw new HttpsError("invalid-argument", "El recinto es obligatorio.");
+		}
+
+		const recint = mapClientRecintoToServer(recintRaw);
+		if (!recint) {
+			throw new HttpsError("invalid-argument", "El recinto no es válido.");
+		}
+
+		if (worksAtHeroica) {
+			if (!department) {
+				throw new HttpsError("invalid-argument", "El área es obligatoria para usuarios de Grupo Heroica.");
+			}
+			if (!leader) {
+				throw new HttpsError("invalid-argument", "El jefe inmediato es obligatorio para usuarios de Grupo Heroica.");
+			}
+		} else if (!companyName) {
+			throw new HttpsError("invalid-argument", "La empresa es obligatoria si no trabajas en Grupo Heroica.");
+		}
+
+		let userRecord: admin.auth.UserRecord;
+		try {
+			userRecord = await admin.auth().createUser({
+				email,
+				password,
+				displayName: name,
+			});
+		} catch (error) {
+			const code = (error as { code?: string }).code;
+			if (code === "auth/email-already-exists") {
+				throw new HttpsError("already-exists", "El correo ya está registrado.");
+			}
+			console.error("Error al crear el usuario en Firebase Auth:", error);
+			throw new HttpsError("internal", "No fue posible crear el usuario.");
+		}
+
+		const databaseUrl = resolveDatabaseUrlByRecinto(recint);
+		if (!databaseUrl) {
+			await admin.auth().deleteUser(userRecord.uid).catch((cleanupError) => {
+				console.error("No se pudo revertir el usuario creado en Firebase Auth:", cleanupError);
+			});
+			throw new HttpsError("failed-precondition", "No se encontró una base de datos para el recinto seleccionado.");
+		}
+
+		const db = admin.app().database(databaseUrl);
+		const userRef = db.ref(`users/${userRecord.uid}`);
+		const nowIso = new Date().toISOString();
+
+		const newUserRecord: Record<string, unknown> = {
+			uid: userRecord.uid,
+			name,
+			email,
+			role: "User",
+			roleId: "user",
+			active: false,
+			createdAt: nowIso,
+			lastLogin: nowIso,
+			identify,
+			department: worksAtHeroica ? department : null,
+			cargo,
+			recint,
+			immediateBoss: worksAtHeroica ? leader : null,
+			companyName: worksAtHeroica ? null : companyName,
 		};
+
+		try {
+			await userRef.set(newUserRecord);
+		} catch (error) {
+			await admin.auth().deleteUser(userRecord.uid).catch((cleanupError) => {
+				console.error("No se pudo revertir el usuario creado en Firebase Auth:", cleanupError);
+			});
+			console.error("Error al crear el registro del usuario en RTDB:", error);
+			throw new HttpsError("internal", "No fue posible crear el registro del usuario.");
+		}
+
+		try {
+			await sendHrPendingActivationEmail({
+				name,
+				email,
+				identify,
+				department: department ?? "No registrada",
+				cargo,
+				companyName: companyName ?? "Grupo Heroica",
+				recinto: recint,
+				databaseUrl,
+			});
+		} catch (error) {
+			console.error("No fue posible enviar la notificación de activación a Talento Humano:", error);
+		}
+
+		return { uid: userRecord.uid, databaseUrl, recinto: recint };
 	},
 );
 
@@ -1688,4 +1864,3 @@ export const onTrainingCompletedSendCertificates = createTrainingCompletedSendCe
 export const onTrainingCompletedSendCertificatesCcci = createTrainingCompletedSendCertificatesTrigger(databaseUrlMap.ccci);
 export const onTrainingCompletedSendCertificatesCccr = createTrainingCompletedSendCertificatesTrigger(databaseUrlMap.cccr);
 export const onTrainingCompletedSendCertificatesCevp = createTrainingCompletedSendCertificatesTrigger(databaseUrlMap.cevp);
-
