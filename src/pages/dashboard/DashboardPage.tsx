@@ -9,6 +9,7 @@ import { get, ref } from 'firebase/database'
 import {
     getAttendanceSummaryFromCloudFunction,
     getEmptyAttendanceSummary,
+    type AttendanceScopeFilter,
     type AttendanceSummary,
 } from '@/services/meetings.analytics.service'
 
@@ -68,9 +69,18 @@ const MONTH_LABELS = [
  * para usuarios corporativos).
  */
 function DashboardPage() {
-    const { user } = useAuth()
+    const { user, hasPermission } = useAuth()
     const { database, databaseUrl, availableDatabases, recinto, loading: dbLoading, isCorporateUser } = useDatabase()
     const emptySummary = useMemo(() => getEmptyAttendanceSummary(), [])
+
+    const canViewAllDashboard = hasPermission("dashboard_view_all")
+    const canViewTeamDashboard = hasPermission("dashboard_view_team")
+
+    const dashboardScope: AttendanceScopeFilter = canViewAllDashboard
+        ? "all"
+        : canViewTeamDashboard
+            ? "team"
+            : "self"
 
     const now = useMemo(() => new Date(), [])
     const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear())
@@ -180,6 +190,8 @@ function DashboardPage() {
                     startTime: rangeStart,
                     endTime: rangeEndExclusive,
                     type: typeFilter === 'ALL' ? undefined : typeFilter,
+                    scope: dashboardScope,
+                    scopeOwnerUid: dashboardScope === "all" ? null : user?.uid ?? null,
                 }
 
                 let result: AttendanceSummary
@@ -242,6 +254,8 @@ function DashboardPage() {
         selectedYear,
         selectedMonth,
         typeFilter,
+        dashboardScope,
+        user?.uid,
     ])
 
     const totalInvited = summary.totalInvited

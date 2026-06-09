@@ -56,6 +56,7 @@ interface RegisterUserRequest {
     readonly cargo: string;
     readonly recint: string;
     readonly leader: string;
+    readonly leaderUid: string;
     readonly worksAtHeroica: boolean;
     readonly companyName: string;
 }
@@ -335,6 +336,7 @@ export const registerWithEmailPassword = async (data: RegisterFormData) => {
             cargo: data.cargo,
             recint: data.recint,
             leader: data.leader,
+            leaderUid: data.leaderUid,
             worksAtHeroica: data.worksAtHeroica,
             companyName: data.companyName,
         });

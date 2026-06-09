@@ -64,6 +64,7 @@ export async function getTrainingsWithParticipants(
     year: number,
     department?: string | null,
     leaderName?: string | null,
+    leaderUid?: string | null,
     month?: number | null,
 ): Promise<TrainingWithParticipants[]> {
     const { startTime, endTime } = ((): { startTime: number; endTime: number } => {
@@ -130,18 +131,27 @@ export async function getTrainingsWithParticipants(
             if (relevantInternalParticipants.length === 0) continue
         }
 
-        if (normalizedLeader) {
+        if (normalizedLeader || leaderUid) {
             relevantInternalParticipants = relevantInternalParticipants.filter((participant) => {
                 const user = usersByUid[participant.uid]
-                const bossRaw = typeof user?.immediateBoss === "string" ? user.immediateBoss : null
-                if (!bossRaw) return false
-                return bossRaw.trim().toLowerCase() === normalizedLeader
+                if (leaderUid) {
+                    if (typeof user?.immediateBossUid === "string" && user.immediateBossUid === leaderUid) {
+                        return true
+                    }
+                }
+                if (normalizedLeader) {
+                    const bossRaw = typeof user?.immediateBoss === "string" ? user.immediateBoss : null
+                    if (bossRaw && bossRaw.trim().toLowerCase() === normalizedLeader) {
+                        return true
+                    }
+                }
+                return false
             })
 
             if (relevantInternalParticipants.length === 0) continue
         }
 
-        const relevantParticipants = normalizedDept || normalizedLeader
+        const relevantParticipants = normalizedDept || normalizedLeader || leaderUid
             ? [...relevantInternalParticipants, ...externalParticipants]
             : participantsWithExternal
 

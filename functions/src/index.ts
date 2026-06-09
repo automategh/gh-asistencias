@@ -846,6 +846,7 @@ interface RegisterUserRequest {
 	readonly cargo?: string;
 	readonly recint?: string;
 	readonly leader?: string;
+	readonly leaderUid?: string;
 	readonly worksAtHeroica?: boolean;
 	readonly companyName?: string;
 }
@@ -876,7 +877,7 @@ export const registerUser = onCall<RegisterUserRequest>(
 		const identify = normalizeRequiredString(request.data?.identify);
 		const cargo = normalizeRequiredString(request.data?.cargo);
 		const recintRaw = normalizeRequiredString(request.data?.recint);
-		const leader = normalizeOptionalString(request.data?.leader);
+		const leaderUid = normalizeOptionalString(request.data?.leaderUid);
 		const department = normalizeOptionalString(request.data?.department);
 		const companyName = normalizeOptionalString(request.data?.companyName);
 		const worksAtHeroica = Boolean(request.data?.worksAtHeroica);
@@ -915,7 +916,7 @@ export const registerUser = onCall<RegisterUserRequest>(
 			if (!department) {
 				throw new HttpsError("invalid-argument", "El área es obligatoria para usuarios de Grupo Heroica.");
 			}
-			if (!leader) {
+			if (!leaderUid) {
 				throw new HttpsError("invalid-argument", "El jefe inmediato es obligatorio para usuarios de Grupo Heroica.");
 			}
 		} else if (!companyName) {
@@ -963,7 +964,7 @@ export const registerUser = onCall<RegisterUserRequest>(
 			department: worksAtHeroica ? department : null,
 			cargo,
 			recint,
-			immediateBoss: worksAtHeroica ? leader : null,
+			immediateBossUid: worksAtHeroica ? leaderUid : null,
 			companyName: worksAtHeroica ? null : companyName,
 		};
 
@@ -1864,3 +1865,222 @@ export const onTrainingCompletedSendCertificates = createTrainingCompletedSendCe
 export const onTrainingCompletedSendCertificatesCcci = createTrainingCompletedSendCertificatesTrigger(databaseUrlMap.ccci);
 export const onTrainingCompletedSendCertificatesCccr = createTrainingCompletedSendCertificatesTrigger(databaseUrlMap.cccr);
 export const onTrainingCompletedSendCertificatesCevp = createTrainingCompletedSendCertificatesTrigger(databaseUrlMap.cevp);
+
+interface MigrateImmediateBossRequest {
+	readonly mode?: "preview" | "commit"
+}
+
+interface MigrateImmediateBossResponse {
+	readonly mode: "preview" | "commit"
+	readonly databaseUrl: string
+	readonly recinto: RecintoKey
+	readonly scanned: number
+	readonly matched: number
+	readonly unmatched: number
+	readonly unmatchedSamples: ReadonlyArray<{ uid: string; bossName: string }>
+}
+
+interface StoredImmediateBossUser {
+	readonly immediateBoss?: string | null
+	readonly immediateBossUid?: string | null
+}
+
+const migrateImmediateBossForDatabase = async (
+	databaseUrl: string,
+	recinto: RecintoKey,
+	mode: "preview" | "commit",
+): Promise<MigrateImmediateBossResponse> => {
+	const database = admin.app().database(databaseUrl)
+	const usersSnap = await database.ref("users").get()
+	const users = usersSnap.val() as Record<string, StoredImmediateBossUser> | null
+
+	if (!users) {
+		return {
+			mode,
+			databaseUrl,
+			recinto,
+			scanned: 0,
+			matched: 0,
+			unmatched: 0,
+			unmatchedSamples: [],
+		}
+	}
+
+	const bossNameToUid = new Map<string, string>()
+	for (const [uid, record] of Object.entries(users)) {
+		const name = typeof (record as { name?: string | null }).name === "string"
+			? ((record as { name?: string | null }).name ?? "").trim()
+			: ""
+		if (name.length > 0) {
+			bossNameToUid.set(name.toLowerCase(), uid)
+		}
+	}
+
+	const updates: Record<string, unknown> = {}
+	let scanned = 0
+	let matched = 0
+	let unmatched = 0
+	const unmatchedSamples: Array<{ uid: string; bossName: string }> = []
+
+	for (const [uid, record] of Object.entries(users)) {
+		if (typeof record.immediateBossUid === "string" && record.immediateBossUid.trim().length > 0) {
+			continue
+		}
+		const bossName = typeof record.immediateBoss === "string" ? record.immediateBoss.trim() : ""
+		if (bossName.length === 0) {
+			continue
+		}
+		scanned += 1
+		const bossUid = bossNameToUid.get(bossName.toLowerCase())
+		if (bossUid) {
+			matched += 1
+			if (mode === "commit") {
+				updates[`users/${uid}/immediateBossUid`] = bossUid
+			}
+		} else {
+			unmatched += 1
+			if (unmatchedSamples.length < 20) {
+				unmatchedSamples.push({ uid, bossName })
+			}
+		}
+	}
+
+	if (mode === "commit" && Object.keys(updates).length > 0) {
+		await database.ref().update(updates)
+	}
+
+	return {
+		mode,
+		databaseUrl,
+		recinto,
+		scanned,
+		matched,
+		unmatched,
+		unmatchedSamples,
+	}
+};
+
+export const migrateImmediateBossToUid = onCall<MigrateImmediateBossRequest>(
+	async (request): Promise<MigrateImmediateBossResponse[]> => {
+		const expectedToken = process.env.MIGRATION_TOKEN
+		const providedToken = typeof request.rawRequest?.headers?.["x-migration-token"] === "string"
+			? (request.rawRequest.headers["x-migration-token"] as string)
+			: null
+
+		if (!expectedToken) {
+			throw new HttpsError(
+				"failed-precondition",
+				"MIGRATION_TOKEN no está configurado en las cloud functions. Configúralo antes de ejecutar migraciones.",
+			)
+		}
+		if (providedToken !== expectedToken) {
+			throw new HttpsError("permission-denied", "Token de migración inválido o ausente.")
+		}
+
+		const mode = request.data?.mode === "commit" ? "commit" : "preview"
+		const map = getDatabaseUrlMap()
+		const results: MigrateImmediateBossResponse[] = []
+
+		const recintos: RecintoKey[] = ["corporativo", "ccci", "cccr", "cevp"]
+		for (const recinto of recintos) {
+			const databaseUrl = map[recinto]
+			if (!databaseUrl) continue
+			const result = await migrateImmediateBossForDatabase(databaseUrl, recinto, mode)
+			results.push(result)
+		}
+
+		return results
+	},
+);
+
+interface CleanImmediateBossLegacyRequest {
+	readonly mode?: "preview" | "commit"
+	/** Por seguridad: solo limpia usuarios que tengan `immediateBossUid` poblado. */
+	readonly requireUidPopulated?: boolean
+}
+
+interface CleanImmediateBossLegacyResponse {
+	readonly mode: "preview" | "commit"
+	readonly databaseUrl: string
+	readonly recinto: RecintoKey
+	readonly scanned: number
+	readonly cleared: number
+	readonly skippedNoUid: number
+}
+
+const cleanImmediateBossLegacyForDatabase = async (
+	databaseUrl: string,
+	recinto: RecintoKey,
+	mode: "preview" | "commit",
+	requireUidPopulated: boolean,
+): Promise<CleanImmediateBossLegacyResponse> => {
+	const database = admin.app().database(databaseUrl)
+	const usersSnap = await database.ref("users").get()
+	const users = usersSnap.val() as Record<string, { immediateBoss?: string | null; immediateBossUid?: string | null }> | null
+
+	if (!users) {
+		return { mode, databaseUrl, recinto, scanned: 0, cleared: 0, skippedNoUid: 0 }
+	}
+
+	const updates: Record<string, null> = {}
+	let scanned = 0
+	let cleared = 0
+	let skippedNoUid = 0
+
+	for (const [uid, record] of Object.entries(users)) {
+		const hasLegacy = typeof record.immediateBoss === "string" && record.immediateBoss.trim().length > 0
+		if (!hasLegacy) {
+			continue
+		}
+		scanned += 1
+		const hasUid = typeof record.immediateBossUid === "string" && record.immediateBossUid.trim().length > 0
+		if (requireUidPopulated && !hasUid) {
+			skippedNoUid += 1
+			continue
+		}
+		cleared += 1
+		if (mode === "commit") {
+			updates[`users/${uid}/immediateBoss`] = null
+		}
+	}
+
+	if (mode === "commit" && Object.keys(updates).length > 0) {
+		await database.ref().update(updates)
+	}
+
+	return { mode, databaseUrl, recinto, scanned, cleared, skippedNoUid }
+};
+
+export const cleanImmediateBossLegacyField = onCall<CleanImmediateBossLegacyRequest>(
+	async (request): Promise<CleanImmediateBossLegacyResponse[]> => {
+		const expectedToken = process.env.MIGRATION_TOKEN
+		const providedToken = typeof request.rawRequest?.headers?.["x-migration-token"] === "string"
+			? (request.rawRequest.headers["x-migration-token"] as string)
+			: null
+
+		if (!expectedToken) {
+			throw new HttpsError(
+				"failed-precondition",
+				"MIGRATION_TOKEN no está configurado. Configúralo antes de ejecutar esta limpieza.",
+			)
+		}
+		if (providedToken !== expectedToken) {
+			throw new HttpsError("permission-denied", "Token de migración inválido o ausente.")
+		}
+
+		const mode = request.data?.mode === "commit" ? "commit" : "preview"
+		const requireUidPopulated = request.data?.requireUidPopulated !== false
+
+		const map = getDatabaseUrlMap()
+		const recintos: RecintoKey[] = ["corporativo", "ccci", "cccr", "cevp"]
+		const results: CleanImmediateBossLegacyResponse[] = []
+		for (const recinto of recintos) {
+			const databaseUrl = map[recinto]
+			if (!databaseUrl) continue
+			const result = await cleanImmediateBossLegacyForDatabase(databaseUrl, recinto, mode, requireUidPopulated)
+			results.push(result)
+		}
+
+		return results
+	},
+);

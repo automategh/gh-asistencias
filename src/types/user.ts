@@ -30,6 +30,7 @@ export interface UserProfile {
   readonly department?: string | null
   readonly identify?: string | null
   readonly immediateBoss?: string | null
+  readonly immediateBossUid?: string | null
   readonly companyName?: string | null
   readonly cargo?: string | null
   readonly signatureUrl?: string | null
@@ -67,6 +68,7 @@ export interface RegisterFormData {
   confirmPassword: string
   recint: string
   leader: string
+  leaderUid: string
   worksAtHeroica: boolean
   companyName: string
 }

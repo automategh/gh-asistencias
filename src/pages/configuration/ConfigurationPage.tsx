@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { getDepartaments } from '@/services/departaments/departments.service';
 import type { Departament } from '@/types/departament';
-import { getLeaderNames, updateUserProfile } from '@/services/user.service';
+import { getLeaders, updateUserProfile, type LeaderOption } from '@/services/user.service';
 import Layout from '@/components/layouts/layout';
 import { useDatabase } from '@/context/DatabaseContext';
 import { getDatabaseForUrl } from '@/services/firebase';
@@ -51,15 +51,15 @@ function ConfigurationProfilePage() {
     const [isEditing, setIsEditing] = useState<boolean>(false);
     const [departaments, setDepartaments] = useState<Departament[]>([]);
     const [signature, setSignature] = useState<string | null>(null);
-    type EditableProfile = Partial<Pick<UserProfile, 'name' | 'department' | 'identify' | 'immediateBoss' | 'cargo'>>
+    type EditableProfile = Partial<Pick<UserProfile, 'name' | 'department' | 'identify' | 'immediateBossUid' | 'cargo'>>
     const [formData, setFormData] = useState<EditableProfile>({
         name: '',
         department: '',
         identify: '',
-        immediateBoss: '',
+        immediateBossUid: '',
         cargo: '',
     })
-    const [leaders, setLeaders] = useState<string[]>([]);
+    const [leaders, setLeaders] = useState<LeaderOption[]>([]);
     const [showIncompleteProfileModal, setShowIncompleteProfileModal] = useState<boolean>(false);
     const [profileValidationError, setProfileValidationError] = useState<string | null>(null);
     const [passwordForm, setPasswordForm] = useState<{ current: string; next: string; confirm: string }>({ current: '', next: '', confirm: '' });
@@ -93,7 +93,7 @@ function ConfigurationProfilePage() {
         if (!user.cargo || user.cargo.trim().length === 0) {
             missing.push('Cargo')
         }
-        if (worksAtHeroica && (!user.immediateBoss || user.immediateBoss.trim().length === 0)) {
+        if (worksAtHeroica && (!user.immediateBossUid || user.immediateBossUid.trim().length === 0) && (!user.immediateBoss || user.immediateBoss.trim().length === 0)) {
             missing.push('Jefe inmediato')
         }
         if (!hasRegisteredSignature) {
@@ -174,13 +174,12 @@ function ConfigurationProfilePage() {
                 console.error("Error al cargar departamentos:", error);
             });
 
-        getLeaderNames(database, { explicitOnly: true })
-            .then(names => {
-                // Aquí podrías usar los nombres de líderes si es necesario
-                setLeaders(names);
+        getLeaders(database, { explicitOnly: true })
+            .then(leaderOptions => {
+                setLeaders(leaderOptions);
             })
             .catch(error => {
-                console.error("Error al obtener nombres de líderes:", error);
+                console.error("Error al obtener líderes:", error);
             });
 
         const resolvedDatabase = resolveDatabaseByEmail(firebaseUser?.email ?? null)
@@ -207,7 +206,7 @@ function ConfigurationProfilePage() {
             name: user.name || '',
             department: user.department || '',
             identify: user.identify || '',
-            immediateBoss: user.immediateBoss || '',
+            immediateBossUid: user.immediateBossUid || '',
             cargo: user.cargo || '',
         })
         setIsEditing(true)
@@ -254,8 +253,11 @@ function ConfigurationProfilePage() {
                 signature,
             })
 
+            const immediateBossUid = formData.immediateBossUid?.trim() ? formData.immediateBossUid : null
+
             const updatedProfile = await updateUserProfile(database, firebaseUser.uid, {
                 ...formData,
+                immediateBossUid,
                 signatureUrl: signatureUrlToSave,
             });
 
@@ -541,7 +543,7 @@ function ConfigurationProfilePage() {
                                                 name: user?.name || '',
                                                 department: user?.department || '',
                                                 identify: user?.identify || '',
-                                                immediateBoss: user?.immediateBoss || '',
+                                                immediateBossUid: user?.immediateBossUid || '',
                                                 cargo: user?.cargo || '',
                                             })
                                             setIsEditing(true)
@@ -562,7 +564,7 @@ function ConfigurationProfilePage() {
                                                 name: user?.name || "",
                                                 department: user?.department || "",
                                                 identify: user?.identify || "",
-                                                immediateBoss: user?.immediateBoss || "",
+                                                immediateBossUid: user?.immediateBossUid || "",
                                                 cargo: user?.cargo || "",
                                             })
                                         }}
@@ -661,21 +663,25 @@ function ConfigurationProfilePage() {
                                             </label>
                                             {isEditing ? (
                                                 <select
-                                                    name="immediateBoss"
-                                                    value={formData.immediateBoss || ""}
+                                                    name="immediateBossUid"
+                                                    value={formData.immediateBossUid || ""}
                                                     disabled={!isEditing || isLocked}
                                                     onChange={handleInputChange}
                                                     className={`w-full px-3 py-2 text-sm bg-muted/40 rounded-lg text-foreground ${!isEditing || isLocked ? 'cursor-not-allowed' : ''}`}
                                                 >
                                                     <option value="">Selecciona un líder</option>
                                                     {leaders.map((leader) => (
-                                                        <option key={leader} value={leader}>
-                                                            {leader}
+                                                        <option key={leader.uid} value={leader.uid}>
+                                                            {leader.name}
                                                         </option>
                                                     ))}
                                                 </select>) : (
                                                 <div className={`w-full px-3 py-2 text-sm bg-muted/40 rounded-lg text-foreground ${!isEditing || isLocked ? 'cursor-not-allowed' : ''}`}>
-                                                    {user?.immediateBoss || 'No asignado'}
+                                                    {(() => {
+                                                        const matchedLeader = leaders.find((leader) => leader.uid === user?.immediateBossUid)
+                                                        if (matchedLeader) return matchedLeader.name
+                                                        return user?.immediateBoss || 'No asignado'
+                                                    })()}
                                                 </div>
                                             )}
                                         </div>
@@ -933,7 +939,7 @@ function ConfigurationProfilePage() {
                                                     name: user?.name || "",
                                                     department: user?.department || "",
                                                     identify: user?.identify || "",
-                                                    immediateBoss: user?.immediateBoss || "",
+                                                    immediateBossUid: user?.immediateBossUid || "",
                                                     cargo: user?.cargo || "",
                                                 })
                                             }}

@@ -42,6 +42,13 @@ export async function getUserLeaders(
             .map(([roleId]) => roleId.trim().toLowerCase()),
     )
 
+    const referencedBossUids = new Set<string>(
+        Object.values(values)
+            .map((user) => (typeof user.immediateBossUid === "string" ? user.immediateBossUid.trim() : ""))
+            .filter((bossUid) => bossUid.length > 0),
+    )
+
+    // Fallback de compat: usuarios que referencian al jefe por nombre (sin uid aún).
     const referencedBossNames = new Set<string>(
         Object.values(values)
             .map((user) => (typeof user.immediateBoss === "string" ? user.immediateBoss.trim().toLowerCase() : ""))
@@ -75,9 +82,10 @@ export async function getUserLeaders(
             const normalizedRoleId = userCandidate.roleId.trim().toLowerCase()
             const hasLegacyLeaderRole = normalizedRole === "lider"
             const hasTeamScopedPermission = normalizedRoleId.length > 0 && roleIdsWithTeamScope.has(normalizedRoleId)
-            const isReferencedAsBoss = referencedBossNames.has(cleanName.toLowerCase())
+            const isReferencedAsBossByUid = referencedBossUids.has(userCandidate.uid)
+            const isReferencedAsBossByName = referencedBossNames.has(cleanName.toLowerCase())
 
-            return hasLegacyLeaderRole || hasTeamScopedPermission || isReferencedAsBoss
+            return hasLegacyLeaderRole || hasTeamScopedPermission || isReferencedAsBossByUid || isReferencedAsBossByName
         })
         .sort((first, second) => first.name.localeCompare(second.name));
 
@@ -85,15 +93,23 @@ export async function getUserLeaders(
 }
 
 /**
- * Obtiene nombres de líderes.
+ * Representa un líder con su uid y nombre visible.
+ */
+export interface LeaderOption {
+    readonly uid: string;
+    readonly name: string;
+}
+
+/**
+ * Obtiene líderes como opciones `{ uid, name }[]`.
  *
  * - `explicitOnly=true`: solo usuarios con `isLeader=true`.
  * - `explicitOnly=false` (default): usa la resolución completa de liderazgo.
  */
-export async function getLeaderNames(
+export async function getLeaders(
     database: Database,
     options?: { explicitOnly?: boolean },
-) {
+): Promise<LeaderOption[]> {
     const explicitOnly = options?.explicitOnly === true
 
     if (!auth?.currentUser || explicitOnly) {
@@ -101,20 +117,30 @@ export async function getLeaderNames(
         const snapshot = await get(leadersRef)
         const users = snapshot.val() as Record<string, Partial<UserProfile>> | null
 
-        const names = Object.values(users ?? {})
-            .map((user) => (typeof user.name === "string" ? user.name.trim() : ""))
-            .filter((name) => name.length > 0)
+        const seen = new Map<string, LeaderOption>()
+        for (const [uid, user] of Object.entries(users ?? {})) {
+            const name = typeof user.name === "string" ? user.name.trim() : ""
+            if (name.length === 0) continue
+            if (!seen.has(uid)) {
+                seen.set(uid, { uid, name })
+            }
+        }
 
-        return Array.from(new Set(names)).sort((first, second) => first.localeCompare(second))
+        return Array.from(seen.values()).sort((first, second) => first.name.localeCompare(second.name))
     }
 
     try {
         const leaders = await getUserLeaders(database);
-        const uniqueNames = Array.from(new Set(leaders.map((user) => user.name.trim())))
-            .filter((name) => name.length > 0)
-            .sort((first, second) => first.localeCompare(second))
+        const seen = new Map<string, LeaderOption>()
+        for (const leader of leaders) {
+            const name = leader.name.trim()
+            if (name.length === 0) continue
+            if (!seen.has(leader.uid)) {
+                seen.set(leader.uid, { uid: leader.uid, name })
+            }
+        }
 
-        return uniqueNames;
+        return Array.from(seen.values()).sort((first, second) => first.name.localeCompare(second.name))
     } catch (error) {
         const isPermissionDenied = error instanceof Error && error.message.toLowerCase().includes("permission_denied")
         if (!isPermissionDenied) {
@@ -126,11 +152,16 @@ export async function getLeaderNames(
         const snapshot = await get(leadersRef)
         const users = snapshot.val() as Record<string, Partial<UserProfile>> | null
 
-        const names = Object.values(users ?? {})
-            .map((user) => (typeof user.name === "string" ? user.name.trim() : ""))
-            .filter((name) => name.length > 0)
+        const seen = new Map<string, LeaderOption>()
+        for (const [uid, user] of Object.entries(users ?? {})) {
+            const name = typeof user.name === "string" ? user.name.trim() : ""
+            if (name.length === 0) continue
+            if (!seen.has(uid)) {
+                seen.set(uid, { uid, name })
+            }
+        }
 
-        return Array.from(new Set(names)).sort((first, second) => first.localeCompare(second))
+        return Array.from(seen.values()).sort((first, second) => first.name.localeCompare(second.name))
     }
 }
 
@@ -144,18 +175,19 @@ export interface ReportUserItem {
     readonly department?: string | null
     readonly cargo?: string | null
     readonly immediateBoss?: string | null
+    readonly immediateBossUid?: string | null
 }
 
 /**
  * Obtiene usuarios para vistas de reportes.
  *
- * - Si se pasa `leaderName`, solo devuelve usuarios cuyo `immediateBoss`
- *   coincide (ignorando mayúsculas/minúsculas y espacios).
+ * - Si se pasa `leaderUid`, filtra por coincidencia exacta con `immediateBossUid`.
+ * - Si se pasa `leaderName`, hace fallback al filtro por nombre (compat).
  * - Filtra usuarios sin nombre o email válidos.
  */
 export async function getUsersForReports(
     database: Database,
-    options?: { leaderName?: string | null },
+    options?: { leaderName?: string | null; leaderUid?: string | null },
 ): Promise<ReportUserItem[]> {
     if (!database) {
         throw new Error("La base de datos no está disponible");
@@ -173,6 +205,10 @@ export async function getUsersForReports(
         ? options.leaderName.trim().toLowerCase()
         : null;
 
+    const leaderUid = typeof options?.leaderUid === "string" && options.leaderUid.trim().length > 0
+        ? options.leaderUid.trim()
+        : null;
+
     const items: ReportUserItem[] = [];
 
     for (const [uid, data] of Object.entries(raw)) {
@@ -183,12 +219,21 @@ export async function getUsersForReports(
             continue;
         }
 
-        if (normalizedLeader) {
+        let matches = !normalizedLeader && !leaderUid
+        if (!matches && leaderUid) {
+            if (typeof data.immediateBossUid === "string" && data.immediateBossUid === leaderUid) {
+                matches = true
+            }
+        }
+        if (!matches && normalizedLeader) {
             const bossRaw = typeof data.immediateBoss === "string" ? data.immediateBoss : null;
             const bossNormalized = bossRaw ? bossRaw.trim().toLowerCase() : "";
-            if (!bossNormalized || bossNormalized !== normalizedLeader) {
-                continue;
+            if (bossNormalized && bossNormalized === normalizedLeader) {
+                matches = true
             }
+        }
+        if (!matches) {
+            continue;
         }
 
         items.push({
@@ -198,6 +243,7 @@ export async function getUsersForReports(
             department: typeof data.department === "string" ? data.department : data.department ?? null,
             cargo: typeof data.cargo === "string" ? data.cargo : data.cargo ?? null,
             immediateBoss: typeof data.immediateBoss === "string" ? data.immediateBoss : data.immediateBoss ?? null,
+            immediateBossUid: typeof data.immediateBossUid === "string" ? data.immediateBossUid : data.immediateBossUid ?? null,
         });
     }
 

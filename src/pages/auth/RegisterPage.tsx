@@ -1,7 +1,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { getDatabaseByRecinto, type RecintoKey } from "@/lib/firebase/databaseResolver";
 import { getDepartmentNames } from "@/services/departaments/departments.service";
-import { getLeaderNames } from "@/services/user.service";
+import { getLeaders, type LeaderOption } from "@/services/user.service";
 import { validatePasswordPolicy } from "@/lib/password-policy";
 import type { RegisterFormData } from "@/types/user";
 import { Briefcase, Building2, ChevronDown, IdCard, Landmark, Lock, Mail, User } from "lucide-react"
@@ -13,7 +13,7 @@ function RegisterPage() {
     const { registerWithEmailPassword } = useAuth();
     const navigate = useNavigate()
     const [departaments, setDepartaments] = useState<string[]>([]);
-    const [leaders, setLeaders] = useState<string[]>([]);
+    const [leaders, setLeaders] = useState<LeaderOption[]>([]);
     const [loadingRecintoCatalogs, setLoadingRecintoCatalogs] = useState<boolean>(false)
     const [formData, setFormData] = useState<RegisterFormData>({
         name: "",
@@ -25,6 +25,7 @@ function RegisterPage() {
         confirmPassword: "",
         recint: "",
         leader: "",
+        leaderUid: "",
         worksAtHeroica: true,
         companyName: "",
     });
@@ -41,7 +42,7 @@ function RegisterPage() {
 
         try {
             setLoadingRecintoCatalogs(true)
-            const [leaderData, departamentData] = await Promise.all([getLeaderNames(db), getDepartmentNames(db)])
+            const [leaderData, departamentData] = await Promise.all([getLeaders(db), getDepartmentNames(db)])
             setLeaders(leaderData)
             setDepartaments(departamentData)
             console.log("Catalogos cargados para recinto", recinto, {
@@ -57,7 +58,7 @@ function RegisterPage() {
 
     const handleRecintoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const key = e.target.value as RecintoKey;
-        setFormData(prev => ({ ...prev, recint: key, department: "", leader: "" }));
+        setFormData(prev => ({ ...prev, recint: key, department: "", leader: "", leaderUid: "" }));
     }
 
     useEffect(() => {
@@ -102,6 +103,7 @@ function RegisterPage() {
             updateField("companyName", "")
         } else {
             updateField("leader", "")
+            updateField("leaderUid", "")
             updateField("department", "")
         }
     }
@@ -119,7 +121,7 @@ function RegisterPage() {
         if (data.worksAtHeroica && !data.department.trim()) return "El área es obligatoria.";
         if (!data.cargo.trim()) return "El cargo es obligatorio.";
         if (!data.recint.trim()) return "El recinto es obligatorio.";
-        if (data.worksAtHeroica && !data.leader.trim()) return "El jefe inmediato es obligatorio para usuarios de Grupo Heroica.";
+        if (data.worksAtHeroica && !data.leaderUid.trim()) return "El jefe inmediato es obligatorio para usuarios de Grupo Heroica.";
         if (!data.worksAtHeroica && !data.companyName.trim()) return "La empresa es obligatoria si no trabajas en Grupo Heroica.";
         const passwordPolicyError = validatePasswordPolicy(data.password)
         if (passwordPolicyError) return passwordPolicyError
@@ -324,17 +326,22 @@ function RegisterPage() {
                                 <div className="relative">
                                     <User className="absolute left-3 top-3.5 w-5 h-5 text-muted-foreground pointer-events-none" />
                                     <select
-                                        name="leader"
+                                        name="leaderUid"
                                         defaultValue=""
-                                        value={formData.leader}
-                                        onChange={handleChange}
+                                        value={formData.leaderUid}
+                                        onChange={(event) => {
+                                            const selectedUid = event.target.value
+                                            const selectedLeader = leaders.find((leader) => leader.uid === selectedUid)
+                                            updateField("leaderUid", selectedUid)
+                                            updateField("leader", selectedLeader?.name ?? "")
+                                        }}
                                         className="w-full bg-input border border-border rounded-lg text-foreground placeholder-muted-foreground transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-0 focus:border-transparent hover:bg-white dark:hover:bg-slate-800 pl-10 pr-10 appearance-none cursor-pointer py-3"
                                         required
                                         disabled={!formData.recint || loadingRecintoCatalogs}
                                     >
                                         <option value="">{!formData.recint ? "Primero selecciona un recinto" : loadingRecintoCatalogs ? "Cargando líderes..." : leaders.length === 0 ? "No hay líderes disponibles" : "Selecciona tu jefe inmediato"}</option>
                                         {leaders.map((leader) => (
-                                            <option key={leader} value={leader}>{leader}</option>
+                                            <option key={leader.uid} value={leader.uid}>{leader.name}</option>
                                         ))}
                                     </select>
                                     <ChevronDown className="absolute right-3 top-3.5 w-5 h-5 text-muted-foreground pointer-events-none" />

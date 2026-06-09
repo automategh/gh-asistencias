@@ -7,12 +7,15 @@ if (!admin.apps.length) {
 
 type AnalyticsMeetingKind = "meeting" | "training" | "custom"
 type AnalyticsTypeFilter = AnalyticsMeetingKind | "ALL"
+type AnalyticsScopeFilter = "all" | "team" | "self"
 
 interface AttendanceSummaryRequest {
 	readonly startTime?: number | null
 	readonly endTime?: number | null
 	readonly type?: AnalyticsTypeFilter | null
 	readonly databaseUrls?: readonly string[] | null
+	readonly scope?: AnalyticsScopeFilter | null
+	readonly scopeOwnerUid?: string | null
 }
 
 interface MeetingKindStats {
@@ -41,6 +44,8 @@ interface AttendanceQueryOptions {
 	readonly startTime: number
 	readonly endTime: number
 	readonly type: AnalyticsTypeFilter
+	readonly scope: AnalyticsScopeFilter
+	readonly scopeOwnerUid: string | null
 }
 
 interface StoredMeeting {
@@ -48,6 +53,7 @@ interface StoredMeeting {
 }
 
 interface StoredParticipant {
+	readonly uid?: string | null
 	readonly attendance?: string | null
 	readonly noShow?: boolean | null
 }
@@ -55,6 +61,50 @@ interface StoredParticipant {
 interface MeetingSnapshotItem {
 	readonly id: string
 	readonly type: AnalyticsMeetingKind
+}
+
+function participantMatchesScope(
+	participant: StoredParticipant,
+	scope: AnalyticsScopeFilter,
+	scopeOwnerUid: string | null,
+	teamUids: ReadonlySet<string>,
+): boolean {
+	if (scope === "all") {
+		return true
+	}
+	if (!scopeOwnerUid) {
+		return false
+	}
+	if (scope === "self") {
+		return participant.uid === scopeOwnerUid
+	}
+	// scope === "team": incluye al dueño y a su equipo
+	if (participant.uid === scopeOwnerUid) {
+		return true
+	}
+	if (participant.uid === undefined || participant.uid === null) {
+		return false
+	}
+	return teamUids.has(participant.uid)
+}
+
+async function loadTeamUidsForOwner(
+	database: admin.database.Database,
+	ownerUid: string,
+): Promise<Set<string>> {
+	const teamUids = new Set<string>()
+	const usersSnap = await database.ref("users").get()
+	const users = usersSnap.val() as Record<string, { immediateBossUid?: string | null; immediateBoss?: string | null }> | null
+	if (!users) {
+		return teamUids
+	}
+	for (const [uid, record] of Object.entries(users)) {
+		if (uid === ownerUid) continue
+		if (record.immediateBossUid === ownerUid) {
+			teamUids.add(uid)
+		}
+	}
+	return teamUids
 }
 
 const PARTICIPANTS_BATCH_SIZE = 25
@@ -107,6 +157,18 @@ function normalizeTypeFilter(value: AnalyticsTypeFilter | null | undefined): Ana
 	}
 
 	throw new HttpsError("invalid-argument", "El filtro de tipo no es válido.")
+}
+
+function normalizeScopeFilter(value: AnalyticsScopeFilter | null | undefined): AnalyticsScopeFilter {
+	if (typeof value === "undefined" || value === null) {
+		return "all"
+	}
+
+	if (value === "all" || value === "team" || value === "self") {
+		return value
+	}
+
+	throw new HttpsError("invalid-argument", "El alcance (scope) no es válido.")
 }
 
 function normalizeDatabaseUrls(databaseUrls: readonly string[] | null | undefined): string[] {
@@ -220,12 +282,18 @@ function parseRequest(data: AttendanceSummaryRequest): {
 
 	const type = normalizeTypeFilter(data.type)
 	const databaseUrls = normalizeDatabaseUrls(data.databaseUrls)
+	const scope = normalizeScopeFilter(data.scope)
+	const scopeOwnerUid = typeof data.scopeOwnerUid === "string" && data.scopeOwnerUid.trim().length > 0
+		? data.scopeOwnerUid.trim()
+		: null
 
 	return {
 		options: {
 			startTime,
 			endTime,
 			type,
+			scope,
+			scopeOwnerUid,
 		},
 		databaseUrls,
 	}
@@ -235,12 +303,22 @@ function accumulateMeeting(
 	summary: AttendanceSummary,
 	meetingType: AnalyticsMeetingKind,
 	participants: readonly StoredParticipant[],
+	scope: AnalyticsScopeFilter,
+	scopeOwnerUid: string | null,
+	teamUids: ReadonlySet<string>,
 ): void {
+	const filtered = participants.filter((participant) =>
+		participantMatchesScope(participant, scope, scopeOwnerUid, teamUids),
+	)
+	if (filtered.length === 0) {
+		return
+	}
+
 	const kindStats = summary.byType[meetingType]
 	summary.totalMeetings += 1
 	kindStats.meetings += 1
 
-	for (const participant of participants) {
+	for (const participant of filtered) {
 		summary.totalInvited += 1
 		kindStats.invited += 1
 
@@ -342,6 +420,10 @@ async function getAttendanceSummaryForDatabase(
 		return summary
 	}
 
+	const teamUids = options.scope === "team" && options.scopeOwnerUid
+		? await loadTeamUidsForOwner(database, options.scopeOwnerUid)
+		: new Set<string>()
+
 	const participantsByMeetingId = await loadParticipantsByMeetingId(
 		database,
 		meetings.map((meeting) => meeting.id),
@@ -349,7 +431,7 @@ async function getAttendanceSummaryForDatabase(
 
 	for (const meeting of meetings) {
 		const participants = participantsByMeetingId[meeting.id] ?? []
-		accumulateMeeting(summary, meeting.type, participants)
+		accumulateMeeting(summary, meeting.type, participants, options.scope, options.scopeOwnerUid, teamUids)
 	}
 
 	return summary

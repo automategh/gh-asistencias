@@ -68,6 +68,14 @@ interface ExternalTrainingParticipantRecord {
 }
 
 /**
+ * Alcance del filtro por usuario al calcular métricas.
+ * - `all`: sin filtro de usuario
+ * - `team`: solo el uid del dueño y los usuarios que lo tienen como `immediateBossUid`
+ * - `self`: solo el uid del dueño
+ */
+export type AttendanceScopeFilter = "all" | "team" | "self"
+
+/**
  * Opciones de consulta para calcular métricas de asistencia.
  * `startTime` y `endTime` se expresan en epoch ms.
  */
@@ -75,6 +83,8 @@ export interface AttendanceQueryOptions {
   startTime: number
   endTime: number
   type?: MeetingKind | "ALL"
+  scope?: AttendanceScopeFilter
+  scopeOwnerUid?: string | null
 }
 
 interface AttendanceSummaryFunctionRequest {
@@ -82,6 +92,8 @@ interface AttendanceSummaryFunctionRequest {
   readonly endTime: number
   readonly type: MeetingKind | "ALL"
   readonly databaseUrls: readonly string[]
+  readonly scope: AttendanceScopeFilter
+  readonly scopeOwnerUid: string | null
 }
 
 interface AttendanceSummaryFunctionResponse {
@@ -166,6 +178,8 @@ export async function getAttendanceSummaryFromCloudFunction(
     endTime: options.endTime,
     type: options.type ?? "ALL",
     databaseUrls: normalizedUrls,
+    scope: options.scope ?? "all",
+    scopeOwnerUid: options.scopeOwnerUid ?? null,
   })
 
   const omittedCount = response.data.omittedDatabases.length
@@ -447,6 +461,7 @@ export async function getTrainingKpiForYear(
   year: number,
   department?: string | null,
   leaderName?: string | null,
+  leaderUid?: string | null,
   month?: number | null,
 ): Promise<TrainingKpiSummary> {
   const { startTime, endTime } = getPeriodRangeForYearAndMonth(year, month)
@@ -519,12 +534,21 @@ export async function getTrainingKpiForYear(
       }
     }
 
-    if (normalizedLeader) {
+    if (normalizedLeader || leaderUid) {
       relevantInternalParticipants = relevantInternalParticipants.filter((participant) => {
         const user = usersByUid[participant.uid]
-        const bossRaw = typeof user?.immediateBoss === "string" ? user.immediateBoss : null
-        if (!bossRaw) return false
-        return bossRaw.trim().toLowerCase() === normalizedLeader
+        if (leaderUid) {
+          if (typeof user?.immediateBossUid === "string" && user.immediateBossUid === leaderUid) {
+            return true
+          }
+        }
+        if (normalizedLeader) {
+          const bossRaw = typeof user?.immediateBoss === "string" ? user.immediateBoss : null
+          if (bossRaw && bossRaw.trim().toLowerCase() === normalizedLeader) {
+            return true
+          }
+        }
+        return false
       })
 
       if (relevantInternalParticipants.length === 0) {
@@ -637,6 +661,7 @@ export async function getTrainingCountsByDepartmentForYear(
   database: Database,
   year: number,
   leaderName?: string | null,
+  leaderUid?: string | null,
   month?: number | null,
 ): Promise<DepartmentTrainingCount[]> {
   const { startTime, endTime } = getPeriodRangeForYearAndMonth(year, month)
@@ -677,12 +702,21 @@ export async function getTrainingCountsByDepartmentForYear(
 
     let relevantParticipants: MeetingParticipant[] = participants
 
-    if (normalizedLeader) {
+    if (normalizedLeader || leaderUid) {
       relevantParticipants = relevantParticipants.filter((participant) => {
         const user = usersByUid[participant.uid]
-        const bossRaw = typeof user?.immediateBoss === "string" ? user.immediateBoss : null
-        if (!bossRaw) return false
-        return bossRaw.trim().toLowerCase() === normalizedLeader
+        if (leaderUid) {
+          if (typeof user?.immediateBossUid === "string" && user.immediateBossUid === leaderUid) {
+            return true
+          }
+        }
+        if (normalizedLeader) {
+          const bossRaw = typeof user?.immediateBoss === "string" ? user.immediateBoss : null
+          if (bossRaw && bossRaw.trim().toLowerCase() === normalizedLeader) {
+            return true
+          }
+        }
+        return false
       })
 
       if (relevantParticipants.length === 0) {
@@ -733,6 +767,7 @@ export async function getTrainingHoursByRoleForYear(
   year: number,
   department?: string | null,
   leaderName?: string | null,
+  leaderUid?: string | null,
   month?: number | null,
 ): Promise<TrainingHoursByRole[]> {
   const { startTime, endTime } = getPeriodRangeForYearAndMonth(year, month)
@@ -806,8 +841,19 @@ export async function getTrainingHoursByRoleForYear(
         }
       }
 
-      if (normalizedLeader) {
-        if (!bossRaw || bossRaw.trim().toLowerCase() !== normalizedLeader) {
+      if (normalizedLeader || leaderUid) {
+        let matches = false
+        if (leaderUid) {
+          if (typeof user.immediateBossUid === "string" && user.immediateBossUid === leaderUid) {
+            matches = true
+          }
+        }
+        if (!matches && normalizedLeader) {
+          if (bossRaw && bossRaw.trim().toLowerCase() === normalizedLeader) {
+            matches = true
+          }
+        }
+        if (!matches) {
           continue
         }
       }

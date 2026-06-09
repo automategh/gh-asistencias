@@ -41,6 +41,8 @@ interface LegacyRoleMigrationResult {
 
 export const PERMISSION_DEFINITIONS: readonly PermissionDefinition[] = [
   { id: "dashboard_view", label: "Ver dashboard", description: "Permite acceder al dashboard principal.", category: "dashboard", system: true, active: true },
+  { id: "dashboard_view_all", label: "Ver dashboard global", description: "Permite ver el resumen del dashboard sin filtros por usuario (ve a todos).", category: "dashboard", system: true, active: true },
+  { id: "dashboard_view_team", label: "Ver dashboard de equipo", description: "Permite ver el resumen del dashboard acotado a su equipo (jefe inmediato).", category: "dashboard", system: true, active: true },
   { id: "profile_edit_self", label: "Editar perfil propio", description: "Permite editar el propio perfil.", category: "profile", system: true, active: true },
   { id: "meetings_view", label: "Ver actividades", description: "Permite acceder al listado y detalle de actividades.", category: "meetings", system: true, active: true },
   { id: "meetings_create", label: "Crear actividades", description: "Permite crear actividades o capacitaciones.", category: "meetings", system: true, active: true },
@@ -102,6 +104,7 @@ export const SYSTEM_ROLE_SEEDS: readonly RoleSeed[] = [
     active: true,
     permissions: buildPermissionMap([
       "dashboard_view",
+      "dashboard_view_all",
       "profile_edit_self",
       "meetings_view",
       "meetings_create",
@@ -133,6 +136,7 @@ export const SYSTEM_ROLE_SEEDS: readonly RoleSeed[] = [
     active: true,
     permissions: buildPermissionMap([
       "dashboard_view",
+      "dashboard_view_team",
       "profile_edit_self",
       "meetings_view",
       "meetings_create",

@@ -13,6 +13,8 @@ export type PermissionCategory =
 
 export type PermissionId =
   | "dashboard_view"
+  | "dashboard_view_all"
+  | "dashboard_view_team"
   | "profile_edit_self"
   | "meetings_view"
   | "meetings_create"
