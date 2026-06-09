@@ -313,6 +313,49 @@ export async function loadUsersCargoMap(database: Database): Promise<UserCargoCa
 }
 
 /**
+ * Item con cargo y departamento (área) de un usuario,
+ * para mostrar info detallada en listados de asistentes.
+ */
+export interface UserProfileMini {
+    readonly cargo: string
+    readonly department: string
+}
+
+/**
+ * Caché uid -> { cargo, department } para resolver info de asistentes
+ * en operaciones de reporte.
+ */
+export type UserProfileMiniCache = Record<string, UserProfileMini>
+
+/**
+ * Carga un mapa uid -> { cargo, department } para todos los usuarios
+ * en la base de datos, en una sola lectura.
+ */
+export async function loadUsersProfileMiniMap(database: Database): Promise<UserProfileMiniCache> {
+    if (!database) {
+        throw new Error("La base de datos no está disponible")
+    }
+
+    const usersRef = ref(database, "users")
+    const snapshot = await get(usersRef)
+    const values = snapshot.val() as Record<string, UserProfile> | null
+
+    const result: UserProfileMiniCache = {}
+    if (!values) {
+        return result
+    }
+
+    for (const [uid, data] of Object.entries(values)) {
+        result[uid] = {
+            cargo: typeof data.cargo === "string" ? data.cargo : "",
+            department: typeof data.department === "string" ? data.department : "",
+        }
+    }
+
+    return result
+}
+
+/**
  * Obtiene el perfil de usuario desde la base de datos por UID.
  * @param uid UID del usuario
  * @returns UserProfile o null si no existe

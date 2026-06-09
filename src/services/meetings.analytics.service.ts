@@ -62,6 +62,22 @@ export interface TrainingHoursByRole {
   hours: number
 }
 
+/**
+ * Horas totales de capacitación agrupadas por departamento (área).
+ */
+export interface TrainingHoursByDepartment {
+  department: string
+  hours: number
+}
+
+/**
+ * Unión para la respuesta de `getTrainingHoursByRoleForYear` cuando
+ * se le pasa el parámetro `groupBy`.
+ */
+export type TrainingHoursGrouped = TrainingHoursByRole | TrainingHoursByDepartment
+
+export type TrainingHoursGroupBy = "role" | "department"
+
 interface ExternalTrainingParticipantRecord {
   readonly attendance?: "present" | "late" | "absent" | null
   readonly noShow?: boolean | null
@@ -769,7 +785,8 @@ export async function getTrainingHoursByRoleForYear(
   leaderName?: string | null,
   leaderUid?: string | null,
   month?: number | null,
-): Promise<TrainingHoursByRole[]> {
+  groupBy: TrainingHoursGroupBy = "role",
+): Promise<TrainingHoursGrouped[]> {
   const { startTime, endTime } = getPeriodRangeForYearAndMonth(year, month)
 
   const meetingsRef = ref(database, "meetings")
@@ -799,7 +816,7 @@ export async function getTrainingHoursByRoleForYear(
     ? leaderName.trim().toLowerCase()
     : null
 
-  const hoursByRole: Record<string, number> = {}
+  const hoursByKey: Record<string, number> = {}
 
   for (const meeting of Object.values(meetingsMap)) {
     if (meeting.type !== "training") {
@@ -831,10 +848,6 @@ export async function getTrainingHoursByRoleForYear(
       const roleRaw = typeof user.cargo === "string" ? user.cargo : null
       const bossRaw = typeof user.immediateBoss === "string" ? user.immediateBoss : null
 
-      if (!roleRaw) {
-        continue
-      }
-
       if (normalizedDept) {
         if (!deptRaw || deptRaw.trim().toLowerCase() !== normalizedDept) {
           continue
@@ -858,16 +871,34 @@ export async function getTrainingHoursByRoleForYear(
         }
       }
 
-      const role = roleRaw.trim()
-      if (!role) {
+      // Clave de agrupación: por cargo o por departamento.
+      let groupKey: string | null = null
+      if (groupBy === "department") {
+        groupKey = deptRaw && deptRaw.trim().length > 0 ? deptRaw.trim() : "Sin área"
+      } else {
+        if (!roleRaw) {
+          continue
+        }
+        groupKey = roleRaw.trim()
+      }
+      if (!groupKey) {
         continue
       }
 
-      hoursByRole[role] = (hoursByRole[role] ?? 0) + durationHours
+      hoursByKey[groupKey] = (hoursByKey[groupKey] ?? 0) + durationHours
     }
   }
 
-  const result: TrainingHoursByRole[] = Object.entries(hoursByRole).map(([role, hours]) => ({
+  if (groupBy === "department") {
+    const result: TrainingHoursByDepartment[] = Object.entries(hoursByKey).map(([department, hours]) => ({
+      department,
+      hours,
+    }))
+    result.sort((a, b) => b.hours - a.hours || a.department.localeCompare(b.department))
+    return result
+  }
+
+  const result: TrainingHoursByRole[] = Object.entries(hoursByKey).map(([role, hours]) => ({
     role,
     hours,
   }))
