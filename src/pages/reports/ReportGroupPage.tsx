@@ -2,11 +2,22 @@ import Layout from "@/components/layouts/layout"
 import { useAuth } from "@/context/AuthContext"
 import { useDatabase } from "@/context/DatabaseContext"
 import { getMeetingYearsForDatabase } from "@/services/meetings.analytics.service"
-import { getUsersForReports, type ReportUserItem } from "@/services/user.service"
+import { getUsersForReports, loadUsersProfileMiniMap, type ReportUserItem } from "@/services/user.service"
 import type { Meeting, MeetingParticipant } from "@/types/meeting"
-import { CalendarDays, LucideBarChart, Search, Users as UsersIcon, Clock, X } from "lucide-react"
+import { CalendarDays, Download, LucideBarChart, Search, Users as UsersIcon, Clock, X } from "lucide-react"
 import { get, ref } from "firebase/database"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import ExcelJS from "exceljs"
+import {
+    createLandscapePdf, loadLogoDataUrl,
+    drawHeader, drawFooter, drawSectionTitle, ensureSpace,
+    drawKpiGrid, drawParagraph, drawTableHeader, drawTableRow, drawTableEnd, drawBarRow,
+    type KpiItem, type TableColumn,
+} from "@/services/pdf/pdfHelpers"
+import {
+    EXCEL_TITLE_STYLE, EXCEL_SUBTITLE_STYLE, EXCEL_SECTION_STYLE, EXCEL_HEADER_STYLE,
+    applyRowStyle, downloadWorkbook,
+} from "@/services/excel/excelHelpers"
 
 const MONTH_LABELS: readonly string[] = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -17,12 +28,15 @@ interface ActivityGroupStats {
     readonly meeting: Meeting
     readonly totalHours: number
     readonly attendeesCount: number
+    readonly attendees: ReadonlyArray<MeetingParticipant>
 }
 
 interface GroupAggregate {
     readonly totalHours: number
     readonly totalMeetings: number
     readonly peopleCount: number
+    readonly attendedSlots: number
+    readonly invitedSlots: number
 }
 
 interface ActivityDetailAttendee {
@@ -54,12 +68,17 @@ function ReportGroupPage() {
         totalHours: 0,
         totalMeetings: 0,
         peopleCount: 0,
+        attendedSlots: 0,
+        invitedSlots: 0,
     })
 
     const [selectedActivity, setSelectedActivity] = useState<Meeting | null>(null)
     const [activityAttendees, setActivityAttendees] = useState<ActivityDetailAttendee[]>([])
     const [isLoadingActivityDetail, setIsLoadingActivityDetail] = useState<boolean>(false)
     const [activityDetailError, setActivityDetailError] = useState<string | null>(null)
+
+    const [showExportMenu, setShowExportMenu] = useState<boolean>(false)
+    const exportRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
         if (!database || !user) {
@@ -161,6 +180,8 @@ function ReportGroupPage() {
                 totalHours: 0,
                 totalMeetings: 0,
                 peopleCount: 0,
+                attendedSlots: 0,
+                invitedSlots: 0,
             })
             return
         }
@@ -174,6 +195,8 @@ function ReportGroupPage() {
                 const allowedUids = new Set(allUsers.map((item) => item.uid))
                 const attendeesUniverse = new Set<string>()
                 const activityStats: ActivityGroupStats[] = []
+                let attendedSlots = 0
+                let invitedSlots = 0
 
                 const meetingsSnapshot = await get(ref(database, "meetings"))
                 if (!meetingsSnapshot.exists()) {
@@ -183,6 +206,8 @@ function ReportGroupPage() {
                             totalHours: 0,
                             totalMeetings: 0,
                             peopleCount: 0,
+                            attendedSlots: 0,
+                            invitedSlots: 0,
                         })
                     }
                     return
@@ -196,6 +221,8 @@ function ReportGroupPage() {
                             totalHours: 0,
                             totalMeetings: 0,
                             peopleCount: 0,
+                            attendedSlots: 0,
+                            invitedSlots: 0,
                         })
                     }
                     return
@@ -241,12 +268,19 @@ function ReportGroupPage() {
                         const isPresentOrLate = attendance === "present" || attendance === "late"
                         const isNoShow = Boolean(participant.noShow)
 
-                        if (!isAllowed || !isPresentOrLate || isNoShow) {
+                        if (!isAllowed) {
+                            continue
+                        }
+
+                        invitedSlots += 1
+
+                        if (!isPresentOrLate || isNoShow) {
                             continue
                         }
 
                         attendeesForMeeting.push(participant)
                         attendeesUniverse.add(participant.uid)
+                        attendedSlots += 1
                         }
                     }
 
@@ -257,6 +291,7 @@ function ReportGroupPage() {
                         meeting,
                         totalHours: hours,
                         attendeesCount: attendeesForMeeting.length,
+                        attendees: attendeesForMeeting,
                     })
 
                     totalHours += hours
@@ -282,6 +317,8 @@ function ReportGroupPage() {
                     totalHours,
                     totalMeetings,
                     peopleCount: attendeesUniverse.size,
+                    attendedSlots,
+                    invitedSlots,
                 })
             } catch (error) {
                 console.error("No fue posible calcular el reporte General:", error)
@@ -291,6 +328,8 @@ function ReportGroupPage() {
                         totalHours: 0,
                         totalMeetings: 0,
                         peopleCount: 0,
+                        attendedSlots: 0,
+                        invitedSlots: 0,
                     })
                 }
             } finally {
@@ -335,6 +374,8 @@ function ReportGroupPage() {
                 totalHours: 0,
                 totalMeetings: 0,
                 peopleCount: 0,
+                attendedSlots: 0,
+                invitedSlots: 0,
             })
         }
     }, [isLoadingStats, stats.length])
@@ -405,6 +446,371 @@ function ReportGroupPage() {
         setSelectedActivity(null)
         setActivityAttendees([])
         setActivityDetailError(null)
+    }
+
+    /**
+     * Cierra el menú de export al hacer click fuera.
+     */
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (exportRef.current && !exportRef.current.contains(event.target as Node)) {
+                setShowExportMenu(false)
+            }
+        }
+        if (showExportMenu) {
+            document.addEventListener("mousedown", handleClickOutside)
+            return () => document.removeEventListener("mousedown", handleClickOutside)
+        }
+        return
+    }, [showExportMenu])
+
+    /**
+     * Calcula el período y labels para los reportes.
+     */
+    const getPeriodLabel = (): string => {
+        if (selectedYear === null) return "Sin período"
+        if (typeof selectedMonth === "number") {
+            return `${selectedYear} - ${MONTH_LABELS[selectedMonth - 1]}`
+        }
+        return String(selectedYear)
+    }
+
+    /**
+     * Exporta el reporte a PDF horizontal nativo con logo, portada + KPIs y gráficos.
+     */
+    const handleExportPDF = async () => {
+        if (!database) return
+        setShowExportMenu(false)
+        try {
+            const logoDataUrl = await loadLogoDataUrl()
+            const state = createLandscapePdf()
+            const periodLabel = getPeriodLabel()
+            const fileBaseName = `reporte-general-${selectedYear ?? "sin-anho"}${typeof selectedMonth === "number" ? "-" + MONTH_LABELS[selectedMonth - 1].toLowerCase().replace(/\s+/g, "-") : ""}`
+
+            const redrawHeader = (): void => {
+                drawHeader(state, {
+                    title: "Reporte General",
+                    subtitle: `Período: ${periodLabel}`,
+                    logoDataUrl,
+                })
+            }
+
+            // PÁGINA 1: Portada + KPIs
+            redrawHeader()
+            state.y = state.margin + 16
+
+            const kpis: KpiItem[] = [
+                { label: "Horas Totales", value: aggregate.totalHours.toFixed(2), sub: "Suma del período" },
+                { label: "Actividades", value: String(aggregate.totalMeetings), sub: "Programadas, cerradas o completadas" },
+                { label: "Asistencia Grupal", value: `${aggregate.attendedSlots} / ${aggregate.invitedSlots}`, sub: "Asistidas vs. citadas" },
+            ]
+            drawKpiGrid(state, kpis, redrawHeader, { cols: 3 })
+
+            drawSectionTitle(state, "Resumen Ejecutivo", redrawHeader)
+            const attendancePct = aggregate.invitedSlots > 0
+                ? `${((aggregate.attendedSlots / aggregate.invitedSlots) * 100).toFixed(1)}%`
+                : "N/A"
+            const introText = `Este reporte muestra la distribución de horas, actividades y colaboradores de la organización durante ${periodLabel.toLowerCase()}. Total de actividades: ${aggregate.totalMeetings}. Total de horas: ${aggregate.totalHours.toFixed(2)}. Asistencia grupal: ${aggregate.attendedSlots} de ${aggregate.invitedSlots} participaciones (${attendancePct}).`
+            drawParagraph(state, introText, redrawHeader)
+
+            // PÁGINA 2: Gráfico de actividades por tipo
+            drawFooter(state)
+            state.pdf.addPage("a4", "landscape")
+            state.nextPage()
+            redrawHeader()
+            state.y = state.margin + 16
+
+            drawSectionTitle(state, "Actividades por Tipo", redrawHeader)
+            const byType = new Map<string, { count: number; hours: number }>()
+            for (const item of filteredStats) {
+                const label = item.meeting.type === "training"
+                    ? "Capacitación"
+                    : item.meeting.type === "meeting"
+                        ? "Reunión"
+                        : item.meeting.customType ?? "Actividad"
+                const current = byType.get(label) ?? { count: 0, hours: 0 }
+                byType.set(label, {
+                    count: current.count + 1,
+                    hours: current.hours + item.totalHours,
+                })
+            }
+            const typeData = Array.from(byType.entries()).sort((a, b) => b[1].count - a[1].count)
+            const maxTypeCount = Math.max(...typeData.map(([, v]) => v.count), 1)
+            typeData.forEach(([label, data], i) => {
+                drawBarRow(state, {
+                    label,
+                    valueLabel: `${data.count} (${data.hours.toFixed(1)} h)`,
+                    labelW: 90,
+                    valueW: 50,
+                    barMaxW: 80,
+                    value: data.count,
+                    maxValue: maxTypeCount,
+                    isZebra: i % 2 === 1,
+                }, redrawHeader)
+            })
+            drawTableEnd(state)
+
+            // Top 10 actividades por horas
+            state.y += 4
+            drawSectionTitle(state, "Top 10 Actividades por Horas", redrawHeader)
+            const top10 = [...filteredStats].slice(0, 10)
+            const maxTopHours = Math.max(...top10.map((it) => it.totalHours), 1)
+            top10.forEach((item, i) => {
+                const title = item.meeting.title
+                drawBarRow(state, {
+                    label: title,
+                    valueLabel: `${item.totalHours.toFixed(2)} h`,
+                    labelW: 140,
+                    valueW: 40,
+                    barMaxW: 50,
+                    value: item.totalHours,
+                    maxValue: maxTopHours,
+                    isZebra: i % 2 === 1,
+                }, redrawHeader)
+            })
+            drawTableEnd(state)
+
+            // PÁGINA 3: Listado completo de actividades
+            drawFooter(state)
+            state.pdf.addPage("a4", "landscape")
+            state.nextPage()
+            redrawHeader()
+            state.y = state.margin + 16
+
+            drawSectionTitle(state, "Listado de Actividades", redrawHeader)
+            const listCols: TableColumn[] = [
+                { label: "Título", width: 90, align: "left" },
+                { label: "Tipo", width: 35, align: "left" },
+                { label: "Fecha", width: 30, align: "left" },
+                { label: "Lugar", width: 50, align: "left" },
+                { label: "Horas", width: 20, align: "right" },
+                { label: "Asistentes", width: 28, align: "right" },
+            ]
+            const listWidths = listCols.map((column) => column.width)
+            const listTotalW = listWidths.reduce((sum, width) => sum + width, 0)
+            if (listTotalW < state.contentW) {
+                listWidths[listWidths.length - 1] += state.contentW - listTotalW
+            }
+            const listTableCols = listCols.map((column, index) => ({ ...column, width: listWidths[index] }))
+            ensureSpace(state, 14, redrawHeader)
+            drawTableHeader(state, listTableCols, redrawHeader)
+            filteredStats.forEach((item, i) => {
+                const typeLabel = item.meeting.type === "training"
+                    ? "Capacitación"
+                    : item.meeting.type === "meeting"
+                        ? "Reunión"
+                        : item.meeting.customType ?? "Actividad"
+                const dateStr = new Date(item.meeting.startTime).toLocaleDateString("es-ES", {
+                    day: "2-digit", month: "short", year: "numeric",
+                })
+                ensureSpace(state, 6, redrawHeader)
+                drawTableRow(state, [
+                    { text: item.meeting.title, align: "left" },
+                    { text: typeLabel, align: "left" },
+                    { text: dateStr, align: "left" },
+                    { text: item.meeting.location, align: "left" },
+                    { text: item.totalHours.toFixed(2), align: "right" },
+                    { text: String(item.attendeesCount), align: "right" },
+                ], listTableCols.map((column) => ({ width: column.width })), i % 2 === 1)
+            })
+            drawTableEnd(state)
+
+            // PÁGINA 4: Detalle de asistentes por actividad
+            const profileMiniMap = await loadUsersProfileMiniMap(database)
+            drawFooter(state)
+            state.pdf.addPage("a4", "landscape")
+            state.nextPage()
+            redrawHeader()
+            state.y = state.margin + 16
+
+            drawSectionTitle(state, "Detalle de Asistentes", redrawHeader)
+            const detailCols: TableColumn[] = [
+                { label: "Actividad", width: 60, align: "left" },
+                { label: "Fecha", width: 22, align: "left" },
+                { label: "Asistente", width: 48, align: "left" },
+                { label: "Área", width: 38, align: "left" },
+                { label: "Cargo", width: 50, align: "left" },
+                { label: "Estado", width: 32, align: "center" },
+            ]
+            const detailWidths = detailCols.map((column) => column.width)
+            const detailTotalW = detailWidths.reduce((sum, width) => sum + width, 0)
+            if (detailTotalW < state.contentW) {
+                detailWidths[detailWidths.length - 1] += state.contentW - detailTotalW
+            }
+            const detailTableCols = detailCols.map((column, index) => ({ ...column, width: detailWidths[index] }))
+            ensureSpace(state, 14, redrawHeader)
+            drawTableHeader(state, detailTableCols, redrawHeader)
+            let detailRowIdx = 0
+            for (const item of filteredStats) {
+                const dateStr = new Date(item.meeting.startTime).toLocaleDateString("es-ES", {
+                    day: "2-digit", month: "short", year: "numeric",
+                })
+                const attendees = item.attendees ?? []
+                if (attendees.length === 0) {
+                    ensureSpace(state, 6, redrawHeader)
+                    drawTableRow(state, [
+                        { text: item.meeting.title, align: "left" },
+                        { text: dateStr, align: "left" },
+                        { text: "Sin asistentes", align: "left" },
+                        { text: "-", align: "left" },
+                        { text: "-", align: "left" },
+                        { text: "-", align: "center" },
+                    ], detailTableCols.map((column) => ({ width: column.width })), detailRowIdx % 2 === 1)
+                    detailRowIdx++
+                    continue
+                }
+                for (const p of attendees) {
+                    const profile = profileMiniMap[p.uid]
+                    const cargo = profile?.cargo?.trim() || "-"
+                    const dept = profile?.department?.trim() || "-"
+                    const estado = p.attendance === "late" ? "Tarde" : "Presente"
+                    ensureSpace(state, 6, redrawHeader)
+                    drawTableRow(state, [
+                        { text: item.meeting.title, align: "left" },
+                        { text: dateStr, align: "left" },
+                        { text: p.name, align: "left" },
+                        { text: dept, align: "left" },
+                        { text: cargo, align: "left" },
+                        { text: estado, align: "center" },
+                    ], detailTableCols.map((column) => ({ width: column.width })), detailRowIdx % 2 === 1)
+                    detailRowIdx++
+                }
+            }
+            drawTableEnd(state)
+
+            drawFooter(state)
+            state.pdf.save(`${fileBaseName}.pdf`)
+        } catch (error) {
+            console.error("Error al exportar PDF:", error)
+        }
+    }
+
+    /**
+     * Exporta el reporte a Excel con hojas estilizadas.
+     */
+    const handleExportExcel = async () => {
+        if (!database) return
+        setShowExportMenu(false)
+        try {
+            const wb = new ExcelJS.Workbook()
+            wb.creator = "Reporte General"
+            wb.created = new Date()
+            const periodLabel = getPeriodLabel()
+            const fileBaseName = `reporte-general-${selectedYear ?? "sin-anho"}${typeof selectedMonth === "number" ? "-" + MONTH_LABELS[selectedMonth - 1].toLowerCase().replace(/\s+/g, "-") : ""}`
+
+            // HOJA 1: Resumen
+            const wsSummary = wb.addWorksheet("Resumen")
+            wsSummary.columns = [{ width: 28 }, { width: 28 }, { width: 28 }]
+            const titleRow = wsSummary.addRow(["Reporte General"])
+            wsSummary.mergeCells("A1:C1")
+            titleRow.getCell(1).style = EXCEL_TITLE_STYLE
+            titleRow.height = 28
+            const subtitleRow = wsSummary.addRow([`Período: ${periodLabel}`])
+            wsSummary.mergeCells("A2:C2")
+            subtitleRow.getCell(1).style = EXCEL_SUBTITLE_STYLE
+            wsSummary.addRow([])
+            const sectionRow = wsSummary.addRow(["Indicadores Clave"])
+            wsSummary.mergeCells(`A${sectionRow.number}:C${sectionRow.number}`)
+            sectionRow.getCell(1).style = EXCEL_SECTION_STYLE
+            sectionRow.height = 22
+            const kpiHeaderRow = wsSummary.addRow(["Indicador", "Valor", "Descripción"])
+            kpiHeaderRow.eachCell((cell) => { cell.style = EXCEL_HEADER_STYLE })
+            kpiHeaderRow.height = 22
+            const kpisData: (string | number)[][] = [
+                ["Horas Totales", aggregate.totalHours.toFixed(2), "Suma del período"],
+                ["Actividades", aggregate.totalMeetings, "Programadas, cerradas o completadas"],
+                ["Asistencia Grupal", `${aggregate.attendedSlots} / ${aggregate.invitedSlots}`, "Asistidas vs. citadas"],
+                ["% Asistencia", aggregate.invitedSlots > 0 ? `${((aggregate.attendedSlots / aggregate.invitedSlots) * 100).toFixed(1)}%` : "N/A", "Tasa de asistencia del grupo"],
+            ]
+            kpisData.forEach((row, i) => {
+                const r = wsSummary.addRow(row)
+                applyRowStyle({ row: r, values: row, isZebra: i % 2 === 1 })
+            })
+            wsSummary.addRow([])
+
+            // HOJA 2: Listado de actividades
+            const wsList = wb.addWorksheet("Actividades")
+            wsList.columns = [
+                { width: 50 }, { width: 18 }, { width: 14 }, { width: 30 }, { width: 12 }, { width: 14 },
+            ]
+            const listHeaderRow = wsList.addRow([
+                "Título", "Tipo", "Fecha", "Lugar", "Horas", "Asistentes",
+            ])
+            listHeaderRow.eachCell((cell) => { cell.style = EXCEL_HEADER_STYLE })
+            listHeaderRow.height = 22
+            filteredStats.forEach((item, i) => {
+                const typeLabel = item.meeting.type === "training"
+                    ? "Capacitación"
+                    : item.meeting.type === "meeting"
+                        ? "Reunión"
+                        : item.meeting.customType ?? "Actividad"
+                const dateStr = new Date(item.meeting.startTime).toLocaleDateString("es-ES", {
+                    day: "2-digit", month: "short", year: "numeric",
+                })
+                const values: (string | number)[] = [
+                    item.meeting.title, typeLabel, dateStr, item.meeting.location,
+                    Number(item.totalHours.toFixed(2)), item.attendeesCount,
+                ]
+                const r = wsList.addRow(values)
+                applyRowStyle({
+                    row: r, values,
+                    isZebra: i % 2 === 1,
+                    alignRightCols: [4, 5],
+                    wrapCols: [0, 3],
+                })
+            })
+
+            // HOJA 3: Detalle de asistentes por actividad
+            const profileMiniMap = await loadUsersProfileMiniMap(database)
+            const wsAttendees = wb.addWorksheet("Asistentes")
+            wsAttendees.columns = [
+                { width: 50 }, { width: 14 }, { width: 36 }, { width: 30 }, { width: 30 }, { width: 12 },
+            ]
+            const attendeesHeaderRow = wsAttendees.addRow([
+                "Actividad", "Fecha", "Asistente", "Área", "Cargo", "Estado",
+            ])
+            attendeesHeaderRow.eachCell((cell) => { cell.style = EXCEL_HEADER_STYLE })
+            attendeesHeaderRow.height = 22
+            filteredStats.forEach((item) => {
+                const dateStr = new Date(item.meeting.startTime).toLocaleDateString("es-ES", {
+                    day: "2-digit", month: "short", year: "numeric",
+                })
+                const attendees = item.attendees ?? []
+                if (attendees.length === 0) {
+                    const values: (string | number)[] = [
+                        item.meeting.title, dateStr, "Sin asistentes", "-", "-", "-",
+                    ]
+                    const r = wsAttendees.addRow(values)
+                    applyRowStyle({
+                        row: r, values,
+                        isZebra: false,
+                        alignCenterCols: [5],
+                        wrapCols: [0, 2, 3, 4],
+                    })
+                    return
+                }
+                attendees.forEach((p, j) => {
+                    const profile = profileMiniMap[p.uid]
+                    const cargo = profile?.cargo?.trim() || "-"
+                    const dept = profile?.department?.trim() || "-"
+                    const estado = p.attendance === "late" ? "Tarde" : "Presente"
+                    const values: (string | number)[] = [
+                        item.meeting.title, dateStr, p.name, dept, cargo, estado,
+                    ]
+                    const r = wsAttendees.addRow(values)
+                    applyRowStyle({
+                        row: r, values,
+                        isZebra: j % 2 === 1,
+                        alignCenterCols: [5],
+                        wrapCols: [0, 2, 3, 4],
+                    })
+                })
+            })
+
+            await downloadWorkbook(wb, fileBaseName)
+        } catch (error) {
+            console.error("Error al exportar Excel:", error)
+        }
     }
 
     return (
@@ -478,6 +884,35 @@ function ReportGroupPage() {
                                         ))}
                                     </select>
                                 </div>
+                                <div className="relative" ref={exportRef}>
+                                    <button
+                                        type="button"
+                                        className="flex items-center gap-x-3 px-3 py-1.5 bg-white border border-[#e3e5e3] rounded-full text-xs font-semibold text-[#191c1c] hover:bg-[#fafbfa] disabled:text-[#b3bab3]"
+                                        onClick={() => setShowExportMenu((v) => !v)}
+                                        disabled={!selectedYear || filteredStats.length === 0}
+                                    >
+                                        <Download className="w-4 h-4 text-[#7a837a]" />
+                                        <span>Exportar</span>
+                                    </button>
+                                    {showExportMenu && (
+                                        <div className="absolute right-0 top-full mt-2 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                                            <button
+                                                type="button"
+                                                className="w-full text-left px-4 py-2 text-xs hover:bg-gray-100 rounded-t-lg"
+                                                onClick={handleExportPDF}
+                                            >
+                                                Exportar a PDF
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="w-full text-left px-4 py-2 text-xs hover:bg-gray-100 rounded-b-lg"
+                                                onClick={handleExportExcel}
+                                            >
+                                                Exportar a Excel
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </section>
 
@@ -518,16 +953,20 @@ function ReportGroupPage() {
                                 <div className="flex items-center justify-between mb-4">
                                     <div>
                                         <p className="text-[10px] uppercase tracking-[0.18em] text-outline font-bold mb-1">
-                                            Colaboradores activos
+                                            Tasa de asistencia
                                         </p>
                                         <p className="text-3xl font-extrabold text-[#191c1c]">
-                                            {selectedYear && !isLoadingStats ? aggregate.peopleCount : "--"}
+                                            {selectedYear && !isLoadingStats
+                                                ? aggregate.invitedSlots > 0
+                                                    ? `${((aggregate.attendedSlots / aggregate.invitedSlots) * 100).toFixed(1)}%`
+                                                    : "N/A"
+                                                : "--"}
                                         </p>
                                     </div>
                                     <UsersIcon className="w-9 h-9 text-emerald-700" />
                                 </div>
                                 <p className="text-[11px] text-[#7a837a]">
-                                    Colaboradores con al menos una actividad registrada en el año.
+                                    Porcentaje de asistencia global del grupo en el periodo.
                                 </p>
                             </div>
                         </section>

@@ -5,9 +5,20 @@ import { getMeetingYearsForDatabase } from "@/services/meetings.analytics.servic
 import { getUserInvitedMeetings } from "@/services/meetings.listing.service"
 import { getUsersForReports, type ReportUserItem } from "@/services/user.service"
 import type { Meeting, MeetingParticipant } from "@/types/meeting"
-import { CalendarDays, Search } from "lucide-react"
+import { CalendarDays, Download, Search } from "lucide-react"
 import { get, ref } from "firebase/database"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import ExcelJS from "exceljs"
+import {
+    createLandscapePdf, loadLogoDataUrl,
+    drawHeader, drawFooter, drawSectionTitle,
+    drawKpiGrid, drawParagraph, drawTableHeader, drawTableRow, drawTableEnd, drawBarRow,
+    type KpiItem, type TableColumn,
+} from "@/services/pdf/pdfHelpers"
+import {
+    EXCEL_TITLE_STYLE, EXCEL_SUBTITLE_STYLE, EXCEL_SECTION_STYLE, EXCEL_HEADER_STYLE,
+    applyRowStyle, downloadWorkbook,
+} from "@/services/excel/excelHelpers"
 
 const MONTH_LABELS: readonly string[] = [
     "Enero",
@@ -47,8 +58,12 @@ function ReportIndividualPage() {
     const [metrics, setMetrics] = useState<{
         totalHours: number
         coursesDone: number
+        invitedCount: number
         trainings: Array<{ meeting: Meeting; hours: number }>
-    }>({ totalHours: 0, coursesDone: 0, trainings: [] })
+    }>({ totalHours: 0, coursesDone: 0, invitedCount: 0, trainings: [] })
+
+    const [showExportMenu, setShowExportMenu] = useState<boolean>(false)
+    const exportRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
         if (!database || !user) {
@@ -162,7 +177,7 @@ function ReportIndividualPage() {
 
     useEffect(() => {
         if (!database || !selectedUserId || !selectedYear) {
-            setMetrics({ totalHours: 0, coursesDone: 0, trainings: [] })
+            setMetrics({ totalHours: 0, coursesDone: 0, invitedCount: 0, trainings: [] })
             return
         }
 
@@ -198,6 +213,7 @@ function ReportIndividualPage() {
 
                 const attendedTrainings: Array<{ meeting: Meeting; hours: number }> = []
                 let totalHours = 0
+                let invitedCount = 0
 
                 for (const meeting of meetingsInPeriod) {
                     try {
@@ -205,6 +221,8 @@ function ReportIndividualPage() {
                         if (!participantSnap.exists()) {
                             continue
                         }
+
+                        invitedCount += 1
 
                         const participant = participantSnap.val() as MeetingParticipant
                         const attendance = participant.attendance ?? null
@@ -231,12 +249,13 @@ function ReportIndividualPage() {
                 setMetrics({
                     totalHours,
                     coursesDone: attendedTrainings.length,
+                    invitedCount,
                     trainings: attendedTrainings,
                 })
             } catch (error) {
                 console.error("No fue posible calcular las métricas individuales de actividades:", error)
                 if (!cancelled) {
-                    setMetrics({ totalHours: 0, coursesDone: 0, trainings: [] })
+                    setMetrics({ totalHours: 0, coursesDone: 0, invitedCount: 0, trainings: [] })
                 }
             } finally {
                 if (!cancelled) {
@@ -256,6 +275,248 @@ function ReportIndividualPage() {
         () => users.find((item) => item.uid === selectedUserId) ?? null,
         [users, selectedUserId],
     )
+
+    /**
+     * Cierra el menú de export al hacer click fuera.
+     */
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (exportRef.current && !exportRef.current.contains(event.target as Node)) {
+                setShowExportMenu(false)
+            }
+        }
+        if (showExportMenu) {
+            document.addEventListener("mousedown", handleClickOutside)
+            return () => document.removeEventListener("mousedown", handleClickOutside)
+        }
+        return
+    }, [showExportMenu])
+
+    /**
+     * Calcula el período y labels para los reportes.
+     */
+    const getPeriodLabel = (): string => {
+        if (selectedYear === null) return "Sin período"
+        if (typeof selectedMonth === "number") {
+            return `${selectedYear} - ${MONTH_LABELS[selectedMonth - 1]}`
+        }
+        return String(selectedYear)
+    }
+
+    /**
+     * Exporta el reporte individual a PDF horizontal nativo con logo, portada + KPIs y gráficos.
+     */
+    const handleExportPDF = async () => {
+        if (!database || !selectedUser) return
+        setShowExportMenu(false)
+        try {
+            const logoDataUrl = await loadLogoDataUrl()
+            const state = createLandscapePdf()
+            const periodLabel = getPeriodLabel()
+            const fileBaseName = `reporte-individual-${selectedUser.name.toLowerCase().replace(/\s+/g, "-")}-${selectedYear ?? "sin-anho"}${typeof selectedMonth === "number" ? "-" + MONTH_LABELS[selectedMonth - 1].toLowerCase().replace(/\s+/g, "-") : ""}`
+
+            const redrawHeader = (): void => {
+                drawHeader(state, {
+                    title: `Reporte Individual: ${selectedUser.name}`,
+                    subtitle: `Período: ${periodLabel}`,
+                    logoDataUrl,
+                })
+            }
+
+            // PÁGINA 1: Portada + KPIs + perfil
+            redrawHeader()
+            state.y = state.margin + 16
+
+            const kpis: KpiItem[] = [
+                { label: "Total Horas", value: metrics.totalHours.toFixed(2), sub: "Horas acumuladas del periodo" },
+                { label: "Asistencia", value: `${metrics.coursesDone} / ${metrics.invitedCount}`, sub: "Asistidas vs. citadas" },
+                { label: "Cargo", value: selectedUser.cargo ?? "Sin cargo", sub: selectedUser.department ?? "Sin departamento" },
+            ]
+            drawKpiGrid(state, kpis, redrawHeader, { cols: 3 })
+
+            drawSectionTitle(state, "Resumen Ejecutivo", redrawHeader)
+            const attendancePct = metrics.invitedCount > 0
+                ? `${((metrics.coursesDone / metrics.invitedCount) * 100).toFixed(1)}%`
+                : "N/A"
+            const introText = `Este reporte muestra el detalle de las actividades en las que ${selectedUser.name} fue citado durante ${periodLabel.toLowerCase()}. Asistencia: ${metrics.coursesDone} de ${metrics.invitedCount} actividades citadas (${attendancePct}). Total de horas acumuladas: ${metrics.totalHours.toFixed(2)}.`
+            drawParagraph(state, introText, redrawHeader)
+
+            // PÁGINA 2: Listado de actividades
+            drawFooter(state)
+            state.pdf.addPage("a4", "landscape")
+            state.nextPage()
+            redrawHeader()
+            state.y = state.margin + 16
+
+            drawSectionTitle(state, "Historial de Actividades", redrawHeader)
+            const listCols: TableColumn[] = [
+                { label: "Título", width: 110, align: "left" },
+                { label: "Tipo", width: 35, align: "left" },
+                { label: "Fecha", width: 30, align: "left" },
+                { label: "Lugar", width: 50, align: "left" },
+                { label: "Horas", width: 25, align: "right" },
+            ]
+            const listWidths = listCols.map((column) => column.width)
+            const listTotalW = listWidths.reduce((sum, width) => sum + width, 0)
+            if (listTotalW < state.contentW) {
+                listWidths[listWidths.length - 1] += state.contentW - listTotalW
+            }
+            const listTableCols = listCols.map((column, index) => ({ ...column, width: listWidths[index] }))
+            drawTableHeader(state, listTableCols, redrawHeader)
+            metrics.trainings.forEach(({ meeting, hours }, i) => {
+                const typeLabel = meeting.type === "training"
+                    ? "Capacitación"
+                    : meeting.type === "meeting"
+                        ? "Reunión"
+                        : meeting.customType ?? "Actividad"
+                const dateStr = new Date(meeting.startTime).toLocaleDateString("es-ES", {
+                    day: "2-digit", month: "short", year: "numeric",
+                })
+                drawTableRow(state, [
+                    { text: meeting.title, align: "left" },
+                    { text: typeLabel, align: "left" },
+                    { text: dateStr, align: "left" },
+                    { text: meeting.location, align: "left" },
+                    { text: hours.toFixed(2), align: "right" },
+                ], listTableCols.map((column) => ({ width: column.width })), i % 2 === 1)
+            })
+            drawTableEnd(state)
+
+            // PÁGINA 3: Gráfico de horas por mes (si hay datos)
+            if (metrics.trainings.length > 0) {
+                drawFooter(state)
+                state.pdf.addPage("a4", "landscape")
+                state.nextPage()
+                redrawHeader()
+                state.y = state.margin + 16
+
+                drawSectionTitle(state, "Horas por Mes", redrawHeader)
+                const byMonth = new Map<number, number>()
+                for (const { meeting, hours } of metrics.trainings) {
+                    const month = new Date(meeting.startTime).getMonth() + 1
+                    byMonth.set(month, (byMonth.get(month) ?? 0) + hours)
+                }
+                const monthData = Array.from(byMonth.entries()).sort((a, b) => a[0] - b[0])
+                const maxHours = Math.max(...monthData.map(([, v]) => v), 1)
+                monthData.forEach(([monthIdx, hours], i) => {
+                    drawBarRow(state, {
+                        label: MONTH_LABELS[monthIdx - 1] ?? `Mes ${monthIdx}`,
+                        valueLabel: `${hours.toFixed(2)} h`,
+                        labelW: 70,
+                        valueW: 35,
+                        barMaxW: 120,
+                        value: hours,
+                        maxValue: maxHours,
+                        isZebra: i % 2 === 1,
+                    }, redrawHeader)
+                })
+                drawTableEnd(state)
+            }
+
+            drawFooter(state)
+            state.pdf.save(`${fileBaseName}.pdf`)
+        } catch (error) {
+            console.error("Error al exportar PDF:", error)
+        }
+    }
+
+    /**
+     * Exporta el reporte individual a Excel.
+     */
+    const handleExportExcel = async () => {
+        if (!database || !selectedUser) return
+        setShowExportMenu(false)
+        try {
+            const wb = new ExcelJS.Workbook()
+            wb.creator = "Reporte Individual"
+            wb.created = new Date()
+            const periodLabel = getPeriodLabel()
+            const fileBaseName = `reporte-individual-${selectedUser.name.toLowerCase().replace(/\s+/g, "-")}-${selectedYear ?? "sin-anho"}${typeof selectedMonth === "number" ? "-" + MONTH_LABELS[selectedMonth - 1].toLowerCase().replace(/\s+/g, "-") : ""}`
+
+            // HOJA 1: Perfil + KPIs
+            const wsSummary = wb.addWorksheet("Resumen")
+            wsSummary.columns = [{ width: 30 }, { width: 30 }, { width: 30 }]
+            const titleRow = wsSummary.addRow([`Reporte Individual: ${selectedUser.name}`])
+            wsSummary.mergeCells("A1:C1")
+            titleRow.getCell(1).style = EXCEL_TITLE_STYLE
+            titleRow.height = 28
+            const subtitleRow = wsSummary.addRow([`Período: ${periodLabel}`])
+            wsSummary.mergeCells("A2:C2")
+            subtitleRow.getCell(1).style = EXCEL_SUBTITLE_STYLE
+            wsSummary.addRow([])
+            const profileSection = wsSummary.addRow(["Perfil"])
+            wsSummary.mergeCells(`A${profileSection.number}:C${profileSection.number}`)
+            profileSection.getCell(1).style = EXCEL_SECTION_STYLE
+            profileSection.height = 22
+            const profileHeader = wsSummary.addRow(["Campo", "Valor", ""])
+            profileHeader.eachCell((cell) => { cell.style = EXCEL_HEADER_STYLE })
+            profileHeader.height = 22
+            const profileData: (string | number)[][] = [
+                ["Nombre", selectedUser.name, ""],
+                ["Email", selectedUser.email, ""],
+                ["Cargo", selectedUser.cargo ?? "Sin cargo", ""],
+                ["Departamento", selectedUser.department ?? "Sin departamento", ""],
+                ["Jefe inmediato", selectedUser.immediateBoss ?? "Sin definir", ""],
+            ]
+            profileData.forEach((row, i) => {
+                const r = wsSummary.addRow(row)
+                applyRowStyle({ row: r, values: row, isZebra: i % 2 === 1 })
+            })
+            wsSummary.addRow([])
+
+            const kpiSection = wsSummary.addRow(["Indicadores Clave"])
+            wsSummary.mergeCells(`A${kpiSection.number}:C${kpiSection.number}`)
+            kpiSection.getCell(1).style = EXCEL_SECTION_STYLE
+            kpiSection.height = 22
+            const kpiHeader = wsSummary.addRow(["Indicador", "Valor", "Descripción"])
+            kpiHeader.eachCell((cell) => { cell.style = EXCEL_HEADER_STYLE })
+            kpiHeader.height = 22
+            const kpiData: (string | number)[][] = [
+                ["Total Horas", metrics.totalHours.toFixed(2), "Horas acumuladas del periodo"],
+                ["Asistencia", `${metrics.coursesDone} / ${metrics.invitedCount}`, "Asistidas vs. citadas"],
+                ["% Asistencia", metrics.invitedCount > 0 ? `${((metrics.coursesDone / metrics.invitedCount) * 100).toFixed(1)}%` : "N/A", "Porcentaje de asistencia"],
+            ]
+            kpiData.forEach((row, i) => {
+                const r = wsSummary.addRow(row)
+                applyRowStyle({ row: r, values: row, isZebra: i % 2 === 1 })
+            })
+
+            // HOJA 2: Historial
+            const wsList = wb.addWorksheet("Actividades")
+            wsList.columns = [
+                { width: 50 }, { width: 18 }, { width: 14 }, { width: 30 }, { width: 12 },
+            ]
+            const listHeaderRow = wsList.addRow([
+                "Título", "Tipo", "Fecha", "Lugar", "Horas",
+            ])
+            listHeaderRow.eachCell((cell) => { cell.style = EXCEL_HEADER_STYLE })
+            listHeaderRow.height = 22
+            metrics.trainings.forEach(({ meeting, hours }, i) => {
+                const typeLabel = meeting.type === "training"
+                    ? "Capacitación"
+                    : meeting.type === "meeting"
+                        ? "Reunión"
+                        : meeting.customType ?? "Actividad"
+                const dateStr = new Date(meeting.startTime).toLocaleDateString("es-ES", {
+                    day: "2-digit", month: "short", year: "numeric",
+                })
+                const values: (string | number)[] = [
+                    meeting.title, typeLabel, dateStr, meeting.location, Number(hours.toFixed(2)),
+                ]
+                const r = wsList.addRow(values)
+                applyRowStyle({
+                    row: r, values,
+                    isZebra: i % 2 === 1,
+                    alignRightCols: [4],
+                    wrapCols: [0, 3],
+                })
+            })
+
+            await downloadWorkbook(wb, fileBaseName)
+        } catch (error) {
+            console.error("Error al exportar Excel:", error)
+        }
+    }
 
     return (
         <Layout
@@ -317,6 +578,35 @@ function ReportIndividualPage() {
                                             </option>
                                         ))}
                                     </select>
+                                </div>
+                                <div className="relative" ref={exportRef}>
+                                    <button
+                                        type="button"
+                                        className="flex items-center gap-x-3 px-3 py-1.5 bg-white border border-[#e3e5e3] rounded-full text-xs font-semibold text-[#191c1c] hover:bg-[#fafbfa] disabled:text-[#b3bab3]"
+                                        onClick={() => setShowExportMenu((v) => !v)}
+                                        disabled={!selectedUser || metrics.trainings.length === 0}
+                                    >
+                                        <Download className="w-4 h-4 text-[#7a837a]" />
+                                        <span>Exportar</span>
+                                    </button>
+                                    {showExportMenu && (
+                                        <div className="absolute right-0 top-full mt-2 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                                            <button
+                                                type="button"
+                                                className="w-full text-left px-4 py-2 text-xs hover:bg-gray-100 rounded-t-lg"
+                                                onClick={handleExportPDF}
+                                            >
+                                                Exportar a PDF
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="w-full text-left px-4 py-2 text-xs hover:bg-gray-100 rounded-b-lg"
+                                                onClick={handleExportExcel}
+                                            >
+                                                Exportar a Excel
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </section>
@@ -423,13 +713,15 @@ function ReportIndividualPage() {
                                     </div>
                                     <div className="bg-white rounded-2xl border border-[#edeeed] p-5">
                                         <p className="text-[10px] uppercase tracking-[0.18em] text-outline font-bold mb-1">
-                                            Actividades registradas
+                                            Asistencia
                                         </p>
                                         <p className="text-3xl font-extrabold text-[#191c1c]">
-                                            {isLoadingMetrics || !selectedYear ? "--" : metrics.coursesDone}
+                                            {isLoadingMetrics || !selectedYear
+                                                ? "--"
+                                                : `${metrics.coursesDone} / ${metrics.invitedCount}`}
                                         </p>
                                         <p className="mt-2 text-[11px] text-[#7a837a]">
-                                            Actividades cerradas o completadas en el periodo.
+                                            Actividades asistidas vs. citadas en el periodo.
                                         </p>
                                     </div>
                                     <div className="bg-white rounded-2xl border border-[#edeeed] p-5">
